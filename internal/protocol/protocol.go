@@ -29,6 +29,7 @@ const (
 
 type MessageOptions struct {
 	Version uint16
+	Unsafe  bool
 }
 
 type MessageHandler struct {
@@ -38,6 +39,8 @@ type MessageHandler struct {
 type Message interface {
 	Encode() []byte
 	Decode() error
+	SafeEncode() ([]byte, error)
+	SafeDecode() error
 	Ver() uint16
 	Type() uint16
 	Length() uint32
@@ -47,6 +50,7 @@ type Message interface {
 func DefaultOptions() *MessageOptions {
 	return &MessageOptions{
 		Version: DefaultProtocolVersion,
+		Unsafe:  false,
 	}
 }
 
@@ -62,7 +66,8 @@ func NewMessageHandler(options *MessageOptions) (*MessageHandler, error) {
 
 func (handler *MessageHandler) Encode(messageType uint16, buf []byte) (data []byte, err error) {
 	if !validMessageType(messageType) {
-		return nil, errors.New("Invalid Message Type")
+		err = errors.New("Invalid Message Type")
+		return
 	}
 
 	var message Message
@@ -78,15 +83,19 @@ func (handler *MessageHandler) Encode(messageType uint16, buf []byte) (data []by
 		}
 	}
 
-	defer func() {
-		if recoveredErr := recover(); recoveredErr != nil {
-			err = errors.Wrap(recoveredErr.(error), "Error Encoding Message")
-		}
-	}()
+	switch handler.Options.Unsafe {
+	case true:
+		defer func() {
+			if recoveredErr := recover(); recoveredErr != nil {
+				err = errors.Wrap(recoveredErr.(error), "Error Encoding Message")
+			}
+		}()
 
-	data = message.Encode()
-
-	return
+		data = message.Encode()
+		return
+	default:
+		return message.SafeEncode()
+	}
 }
 
 func (handler *MessageHandler) Decode(buf []byte) (message Message, err error) {
@@ -99,11 +108,19 @@ func (handler *MessageHandler) Decode(buf []byte) (message Message, err error) {
 		}
 	}
 
-	if err = message.Decode(); err != nil {
-		return nil, err
+	switch handler.Options.Unsafe {
+	case true:
+		defer func() {
+			if recoveredErr := recover(); recoveredErr != nil {
+				err = errors.Wrap(recoveredErr.(error), "Error Unsafe Decoding Message")
+			}
+		}()
+		err = message.Decode()
+	default:
+		err = message.SafeDecode()
 	}
+	return
 
-	return message, nil
 }
 
 // Encode MessageV0
