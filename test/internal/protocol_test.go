@@ -7,118 +7,121 @@ import (
 	"testing"
 )
 
-func TestDefaultOptions(t *testing.T) {
-	assert.Equal(t, protocol.DefaultProtocolVersion, protocol.DefaultOptions().Version)
-}
-
-func TestNewMessageHandler(t *testing.T) {
-	_, err := protocol.NewMessageHandler(&protocol.MessageOptions{
-		Version: 0x0000,
-	})
-	assert.NotEqual(t, nil, err)
+func TestDefaultHandler(t *testing.T) {
+	defaultHandler := protocol.NewDefaultHandler()
+	assert.Equal(t, false, defaultHandler.Unsafe)
+	assert.Equal(t, defaultHandler, protocol.NewV0Handler(false))
 }
 
 func TestEncodeDecodeV0(t *testing.T) {
-	defaultOptions := protocol.DefaultOptions()
-
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0, err := protocol.NewMessageHandler(defaultOptions)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, defaultOptions, handlerV0.Options)
+	handlerV0 := protocol.NewV0Handler(false)
+	assert.Equal(t, false, handlerV0.Unsafe)
 
-	encodedBytes, err := handlerV0.Encode(protocol.MessagePing, randomData)
+	encodedBytes, err := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 	assert.Equal(t, nil, err)
 
 	message, err := handlerV0.Decode(encodedBytes)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, uint32(512), message.Length())
-	assert.Equal(t, protocol.DefaultProtocolVersion, message.Ver())
-	assert.Equal(t, protocol.MessagePing, message.Type())
-
-	messageData, err := message.Data()
-	assert.Equal(t, err, nil)
-	assert.Equal(t, messageData, randomData)
+	assert.Equal(t, uint32(512), message.ContentLength)
+	assert.Equal(t, protocol.Version0, message.Version)
+	assert.Equal(t, uint32(0), message.Routing)
+	assert.Equal(t, protocol.MessagePacket, message.Operation)
+	assert.Equal(t, randomData, message.Content)
 }
 
 func TestUnsafeEncodeDecodeV0(t *testing.T) {
-	defaultOptions := protocol.DefaultOptions()
-	defaultOptions.Unsafe = true
 
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0, err := protocol.NewMessageHandler(defaultOptions)
-	assert.Equal(t, nil, err)
-	assert.Equal(t, defaultOptions, handlerV0.Options)
+	handlerV0 := protocol.NewV0Handler(true)
+	assert.Equal(t, true, handlerV0.Unsafe)
 
-	encodedBytes, err := handlerV0.Encode(protocol.MessagePing, randomData)
+	encodedBytes, err := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 	assert.Equal(t, nil, err)
 
 	message, err := handlerV0.Decode(encodedBytes)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, uint32(512), message.Length())
-	assert.Equal(t, protocol.DefaultProtocolVersion, message.Ver())
-	assert.Equal(t, protocol.MessagePing, message.Type())
-
-	messageData, err := message.Data()
-	assert.Equal(t, err, nil)
-	assert.Equal(t, messageData, randomData)
+	assert.Equal(t, uint32(512), message.ContentLength)
+	assert.Equal(t, protocol.Version0, message.Version)
+	assert.Equal(t, uint32(0), message.Routing)
+	assert.Equal(t, protocol.MessagePacket, message.Operation)
+	assert.Equal(t, randomData, message.Content)
 }
 
 func BenchmarkEncode(b *testing.B) {
-	defaultOptions := protocol.DefaultOptions()
-
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0, _ := protocol.NewMessageHandler(defaultOptions)
-
+	handlerV0 := protocol.NewV0Handler(false)
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = handlerV0.Encode(protocol.MessagePing, randomData)
+		_, _ = handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 	}
 }
 
 func BenchmarkDecode(b *testing.B) {
-	defaultOptions := protocol.DefaultOptions()
-
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0, _ := protocol.NewMessageHandler(defaultOptions)
-	encodedMessage, _ := handlerV0.Encode(protocol.MessagePing, randomData)
+	handlerV0 := protocol.NewV0Handler(false)
+	encodedMessage, _ := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = handlerV0.Decode(encodedMessage)
 	}
 }
 
 func BenchmarkUnsafeEncode(b *testing.B) {
-	defaultOptions := protocol.DefaultOptions()
-	defaultOptions.Unsafe = true
-
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0, _ := protocol.NewMessageHandler(defaultOptions)
-
+	handlerV0 := protocol.NewV0Handler(true)
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = handlerV0.Encode(protocol.MessagePing, randomData)
+		_, _ = handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 	}
 }
 
 func BenchmarkUnsafeDecode(b *testing.B) {
-	defaultOptions := protocol.DefaultOptions()
-	defaultOptions.Unsafe = true
-
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0, _ := protocol.NewMessageHandler(defaultOptions)
-	encodedMessage, _ := handlerV0.Encode(protocol.MessagePing, randomData)
+	handlerV0 := protocol.NewV0Handler(true)
+	encodedMessage, _ := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		_, _ = handlerV0.Decode(encodedMessage)
+	}
+}
+
+func BenchmarkEncodeDecode(b *testing.B) {
+	randomData := make([]byte, 512)
+	_, _ = rand.Read(randomData)
+
+	handlerV0 := protocol.NewV0Handler(false)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		encodedMessage, _ := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
+		_, _ = handlerV0.Decode(encodedMessage)
+	}
+}
+
+func BenchmarkUnsafeEncodeDecode(b *testing.B) {
+	randomData := make([]byte, 512)
+	_, _ = rand.Read(randomData)
+
+	handlerV0 := protocol.NewV0Handler(true)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		encodedMessage, _ := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 		_, _ = handlerV0.Decode(encodedMessage)
 	}
 }
