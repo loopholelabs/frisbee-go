@@ -1,61 +1,78 @@
-package main
+package client
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
-	"io"
-	"log"
-	"net"
-
 	"github.com/loophole-labs/frisbee/internal/protocol"
+	"io"
+	"net"
+	"sync"
+	//"strconv"
 )
 
 // Example command: go run client.go
-func main() {
+func Run() {
 	conn, err := net.Dial("tcp", "127.0.0.1:8192")
 	if err != nil {
 		panic(err)
 	}
+
 	defer conn.Close()
+
+	bufConn := bufio.NewWriterSize(conn, 512)
+	bufRead := bufio.NewReader(conn)
+
+	//cleanup := make(chan bool)
 
 	go func() {
 		for {
-
-			response, err := ClientDecode(conn)
+			_, err := ClientDecode(bufRead)
 			if err != nil {
 				// Can be caused by server disconnects
-				log.Printf("ClientDecode error, %v\n", err)
+				//log.Printf("ClientDecode error, %v\n", err)
+				break
 			}
-
-			log.Printf("Operation: %x, Routing %x, Content: %s", response.Operation, response.Routing, string(response.Content))
-
+			//log.Printf("Operation: %x, Routing %x, Content: %s", response.Operation, response.Routing, string(response.Content))
+			//numResp, _ := strconv.Atoi(string(response.Content))
+			//if numResp == 100000-1 {
+			//	cleanup <- true
+			//	break
+			//}
 		}
 	}()
 
-	data := []byte("hello")
-	encodedMessage, err := ClientEncode(protocol.MessagePing, data)
-	if err != nil {
-		panic(err)
-	}
-	conn.Write(encodedMessage)
+	var wg sync.Mutex
+	var wait sync.WaitGroup
 
-	data = []byte("world")
-	encodedMessage, err = ClientEncode(protocol.MessagePing, data)
-	if err != nil {
-		panic(err)
+	for i := 0; i < 1000000; i++ {
+		data := []byte(fmt.Sprintf("%d", i))
+		encodedMessage, err := ClientEncode(protocol.MessagePing, data)
+		if err != nil {
+			panic(err)
+		}
+		wait.Add(1)
+		go func() {
+			wg.Lock()
+			_, _ = bufConn.Write(encodedMessage)
+			wg.Unlock()
+			wait.Done()
+		}()
 	}
-	conn.Write(encodedMessage)
-
-	select {}
+	wait.Wait()
+	bufConn.Flush()
+	//select {
+	//case <- cleanup:
+	//}
 }
 
 // ClientEncode :
 func ClientEncode(operation uint16, data []byte) ([]byte, error) {
-	return protocol.EncodeV0(operation, 0, data, false)
+	return protocol.EncodeV0(operation, 0, data, true)
 }
 
 // ClientDecode :
-func ClientDecode(rawConn net.Conn) (*protocol.MessageV0, error) {
+func ClientDecode(rawConn *bufio.Reader) (*protocol.MessageV0, error) {
 
 	encodedHeader := make([]byte, protocol.HeaderLengthV0)
 	n, err := io.ReadFull(rawConn, encodedHeader)
@@ -63,7 +80,7 @@ func ClientDecode(rawConn net.Conn) (*protocol.MessageV0, error) {
 		return nil, err
 	}
 
-	decodedHeader, err := protocol.DecodeV0(encodedHeader, false, true)
+	decodedHeader, err := protocol.DecodeV0(encodedHeader, true, true)
 	if err != nil {
 		return nil, err
 	}

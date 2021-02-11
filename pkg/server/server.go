@@ -1,11 +1,8 @@
-package main
+package server
 
 import (
-	"fmt"
-	"log"
 	"time"
 
-	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/loophole-labs/frisbee/pkg/codec"
 	"github.com/panjf2000/gnet"
 	"github.com/panjf2000/gnet/pool/goroutine"
@@ -20,47 +17,33 @@ type gnetServer struct {
 	workerPool *goroutine.Pool
 }
 
-func (server *gnetServer) OnInitComplete(srv gnet.Server) (action gnet.Action) {
-	log.Printf("Test codec server is listening on %s (multi-cores: %t, loops: %d)\n",
-		srv.Addr.String(), srv.Multicore, srv.NumEventLoop)
+func (server *gnetServer) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
+
+	//message, _ := protocol.DecodeV0(encodedData, true, false)
+
+	//log.Printf("Frame: %s", string(frame))
+
+	//response := codec.MessageV0{
+	//	Operation: protocol.MessagePong,
+	//	Routing:   0,
+	//}
+	//
+	//c.SetContext(response)
+	//
+	//if server.async {
+	//	data := append([]byte{}, frame...)
+	//	_ = server.workerPool.Submit(func() {
+	//		c.AsyncWrite(data)
+	//	})
+	//	return
+	//}
+	out = nil
 	return
 }
 
-func (server *gnetServer) React(encodedData []byte, c gnet.Conn) (out []byte, action gnet.Action) {
-
-	message, _ := protocol.DecodeV0(encodedData, false, false)
-
-	log.Printf("Operation: %x, Routing %x, Content: %s", message.Operation, message.Routing, string(message.Content))
-
-	response := codec.MessageV0{
-		Operation: protocol.MessagePong,
-		Routing:   0,
-	}
-
-	c.SetContext(response)
-
-	if server.async {
-		data := append([]byte{}, message.Content...)
-		_ = server.workerPool.Submit(func() {
-			c.AsyncWrite(data)
-		})
-		return
-	}
-	out = message.Content
-	return
-}
-
-func startServer(addr string, multicore, async bool, icCodec gnet.ICodec) {
-	var err error
+func StartServer(addr string, multicore, async bool, icCodec gnet.ICodec) {
 	icCodec = &codec.MessageV0{}
 	server := &gnetServer{addr: addr, multicore: multicore, async: async, codec: icCodec, workerPool: goroutine.Default()}
-	err = gnet.Serve(server, addr, gnet.WithMulticore(multicore), gnet.WithTCPKeepAlive(time.Minute*5), gnet.WithCodec(icCodec))
-	if err != nil {
-		panic(err)
-	}
-}
+	go gnet.Serve(server, addr, gnet.WithMulticore(multicore), gnet.WithTCPKeepAlive(time.Minute*5), gnet.WithCodec(icCodec), gnet.WithNumEventLoop(16), gnet.WithLoadBalancing(gnet.RoundRobin))
 
-func main() {
-	addr := fmt.Sprintf("tcp://:8192")
-	startServer(addr, true, false, nil)
 }
