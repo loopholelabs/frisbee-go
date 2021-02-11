@@ -79,9 +79,9 @@ func (handler *V0Handler) Decode(buf []byte) (message MessageV0, err error) {
 
 	switch handler.Unsafe {
 	case true:
-		err = message.UnsafeDecode()
+		err = message.UnsafeDecode(false)
 	default:
-		err = message.Decode()
+		err = message.Decode(false)
 	}
 
 	return
@@ -150,7 +150,7 @@ func (fm *MessageV0) Encode() ([]byte, error) {
 }
 
 // UnsafeDecode MessageV0
-func (fm *MessageV0) UnsafeDecode() (err error) {
+func (fm *MessageV0) UnsafeDecode(headerOnly bool) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.Wrap(recoveredErr.(error), "Error Unsafe Decoding Message")
@@ -174,7 +174,7 @@ func (fm *MessageV0) UnsafeDecode() (err error) {
 	fm.Routing = binary.BigEndian.Uint32(fm.Content[8:12])
 	fm.ContentLength = binary.BigEndian.Uint32(fm.Content[12:16])
 
-	if fm.ContentLength > 0 {
+	if fm.ContentLength > 0 && !headerOnly {
 		fm.Content = fm.Content[HeaderLengthV0:]
 		if uint32(len(fm.Content)) != fm.ContentLength {
 			return errors.New("Invalid Data is not the same length as Data Length")
@@ -185,7 +185,7 @@ func (fm *MessageV0) UnsafeDecode() (err error) {
 }
 
 // Decode MessageV0
-func (fm *MessageV0) Decode() (err error) {
+func (fm *MessageV0) Decode(headerOnly bool) (err error) {
 
 	if len(fm.Content) < HeaderLengthV0 {
 		return errors.New("Invalid Message Header (Too Small)")
@@ -217,7 +217,7 @@ func (fm *MessageV0) Decode() (err error) {
 		return errors.Wrap(err, "Unable to read Data Length")
 	}
 
-	if fm.ContentLength > 0 {
+	if fm.ContentLength > 0 && !headerOnly {
 		fm.Content = fm.Content[HeaderLengthV0:]
 		if uint32(len(fm.Content)) != fm.ContentLength {
 			return errors.New("Invalid Data is not the same length as Data Length")
@@ -225,6 +225,40 @@ func (fm *MessageV0) Decode() (err error) {
 	}
 
 	return nil
+}
+
+// EncodeV0 without a Handler
+func EncodeV0(operation uint16, routing uint32, buf []byte, unsafe bool) (data []byte, err error) {
+	message := MessageV0{
+		Version:       Version0,
+		Operation:     operation,
+		Routing:       routing,
+		ContentLength: uint32(len(buf)),
+		Content:       buf,
+	}
+
+	switch unsafe {
+	case true:
+		return message.UnsafeEncode()
+	default:
+		return message.Encode()
+	}
+}
+
+// DecodeV0 without a Handler
+func DecodeV0(buf []byte, unsafe bool, headerOnly bool) (message MessageV0, err error) {
+	message = MessageV0{
+		Content: buf,
+	}
+
+	switch unsafe {
+	case true:
+		err = message.UnsafeDecode(headerOnly)
+	default:
+		err = message.Decode(headerOnly)
+	}
+
+	return
 }
 
 func validVersion(version uint8) bool {

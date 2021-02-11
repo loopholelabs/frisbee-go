@@ -1,16 +1,17 @@
-package server
+package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/loophole-labs/frisbee/pkg/codec"
 	"github.com/panjf2000/gnet"
 	"github.com/panjf2000/gnet/pool/goroutine"
 )
 
-type codecServer struct {
+type gnetServer struct {
 	*gnet.EventServer
 	addr       string
 	multicore  bool
@@ -19,50 +20,47 @@ type codecServer struct {
 	workerPool *goroutine.Pool
 }
 
-func (cs *codecServer) OnInitComplete(srv gnet.Server) (action gnet.Action) {
+func (server *gnetServer) OnInitComplete(srv gnet.Server) (action gnet.Action) {
 	log.Printf("Test codec server is listening on %s (multi-cores: %t, loops: %d)\n",
 		srv.Addr.String(), srv.Multicore, srv.NumEventLoop)
 	return
 }
 
-func (cs *codecServer) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
-	if cs.async {
-		data := append([]byte{}, frame...)
-		_ = cs.workerPool.Submit(func() {
+func (server *gnetServer) React(encodedData []byte, c gnet.Conn) (out []byte, action gnet.Action) {
+
+	message, _ := protocol.DecodeV0(encodedData, false, false)
+
+	log.Printf("Operation: %x, Routing %x, Content: %s", message.Operation, message.Routing, string(message.Content))
+
+	response := codec.MessageV0{
+		Operation: protocol.MessagePong,
+		Routing:   0,
+	}
+
+	c.SetContext(response)
+
+	if server.async {
+		data := append([]byte{}, message.Content...)
+		_ = server.workerPool.Submit(func() {
 			c.AsyncWrite(data)
 		})
 		return
 	}
-	out = frame
+	out = message.Content
 	return
 }
 
-func testCodecServe(addr string, multicore, async bool, codec gnet.ICodec) {
+func startServer(addr string, multicore, async bool, icCodec gnet.ICodec) {
 	var err error
-	if codec == nil {
-		encoderConfig := gnet.EncoderConfig{
-			ByteOrder:                       binary.BigEndian,
-			LengthFieldLength:               4,
-			LengthAdjustment:                0,
-			LengthIncludesLengthFieldLength: false,
-		}
-		decoderConfig := gnet.DecoderConfig{
-			ByteOrder:           binary.BigEndian,
-			LengthFieldOffset:   0,
-			LengthFieldLength:   4,
-			LengthAdjustment:    0,
-			InitialBytesToStrip: 4,
-		}
-		codec = gnet.NewLengthFieldBasedFrameCodec(encoderConfig, decoderConfig)
-	}
-	cs := &codecServer{addr: addr, multicore: multicore, async: async, codec: codec, workerPool: goroutine.Default()}
-	err = gnet.Serve(cs, addr, gnet.WithMulticore(multicore), gnet.WithTCPKeepAlive(time.Minute*5), gnet.WithCodec(codec))
+	icCodec = &codec.MessageV0{}
+	server := &gnetServer{addr: addr, multicore: multicore, async: async, codec: icCodec, workerPool: goroutine.Default()}
+	err = gnet.Serve(server, addr, gnet.WithMulticore(multicore), gnet.WithTCPKeepAlive(time.Minute*5), gnet.WithCodec(icCodec))
 	if err != nil {
 		panic(err)
 	}
 }
 
-func Run() {
+func main() {
 	addr := fmt.Sprintf("tcp://:8192")
-	testCodecServe(addr, true, false, nil)
+	startServer(addr, true, false, nil)
 }
