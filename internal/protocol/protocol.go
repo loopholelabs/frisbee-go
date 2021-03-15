@@ -95,16 +95,19 @@ func (fm *MessageV0) UnsafeEncode() (result []byte, err error) {
 		}
 	}()
 
+	intermediate := make([]uint8, HeaderLengthV0)
+	intermediate[0] = uint8(0x00) // Reserved
+	intermediate[1] = uint8(0x46) // F
+	intermediate[2] = uint8(0x42) // B
+	intermediate[3] = uint8(0x45) // E
+	intermediate[4] = uint8(0x45) // E
+	intermediate[5] = fm.Version
+	binary.BigEndian.PutUint16(intermediate[6:8], fm.Operation)
+	binary.BigEndian.PutUint32(intermediate[8:12], fm.Routing)
+	binary.BigEndian.PutUint32(intermediate[12:16], fm.ContentLength)
+
 	result = make([]byte, HeaderLengthV0+fm.ContentLength)
-	result[0] = uint8(0x00) // Reserved
-	result[1] = uint8(0x46) // F
-	result[2] = uint8(0x42) // B
-	result[3] = uint8(0x45) // E
-	result[4] = uint8(0x45) // E
-	result[5] = fm.Version
-	binary.BigEndian.PutUint16(result[6:8], fm.Operation)
-	binary.BigEndian.PutUint32(result[8:12], fm.Routing)
-	binary.BigEndian.PutUint32(result[12:16], fm.ContentLength)
+	copy(result[:HeaderLengthV0], intermediate)
 
 	if fm.ContentLength > 0 {
 		copy(result[HeaderLengthV0:], fm.Content)
@@ -179,6 +182,8 @@ func (fm *MessageV0) UnsafeDecode(headerOnly bool) (err error) {
 		if uint32(len(fm.Content)) != fm.ContentLength {
 			return errors.New("Invalid Data is not the same length as Data Length")
 		}
+	} else if fm.ContentLength < 1 {
+		fm.Content = make([]byte, 0)
 	}
 
 	return nil

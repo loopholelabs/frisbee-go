@@ -50,6 +50,18 @@ func TestUnsafeEncodeDecodeV0(t *testing.T) {
 	assert.Equal(t, uint32(0), message.Routing)
 	assert.Equal(t, protocol.MessagePacket, message.Operation)
 	assert.Equal(t, randomData, message.Content)
+
+	emptyData := make([]byte, 0)
+	emptyEncodedBytes, err := handlerV0.Encode(protocol.MessagePing, 0, emptyData)
+	assert.Equal(t, nil, err)
+
+	emptyMessage, err := handlerV0.Decode(emptyEncodedBytes)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, uint32(0), emptyMessage.ContentLength)
+	assert.Equal(t, protocol.Version0, emptyMessage.Version)
+	assert.Equal(t, uint32(0), emptyMessage.Routing)
+	assert.Equal(t, protocol.MessagePing, emptyMessage.Operation)
+	assert.Equal(t, emptyData, emptyMessage.Content)
 }
 
 func BenchmarkEncode(b *testing.B) {
