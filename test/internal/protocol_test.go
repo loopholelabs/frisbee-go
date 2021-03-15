@@ -9,16 +9,14 @@ import (
 
 func TestDefaultHandler(t *testing.T) {
 	defaultHandler := protocol.NewDefaultHandler()
-	assert.Equal(t, false, defaultHandler.Unsafe)
-	assert.Equal(t, defaultHandler, protocol.NewV0Handler(false))
+	assert.Equal(t, defaultHandler, protocol.NewV0Handler())
 }
 
 func TestEncodeDecodeV0(t *testing.T) {
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0 := protocol.NewV0Handler(false)
-	assert.Equal(t, false, handlerV0.Unsafe)
+	handlerV0 := protocol.NewV0Handler()
 
 	encodedBytes, err := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 	assert.Equal(t, nil, err)
@@ -37,8 +35,7 @@ func TestUnsafeEncodeDecodeV0(t *testing.T) {
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0 := protocol.NewV0Handler(true)
-	assert.Equal(t, true, handlerV0.Unsafe)
+	handlerV0 := protocol.NewV0Handler()
 
 	encodedBytes, err := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 	assert.Equal(t, nil, err)
@@ -68,7 +65,7 @@ func BenchmarkEncode(b *testing.B) {
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0 := protocol.NewV0Handler(false)
+	handlerV0 := protocol.NewV0Handler()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = handlerV0.Encode(protocol.MessagePacket, 0, randomData)
@@ -79,31 +76,7 @@ func BenchmarkDecode(b *testing.B) {
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0 := protocol.NewV0Handler(false)
-	encodedMessage, _ := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = handlerV0.Decode(encodedMessage)
-	}
-}
-
-func BenchmarkUnsafeEncode(b *testing.B) {
-	randomData := make([]byte, 512)
-	_, _ = rand.Read(randomData)
-
-	handlerV0 := protocol.NewV0Handler(true)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = handlerV0.Encode(protocol.MessagePacket, 0, randomData)
-	}
-}
-
-func BenchmarkUnsafeDecode(b *testing.B) {
-	randomData := make([]byte, 512)
-	_, _ = rand.Read(randomData)
-
-	handlerV0 := protocol.NewV0Handler(true)
+	handlerV0 := protocol.NewV0Handler()
 	encodedMessage, _ := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
 
 	b.ResetTimer()
@@ -116,20 +89,7 @@ func BenchmarkEncodeDecode(b *testing.B) {
 	randomData := make([]byte, 512)
 	_, _ = rand.Read(randomData)
 
-	handlerV0 := protocol.NewV0Handler(false)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		encodedMessage, _ := handlerV0.Encode(protocol.MessagePacket, 0, randomData)
-		_, _ = handlerV0.Decode(encodedMessage)
-	}
-}
-
-func BenchmarkUnsafeEncodeDecode(b *testing.B) {
-	randomData := make([]byte, 512)
-	_, _ = rand.Read(randomData)
-
-	handlerV0 := protocol.NewV0Handler(true)
+	handlerV0 := protocol.NewV0Handler()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
