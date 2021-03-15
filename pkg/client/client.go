@@ -68,7 +68,7 @@ func Run() {
 
 // ClientEncode :
 func ClientEncode(operation uint16, data []byte) ([]byte, error) {
-	return protocol.EncodeV0(operation, 0, data, true)
+	return protocol.EncodeV0(operation, 0, data)
 }
 
 // ClientDecode :
@@ -80,7 +80,7 @@ func ClientDecode(rawConn *bufio.Reader) (*protocol.MessageV0, error) {
 		return nil, err
 	}
 
-	decodedHeader, err := protocol.DecodeV0(encodedHeader, true, true)
+	decodedHeader, err := protocol.DecodeV0(encodedHeader, true)
 	if err != nil {
 		return nil, err
 	}

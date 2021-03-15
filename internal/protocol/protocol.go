@@ -136,7 +136,7 @@ func EncodeV0(operation uint16, routing uint32, buf []byte) ([]byte, error) {
 }
 
 // DecodeV0 without a Handler
-func DecodeV0(buf []byte, unsafe bool, headerOnly bool) (message MessageV0, err error) {
+func DecodeV0(buf []byte, headerOnly bool) (message MessageV0, err error) {
 	message = MessageV0{
 		Content: buf,
 	}
