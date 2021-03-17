@@ -15,8 +15,8 @@ import (
 
 func BenchmarkThroughput(b *testing.B) {
 	const testSize = 10000
-	const messageSize = 32
-	const bufferSize = messageSize << 9
+	const messageSize = 512
+	const bufferSize = messageSize << 8
 	addr := fmt.Sprintf("0.0.0.0:8192")
 	messageMap := make(MessageMap)
 
@@ -37,7 +37,7 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 
 	bufConn := bufio.NewWriterSize(conn, bufferSize)
-	data := make([]byte, 32)
+	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
 	b.Run("client-test", func(b *testing.B) {
@@ -71,8 +71,8 @@ func BenchmarkThroughput(b *testing.B) {
 
 func BenchmarkThroughputWithResponse(b *testing.B) {
 	const testSize = 10000
-	const messageSize = 32
-	const bufferSize = messageSize << 9
+	const messageSize = 512
+	const bufferSize = messageSize << 8
 	addr := fmt.Sprintf("0.0.0.0:8192")
 	messageMap := make(MessageMap)
 
@@ -98,7 +98,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 
 	response := [protocol.HeaderLengthV0]byte{}
 	bufConn := bufio.NewWriterSize(conn, bufferSize)
-	data := make([]byte, 32)
+	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
 	b.Run("client-test", func(b *testing.B) {
