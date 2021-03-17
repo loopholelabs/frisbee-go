@@ -7,24 +7,18 @@ import (
 )
 
 const (
-	MessageHello   = uint16(0x0001) // HELLO
-	MessageWelcome = uint16(0x0002) // WELCOME
-	MessagePing    = uint16(0x0003) // PING
-	MessagePong    = uint16(0x0004) // PONG
-	MessagePacket  = uint16(0x0005) // PACKET
+	MessagePing   = uint16(0x0003) // PING
+	MessagePong   = uint16(0x0004) // PONG
+	MessagePacket = uint16(0x0005) // PACKET
 )
 
 const (
-	MagicBytes     = uint16(0x4642) // FBEE
-	Version0       = uint8(0x01)    // Version 0
-	HeaderLengthV0 = 16             // Version 0
+	Version0       = uint8(0x01) // Version 0
+	HeaderLengthV0 = 16          // Version 0
 )
 
 type MessageV0 struct {
-	Reserved      uint8  // 1 Byte
-	MagicBytes    uint16 // 2 Bytes
-	Version       uint8  // 1 Byte
-	Id            uint16 // 2 Bytes
+	Id            uint32 // 4 Bytes
 	Operation     uint16 // 2 Byte
 	Routing       uint32 // 4 Bytes
 	ContentLength uint32 // 4 Bytes
@@ -40,7 +34,7 @@ func NewV0Handler() V0Handler {
 	return V0Handler{}
 }
 
-func (handler *V0Handler) Encode(id uint16, operation uint16, routing uint32, contentLength uint32) ([HeaderLengthV0]byte, error) {
+func (handler *V0Handler) Encode(id uint32, operation uint16, routing uint32, contentLength uint32) ([HeaderLengthV0]byte, error) {
 	return EncodeV0(id, operation, routing, contentLength)
 }
 
@@ -57,9 +51,8 @@ func (fm *MessageV0) Encode() (result [HeaderLengthV0]byte, err error) {
 	}()
 
 	result[0] = byte(0x00) // Reserved
-	binary.BigEndian.PutUint16(result[1:3], MagicBytes)
-	result[3] = fm.Version
-	binary.BigEndian.PutUint16(result[4:6], fm.Id)
+	result[1] = Version0
+	binary.BigEndian.PutUint32(result[2:6], fm.Id)
 	binary.BigEndian.PutUint16(result[6:8], fm.Operation)
 	binary.BigEndian.PutUint32(result[8:12], fm.Routing)
 	binary.BigEndian.PutUint32(result[12:16], fm.ContentLength)
@@ -75,11 +68,10 @@ func (fm *MessageV0) Decode(buf [HeaderLengthV0]byte) (err error) {
 		}
 	}()
 
-	fm.Version = buf[3]
-	if !validVersion(fm.Version) {
+	if !validVersion(buf[1]) {
 		return errors.New("invalid message version")
 	}
-	fm.Id = binary.BigEndian.Uint16(buf[4:6])
+	fm.Id = binary.BigEndian.Uint32(buf[2:6])
 	fm.Operation = binary.BigEndian.Uint16(buf[6:8])
 	fm.Routing = binary.BigEndian.Uint32(buf[8:12])
 	fm.ContentLength = binary.BigEndian.Uint32(buf[12:16])
@@ -88,9 +80,8 @@ func (fm *MessageV0) Decode(buf [HeaderLengthV0]byte) (err error) {
 }
 
 // EncodeV0 without a Handler
-func EncodeV0(id uint16, operation uint16, routing uint32, contentLength uint32) ([HeaderLengthV0]byte, error) {
+func EncodeV0(id uint32, operation uint16, routing uint32, contentLength uint32) ([HeaderLengthV0]byte, error) {
 	message := MessageV0{
-		Version:       Version0,
 		Id:            id,
 		Operation:     operation,
 		Routing:       routing,

@@ -6,7 +6,8 @@ import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/panjf2000/gnet"
 	"github.com/panjf2000/gnet/pool/goroutine"
-	"log"
+	"github.com/sirupsen/logrus"
+	"io/ioutil"
 	"time"
 )
 
@@ -21,27 +22,38 @@ type Handler struct {
 	workerPool *goroutine.Pool
 	codec      *codec.ICodec
 	router     MessageMap
+	started    chan struct{}
+}
+
+func (handler *Handler) OnInitComplete(server gnet.Server) (action gnet.Action) {
+	handler.started <- struct{}{}
+	return 0
+}
+
+func (handler *Handler) OnOpened(c gnet.Conn) (out []byte, action gnet.Action) {
+	return nil, 0
+}
+
+func (handler *Handler) OnShutdown(svr gnet.Server) {
 }
 
 func (handler *Handler) React(frame []byte, _ gnet.Conn) (out []byte, action gnet.Action) {
-	id := binary.BigEndian.Uint16(frame)
+	id := binary.BigEndian.Uint32(frame)
 	packet := handler.codec.Packets[id]
 	handlerFunc := handler.router[packet.Message.Operation]
 	if handlerFunc != nil {
-		out, actionInt := handlerFunc(*packet.Message, *packet.Content)
+		out, actionInt := handlerFunc(*packet.Message, packet.Content)
 		action = gnet.Action(actionInt)
 		return out, action
-	} else {
-		log.Printf("Operation 0x%x was invalid", packet.Message.Operation)
 	}
 	out = nil
 	return
 
 }
 
-func StartServer(addr string, multicore bool, async bool, router MessageMap) {
+func StartServer(started chan struct{}, addr string, multicore bool, async bool, router MessageMap) {
 	icCodec := &codec.ICodec{
-		Packets: make(map[uint16]*codec.Packet),
+		Packets: make(map[uint32]*codec.Packet),
 	}
 	server := &Handler{
 		addr:       addr,
@@ -50,6 +62,14 @@ func StartServer(addr string, multicore bool, async bool, router MessageMap) {
 		codec:      icCodec,
 		workerPool: goroutine.Default(),
 		router:     router,
+		started:    started,
 	}
-	go gnet.Serve(server, addr, gnet.WithMulticore(multicore), gnet.WithTCPKeepAlive(time.Minute*5), gnet.WithCodec(icCodec), gnet.WithNumEventLoop(16), gnet.WithLoadBalancing(gnet.RoundRobin))
+	logger := logrus.New()
+	logger.SetOutput(ioutil.Discard)
+	go func() {
+		err := gnet.Serve(server, addr, gnet.WithMulticore(multicore), gnet.WithTCPKeepAlive(time.Minute*5), gnet.WithCodec(icCodec), gnet.WithLogger(logger), gnet.WithNumEventLoop(16))
+		if err != nil {
+			panic(err)
+		}
+	}()
 }
