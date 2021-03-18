@@ -1,4 +1,4 @@
-package router
+package handler
 
 import (
 	"bufio"
@@ -8,9 +8,12 @@ import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/panjf2000/gnet"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"io"
+	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 )
 
 func BenchmarkThroughput(b *testing.B) {
@@ -25,8 +28,9 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 
 	started := make(chan struct{})
-
-	go StartServer(started, addr, true, true, messageMap)
+	emptyLogger := logrus.New()
+	emptyLogger.SetOutput(ioutil.Discard)
+	go StartHandler(started, addr, true, true, 16, time.Minute*5, emptyLogger, messageMap)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
@@ -85,8 +89,9 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	}
 
 	started := make(chan struct{})
-
-	go StartServer(started, addr, true, true, messageMap)
+	emptyLogger := logrus.New()
+	emptyLogger.SetOutput(ioutil.Discard)
+	go StartHandler(started, addr, true, true, 16, time.Minute*5, emptyLogger, messageMap)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
