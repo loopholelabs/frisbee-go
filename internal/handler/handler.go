@@ -3,16 +3,17 @@ package handler
 import (
 	"encoding/binary"
 	"github.com/loophole-labs/frisbee/internal/codec"
+	"github.com/loophole-labs/frisbee/internal/log"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/panjf2000/ants/v2"
 	"github.com/panjf2000/gnet"
 	"github.com/panjf2000/gnet/pool/goroutine"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"time"
 )
 
-type HandleFunc func(message protocol.MessageV0, content []byte) ([]byte, int)
-type MessageMap map[uint16]HandleFunc
+type RouteFUnc func(message protocol.MessageV0, content []byte) ([]byte, int)
+type Router map[uint16]RouteFUnc
 
 type Handler struct {
 	*gnet.EventServer
@@ -21,7 +22,7 @@ type Handler struct {
 	async      bool
 	workerPool *goroutine.Pool
 	codec      *codec.ICodec
-	router     MessageMap
+	router     Router
 	started    chan struct{}
 }
 
@@ -65,7 +66,7 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 
 }
 
-func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, log *logrus.Logger, router MessageMap) {
+func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router Router) *Handler {
 	icCodec := &codec.ICodec{
 		Packets: make(map[uint32]*codec.Packet),
 	}
@@ -89,11 +90,13 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 			gnet.WithMulticore(multicore),
 			gnet.WithNumEventLoop(loops),
 			gnet.WithTCPKeepAlive(keepAlive),
-			gnet.WithLogger(log),
+			gnet.WithLogger(log.Convert(logger)),
 			gnet.WithCodec(icCodec))
 
 		if err != nil {
 			panic(err)
 		}
 	}()
+
+	return handler
 }

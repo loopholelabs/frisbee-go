@@ -8,7 +8,7 @@ import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/panjf2000/gnet"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog"
 	"io"
 	"io/ioutil"
 	"net"
@@ -21,16 +21,15 @@ func BenchmarkThroughput(b *testing.B) {
 	const messageSize = 512
 	const bufferSize = messageSize << 8
 	addr := fmt.Sprintf("0.0.0.0:8192")
-	messageMap := make(MessageMap)
+	messageMap := make(Router)
 
 	messageMap[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
 		return nil, 0
 	}
 
 	started := make(chan struct{})
-	emptyLogger := logrus.New()
-	emptyLogger.SetOutput(ioutil.Discard)
-	go StartHandler(started, addr, true, true, 16, time.Minute*5, emptyLogger, messageMap)
+	emptyLogger := zerolog.New(ioutil.Discard)
+	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, messageMap)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
@@ -78,7 +77,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	const messageSize = 512
 	const bufferSize = messageSize << 8
 	addr := fmt.Sprintf("0.0.0.0:8192")
-	messageMap := make(MessageMap)
+	messageMap := make(Router)
 
 	messageMap[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
 		if message.Id == testSize-1 {
@@ -89,9 +88,8 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	}
 
 	started := make(chan struct{})
-	emptyLogger := logrus.New()
-	emptyLogger.SetOutput(ioutil.Discard)
-	go StartHandler(started, addr, true, true, 16, time.Minute*5, emptyLogger, messageMap)
+	emptyLogger := zerolog.New(ioutil.Discard)
+	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, messageMap)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
