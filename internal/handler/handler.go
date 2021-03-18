@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/binary"
+	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/codec"
 	"github.com/loophole-labs/frisbee/internal/log"
 	"github.com/loophole-labs/frisbee/internal/protocol"
@@ -12,9 +14,6 @@ import (
 	"time"
 )
 
-type RouteFUnc func(message protocol.MessageV0, content []byte) ([]byte, int)
-type Router map[uint16]RouteFUnc
-
 type Handler struct {
 	*gnet.EventServer
 	addr       string
@@ -22,7 +21,8 @@ type Handler struct {
 	async      bool
 	workerPool *goroutine.Pool
 	codec      *codec.ICodec
-	router     Router
+	router     frisbee.Router
+	logger     log.Logger
 	started    chan struct{}
 }
 
@@ -43,30 +43,45 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 	packet := handler.codec.Packets[id]
 	handlerFunc := handler.router[packet.Message.Operation]
 	if handlerFunc != nil {
-		out, actionInt := handlerFunc(*packet.Message, packet.Content)
-		action = gnet.Action(actionInt)
-		if handler.async && out != nil {
-			if handler.workerPool.Free() > 0 {
-				_ = handler.workerPool.Submit(func() {
-					_ = c.AsyncWrite(out)
-				})
-			} else {
-				go func() {
-					_ = handler.workerPool.Submit(func() {
-						_ = c.AsyncWrite(out)
-					})
-				}()
+		message, output, frisbeeAction := handlerFunc(frisbee.Message(*packet.Message), packet.Content)
+		action = gnet.Action(frisbeeAction)
+		if message != nil && message.ContentLength == uint32(len(output)) {
+			encodedMessage, err := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
+			if err != nil {
+				return
 			}
-			return nil, action
+			if message.ContentLength > 0 {
+				if handler.async {
+					if handler.workerPool.Free() > 0 {
+						_ = handler.workerPool.Submit(func() {
+							_ = c.AsyncWrite(append(encodedMessage[:], output...))
+						})
+					} else {
+						go func() {
+							_ = handler.workerPool.Submit(func() {
+								_ = c.AsyncWrite(append(encodedMessage[:], output...))
+							})
+						}()
+					}
+					return nil, action
+				}
+				return append(encodedMessage[:], output...), action
+			}
+			return encodedMessage[:], action
 		}
-		return out, action
+		return
 	}
 	out = nil
 	return
 
 }
 
-func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router Router) *Handler {
+func (handler *Handler) Stop() (err error) {
+	err = gnet.Stop(context.Background(), handler.addr)
+	return
+}
+
+func StartHandler(started chan struct{}, err chan error, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.Router) *Handler {
 	icCodec := &codec.ICodec{
 		Packets: make(map[uint32]*codec.Packet),
 	}
@@ -81,10 +96,11 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 		codec:      icCodec,
 		workerPool: defaultAntsPool,
 		router:     router,
+		logger:     log.Convert(logger),
 		started:    started,
 	}
 	go func() {
-		err := gnet.Serve(
+		gnetError := gnet.Serve(
 			handler,
 			addr,
 			gnet.WithMulticore(multicore),
@@ -92,10 +108,7 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 			gnet.WithTCPKeepAlive(keepAlive),
 			gnet.WithLogger(log.Convert(logger)),
 			gnet.WithCodec(icCodec))
-
-		if err != nil {
-			panic(err)
-		}
+		err <- gnetError
 	}()
 
 	return handler

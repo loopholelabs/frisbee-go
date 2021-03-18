@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+func TestWithoutOptions(t *testing.T) {
+	options := loadOptions()
+
+	assert.Equal(t, false, options.multicore)
+	assert.Equal(t, false, options.async)
+	assert.Equal(t, 16, options.loops)
+	assert.Equal(t, time.Minute*3, options.keepAlive)
+	assert.Equal(t, &DefaultLogger, options.logger)
+}
+
 func TestWithOptions(t *testing.T) {
 	option := WithOptions(Options{
 		multicore: true,

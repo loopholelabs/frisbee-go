@@ -4,30 +4,38 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type Logger struct {
+type Logger interface {
+	Fatalf(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
+	Debugf(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
+	Infof(format string, args ...interface{})
+}
+
+type logger struct {
 	*zerolog.Logger
 }
 
-func Convert(logger *zerolog.Logger) Logger {
-	return Logger{logger}
+func Convert(zeroLogger *zerolog.Logger) Logger {
+	return logger{zeroLogger}
 }
 
-func (l Logger) Fatalf(format string, args ...interface{}) {
+func (l logger) Fatalf(format string, args ...interface{}) {
 	l.Fatal().Msgf(format, args)
 }
 
-func (l Logger) Errorf(format string, args ...interface{}) {
+func (l logger) Errorf(format string, args ...interface{}) {
 	l.Error().Msgf(format, args)
 }
 
-func (l Logger) Debugf(format string, args ...interface{}) {
+func (l logger) Debugf(format string, args ...interface{}) {
 	l.Debug().Msgf(format, args)
 }
 
-func (l Logger) Warnf(format string, args ...interface{}) {
+func (l logger) Warnf(format string, args ...interface{}) {
 	l.Warn().Msgf(format, args)
 }
 
-func (l Logger) Infof(format string, args ...interface{}) {
+func (l logger) Infof(format string, args ...interface{}) {
 	l.Info().Msgf(format, args)
 }

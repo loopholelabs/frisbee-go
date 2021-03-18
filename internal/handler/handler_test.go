@@ -2,11 +2,9 @@ package handler
 
 import (
 	"bufio"
-	"context"
 	"crypto/rand"
-	"fmt"
+	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/panjf2000/gnet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"io"
@@ -20,16 +18,17 @@ func BenchmarkThroughput(b *testing.B) {
 	const testSize = 10000
 	const messageSize = 512
 	const bufferSize = messageSize << 8
-	addr := fmt.Sprintf("0.0.0.0:8192")
-	router := make(Router)
+	addr := "0.0.0.0:8192"
+	router := make(frisbee.Router)
 
-	router[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
-		return nil, 0
+	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+		return
 	}
 
 	started := make(chan struct{})
+	serverError := make(chan error)
 	emptyLogger := zerolog.New(ioutil.Discard)
-	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
+	handler := StartHandler(started, serverError, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
@@ -69,27 +68,32 @@ func BenchmarkThroughput(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	_ = gnet.Stop(context.Background(), addr)
+	_ = handler.Stop()
 }
 
 func BenchmarkThroughputWithResponse(b *testing.B) {
 	const testSize = 10000
 	const messageSize = 512
 	const bufferSize = messageSize << 8
-	addr := fmt.Sprintf("0.0.0.0:8192")
-	router := make(Router)
+	addr := "0.0.0.0:8192"
+	router := make(frisbee.Router)
 
-	router[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
-		if message.Id == testSize-1 {
-			encodedMessage, _ := protocol.EncodeV0(testSize, protocol.MessagePong, 0, 0)
-			return encodedMessage[:], 0
+	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+		if incomingMessage.Id == testSize-1 {
+			outgoingMessage = &frisbee.Message{
+				Id:            testSize,
+				Operation:     protocol.MessagePong,
+				Routing:       0,
+				ContentLength: 0,
+			}
 		}
-		return nil, 0
+		return
 	}
 
 	started := make(chan struct{})
+	serverError := make(chan error)
 	emptyLogger := zerolog.New(ioutil.Discard)
-	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
+	handler := StartHandler(started, serverError, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
@@ -142,5 +146,6 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	_ = gnet.Stop(context.Background(), addr)
+
+	_ = handler.Stop()
 }

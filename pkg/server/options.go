@@ -24,12 +24,16 @@ func loadOptions(options ...Option) *Options {
 		option(opts)
 	}
 
-	if opts.loops < -1 {
-		opts.loops = -1
+	if opts.loops <= 0 {
+		opts.loops = 16
 	}
 
 	if opts.logger == nil {
 		opts.logger = &DefaultLogger
+	}
+
+	if opts.keepAlive == 0 {
+		opts.keepAlive = time.Minute * 3
 	}
 
 	return opts
