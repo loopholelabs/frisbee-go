@@ -21,15 +21,15 @@ func BenchmarkThroughput(b *testing.B) {
 	const messageSize = 512
 	const bufferSize = messageSize << 8
 	addr := fmt.Sprintf("0.0.0.0:8192")
-	messageMap := make(Router)
+	router := make(Router)
 
-	messageMap[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
+	router[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
 		return nil, 0
 	}
 
 	started := make(chan struct{})
 	emptyLogger := zerolog.New(ioutil.Discard)
-	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, messageMap)
+	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
@@ -77,9 +77,9 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	const messageSize = 512
 	const bufferSize = messageSize << 8
 	addr := fmt.Sprintf("0.0.0.0:8192")
-	messageMap := make(Router)
+	router := make(Router)
 
-	messageMap[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
+	router[protocol.MessagePing] = func(message protocol.MessageV0, content []byte) ([]byte, int) {
 		if message.Id == testSize-1 {
 			encodedMessage, _ := protocol.EncodeV0(testSize, protocol.MessagePong, 0, 0)
 			return encodedMessage[:], 0
@@ -89,7 +89,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 
 	started := make(chan struct{})
 	emptyLogger := zerolog.New(ioutil.Discard)
-	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, messageMap)
+	StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
