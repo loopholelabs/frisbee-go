@@ -44,6 +44,7 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 	handlerFunc := handler.router[packet.Message.Operation]
 	if handlerFunc != nil {
 		message, output, frisbeeAction := handlerFunc(frisbee.Message(*packet.Message), packet.Content)
+
 		action = gnet.Action(frisbeeAction)
 		if message != nil && message.ContentLength == uint32(len(output)) {
 			encodedMessage, err := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)

@@ -21,21 +21,21 @@ func Convert(zeroLogger *zerolog.Logger) Logger {
 }
 
 func (l logger) Fatalf(format string, args ...interface{}) {
-	l.Fatal().Msgf(format, args)
+	l.Fatal().Msgf(format, args...)
 }
 
 func (l logger) Errorf(format string, args ...interface{}) {
-	l.Error().Msgf(format, args)
+	l.Error().Msgf(format, args...)
 }
 
 func (l logger) Debugf(format string, args ...interface{}) {
-	l.Debug().Msgf(format, args)
+	l.Debug().Msgf(format, args...)
 }
 
 func (l logger) Warnf(format string, args ...interface{}) {
-	l.Warn().Msgf(format, args)
+	l.Warn().Msgf(format, args...)
 }
 
 func (l logger) Infof(format string, args ...interface{}) {
-	l.Info().Msgf(format, args)
+	l.Info().Msgf(format, args...)
 }

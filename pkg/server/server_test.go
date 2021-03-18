@@ -14,8 +14,8 @@ func TestNewServer(t *testing.T) {
 		return
 	}
 
-	server := NewServer(addr, router, WithAsync(true))
+	server := NewServer(addr, router, frisbee.WithAsync(true))
 	assert.Equal(t, router, server.router)
-	assert.Equal(t, loadOptions(WithAsync(true)), server.options)
+	assert.Equal(t, frisbee.LoadOptions(frisbee.WithAsync(true)), server.options)
 	assert.Equal(t, addr, server.addr)
 }

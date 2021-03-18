@@ -43,6 +43,7 @@ func (codec *ICodec) Decode(c gnet.Conn) ([]byte, error) {
 			}
 			return nil, errors.New("invalid content length")
 		}
+		c.ShiftN(protocol.HeaderLengthV0)
 		codec.Packets[decodedMessage.Id] = packet
 		return key[:], nil
 	}

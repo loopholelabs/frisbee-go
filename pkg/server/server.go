@@ -9,29 +9,29 @@ type Server struct {
 	*handler.Handler
 	addr    string
 	router  frisbee.Router
-	options *Options
+	options *frisbee.Options
 }
 
-func NewServer(addr string, router frisbee.Router, opts ...Option) *Server {
+func NewServer(addr string, router frisbee.Router, opts ...frisbee.Option) *Server {
 	return &Server{
 		addr:    addr,
 		router:  router,
-		options: loadOptions(opts...),
+		options: frisbee.LoadOptions(opts...),
 	}
 }
 
 func (s *Server) Start() error {
 	started := make(chan struct{})
 	serverError := make(chan error)
-	s.options.logger.Info().Msg("Starting Server")
+	s.options.Logger.Info().Msg("Starting Server")
 	s.Handler = handler.StartHandler(
 		started,
 		serverError,
-		s.addr, s.options.multicore,
-		s.options.async,
-		s.options.loops,
-		s.options.keepAlive,
-		s.options.logger,
+		s.addr, s.options.Multicore,
+		s.options.Async,
+		s.options.Loops,
+		s.options.KeepAlive,
+		s.options.Logger,
 		s.router)
 	<-started
 	err := <-serverError
@@ -42,6 +42,6 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Stop() error {
-	s.options.logger.Info().Msg("Stopping Server")
+	s.options.Logger.Info().Msg("Stopping Server")
 	return s.Handler.Stop()
 }
