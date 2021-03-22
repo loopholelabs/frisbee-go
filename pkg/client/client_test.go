@@ -11,7 +11,7 @@ import (
 func BenchmarkClientThroughput(b *testing.B) {
 	const testSize = 10000
 	const messageSize = 512
-	addr := "0.0.0.0:8192"
+	addr := ":8192"
 	router := make(frisbee.Router)
 
 	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
