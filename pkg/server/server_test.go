@@ -8,14 +8,14 @@ import (
 )
 
 func TestNewServer(t *testing.T) {
-	addr := "tcp://123.0.0.0:123"
+	addr := "tcp://:8192"
 	router := make(frisbee.Router)
 	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		return
 	}
 
-	server := NewServer(addr, router, frisbee.WithAsync(true))
+	server := NewServer(addr, router, WithAsync(true))
 	assert.Equal(t, router, server.router)
-	assert.Equal(t, frisbee.LoadOptions(frisbee.WithAsync(true)), server.options)
+	assert.Equal(t, LoadOptions(WithAsync(true)), server.options)
 	assert.Equal(t, addr, server.addr)
 }

@@ -9,14 +9,14 @@ type Server struct {
 	*handler.Handler
 	addr    string
 	router  frisbee.Router
-	options *frisbee.Options
+	options *Options
 }
 
-func NewServer(addr string, router frisbee.Router, opts ...frisbee.Option) *Server {
+func NewServer(addr string, router frisbee.Router, opts ...Option) *Server {
 	return &Server{
 		addr:    addr,
 		router:  router,
-		options: frisbee.LoadOptions(opts...),
+		options: LoadOptions(opts...),
 	}
 }
 

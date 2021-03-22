@@ -22,16 +22,16 @@ type Client struct {
 	packets         map[uint32]*codec.Packet
 	messages        chan uint32
 	router          frisbee.Router
-	options         *frisbee.Options
+	options         *Options
 	writer          chan []byte
 	quit            chan struct{}
 }
 
-func NewClient(addr string, router frisbee.Router, opts ...frisbee.Option) *Client {
+func NewClient(addr string, router frisbee.Router, opts ...Option) *Client {
 	return &Client{
 		addr:            addr,
 		router:          router,
-		options:         frisbee.LoadOptions(opts...),
+		options:         LoadOptions(opts...),
 		ringBufConnRead: ringbuffer.New(1 << 18),
 		packets:         make(map[uint32]*codec.Packet),
 		messages:        make(chan uint32, 2<<15),
@@ -117,14 +117,14 @@ func BufConnWriter(quit *chan struct{}, bufConnWriter *bufio.Writer, writer *cha
 	}
 }
 
-func RingBufferWriter(quit *chan struct{}, ringBufConnLock *sync.Mutex, ringBuf *ringbuffer.RingBuffer, conn *bufio.Reader) {
+func RingBufferWriter(quit *chan struct{}, ringBufConnLock *sync.Mutex, ringBuf *ringbuffer.RingBuffer, bufConnReader *bufio.Reader) {
 	for {
 		select {
 		case <-*quit:
 			return
 		default:
 			var data []byte
-			n, err := (*conn).Read(data)
+			n, err := (*bufConnReader).Read(data)
 			if err == nil && n > 0 {
 				ringBufConnLock.Lock()
 				_, _ = ringBuf.Write(data)
