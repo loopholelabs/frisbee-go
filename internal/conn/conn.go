@@ -35,6 +35,10 @@ func (c *Conn) Read() []byte {
 	return c.conn.Read()
 }
 
+func (c *Conn) AsyncWrite(data []byte) error {
+	return c.conn.AsyncWrite(data)
+}
+
 func (c *Conn) Close() error {
 	return c.conn.Close()
 }

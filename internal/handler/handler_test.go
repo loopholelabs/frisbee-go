@@ -19,9 +19,9 @@ func BenchmarkThroughput(b *testing.B) {
 	const messageSize = 512
 	const bufferSize = messageSize << 9
 	addr := "0.0.0.0:8192"
-	router := make(frisbee.Router)
+	router := make(frisbee.ServerRouter)
 
-	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	router[protocol.MessagePing] = func(_ frisbee.Conn, _ frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		return
 	}
 
@@ -75,9 +75,9 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	const messageSize = 512
 	const bufferSize = messageSize << 9
 	addr := "0.0.0.0:8192"
-	router := make(frisbee.Router)
+	router := make(frisbee.ServerRouter)
 
-	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	router[protocol.MessagePing] = func(_ frisbee.Conn, incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &frisbee.Message{
 				Id:            testSize,

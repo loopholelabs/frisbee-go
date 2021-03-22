@@ -21,14 +21,14 @@ type Client struct {
 	ringBufConnLock sync.Mutex
 	packets         map[uint32]*codec.Packet
 	messages        chan uint32
-	router          frisbee.Router
+	router          frisbee.ClientRouter
 	options         *Options
 	writer          chan []byte
 	quit            chan struct{}
 	pool            *ants.Pool
 }
 
-func NewClient(addr string, router frisbee.Router, opts ...Option) *Client {
+func NewClient(addr string, router frisbee.ClientRouter, opts ...Option) *Client {
 	ants.Release()
 	pool, _ := ants.NewPool(1<<18, ants.WithNonblocking(false))
 	return &Client{
@@ -64,7 +64,7 @@ func (c *Client) Connect() (err error) {
 		// Reads data from the ringBuffer
 		go RingBufferReader(&c.quit, &c.ringBufConnLock, c.ringBufConnRead, &c.packets, &c.messages)
 
-		// Reacts to incomming messages
+		// Reacts to incoming messages
 		go Reactor(c)
 
 	} else {

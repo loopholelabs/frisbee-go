@@ -11,7 +11,7 @@ import (
 const PING = uint16(1)
 const PONG = uint16(2)
 
-func handlePing(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func handlePing(_ frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
 		log.Printf("Server Received Message: %s", incomingContent)
 		outgoingMessage = &frisbee.Message{
@@ -27,7 +27,7 @@ func handlePing(incomingMessage frisbee.Message, incomingContent []byte) (outgoi
 }
 
 func main() {
-	router := make(frisbee.Router)
+	router := make(frisbee.ServerRouter)
 	router[PING] = handlePing
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)

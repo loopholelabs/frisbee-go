@@ -11,19 +11,25 @@ import (
 )
 
 func BenchmarkClientThroughput(b *testing.B) {
-	const testSize = 10000
-	const messageSize = 512
+	const testSize = 100000
+	const messageSize = 2048
 	addr := ":8192"
-	router := make(frisbee.Router)
+	serverRouter := make(frisbee.ServerRouter)
+	clientRouter := make(frisbee.ClientRouter)
 
-	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	serverRouter[protocol.MessagePing] = func(_ frisbee.Conn, _ frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		return
 	}
+
+	clientRouter[protocol.MessagePing] = func(_ frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+		return
+	}
+
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s := server.NewServer(addr, router, server.WithAsync(true), server.WithLogger(&emptyLogger), server.WithMulticore(true), server.WithLoops(16))
+	s := server.NewServer(addr, serverRouter, server.WithAsync(true), server.WithLogger(&emptyLogger), server.WithMulticore(true), server.WithLoops(16))
 	s.Start()
 
-	c := NewClient("127.0.0.1:8192", router, WithLogger(&emptyLogger))
+	c := NewClient("127.0.0.1:8192", clientRouter, WithLogger(&emptyLogger))
 	_ = c.Connect()
 
 	data := make([]byte, messageSize)
@@ -44,8 +50,6 @@ func BenchmarkClientThroughput(b *testing.B) {
 				}
 			}
 		}
-		b.SetBytes(int64(messageSize * testSize))
-
 	})
 	b.StopTimer()
 	_ = c.Stop()
@@ -53,14 +57,14 @@ func BenchmarkClientThroughput(b *testing.B) {
 }
 
 func BenchmarkClientThroughputResponse(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
 
 	finished := make(chan struct{})
 
 	addr := ":8192"
-	serverRouter := make(frisbee.Router)
-	serverRouter[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	serverRouter := make(frisbee.ServerRouter)
+	serverRouter[protocol.MessagePing] = func(_ frisbee.Conn, incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &frisbee.Message{
 				Id:            testSize,
@@ -72,8 +76,8 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		return
 	}
 
-	clientRouter := make(frisbee.Router)
-	clientRouter[protocol.MessagePong] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	clientRouter := make(frisbee.ClientRouter)
+	clientRouter[protocol.MessagePong] = func(incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		if incomingMessage.Id == testSize {
 			finished <- struct{}{}
 		}
@@ -106,8 +110,6 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 			}
 			<-finished
 		}
-		b.SetBytes(int64(messageSize * testSize))
-
 	})
 	b.StopTimer()
 	_ = c.Stop()

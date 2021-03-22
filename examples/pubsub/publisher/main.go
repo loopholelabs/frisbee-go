@@ -4,25 +4,19 @@ import (
 	"fmt"
 	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/pkg/client"
-	"github.com/rs/zerolog/log"
+	"hash/crc32"
 	"os"
 	"os/signal"
 	"time"
 )
 
-const PING = uint16(1)
-const PONG = uint16(2)
+const PUB = uint16(1)
 
-func handlePong(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-	if incomingMessage.ContentLength > 0 {
-		log.Printf("Client Received Message: %s", string(incomingContent))
-	}
-	return
-}
+var topic = []byte("TOPIC 1")
+var topicHash = crc32.ChecksumIEEE(topic)
 
 func main() {
 	router := make(frisbee.ClientRouter)
-	router[PONG] = handlePong
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
 
@@ -35,11 +29,11 @@ func main() {
 	go func() {
 		i := 0
 		for {
-			message := []byte(fmt.Sprintf("ECHO MESSAGE: %d", i))
+			message := []byte(fmt.Sprintf("PUBLISHED MESSAGE: %d", i))
 			err := c.Write(frisbee.Message{
 				Id:            uint32(i),
-				Operation:     PING,
-				Routing:       0,
+				Operation:     PUB,
+				Routing:       topicHash,
 				ContentLength: uint32(len(message)),
 			}, &message)
 			if err != nil {

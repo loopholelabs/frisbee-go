@@ -9,8 +9,8 @@ import (
 
 func TestNewServer(t *testing.T) {
 	addr := "tcp://:8192"
-	router := make(frisbee.Router)
-	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	router := make(frisbee.ServerRouter)
+	router[protocol.MessagePing] = func(_ frisbee.Conn, _ frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		return
 	}
 

@@ -2,7 +2,6 @@ package server
 
 import (
 	"github.com/loophole-labs/frisbee"
-	"github.com/loophole-labs/frisbee/internal/conn"
 	"github.com/loophole-labs/frisbee/internal/handler"
 	"time"
 )
@@ -10,18 +9,18 @@ import (
 type Server struct {
 	*handler.Handler
 	addr               string
-	router             frisbee.Router
+	router             frisbee.ServerRouter
 	Custom             interface{}
 	Options            *Options
 	UserOnInitComplete func(server *Server) frisbee.Action
-	UserOnOpened       func(server *Server, c conn.Conn) ([]byte, frisbee.Action)
-	UserOnClosed       func(server *Server, c conn.Conn, err error) frisbee.Action
+	UserOnOpened       func(server *Server, c frisbee.Conn) ([]byte, frisbee.Action)
+	UserOnClosed       func(server *Server, c frisbee.Conn, err error) frisbee.Action
 	UserOnShutdown     func(server *Server)
 	UserPreWrite       func(server *Server)
 	UserTick           func(server *Server) (time.Duration, frisbee.Action)
 }
 
-func NewServer(addr string, router frisbee.Router, opts ...Option) *Server {
+func NewServer(addr string, router frisbee.ServerRouter, opts ...Option) *Server {
 	return &Server{
 		addr:    addr,
 		router:  router,
@@ -33,11 +32,11 @@ func (s *Server) onInitComplete() frisbee.Action {
 	return s.UserOnInitComplete(s)
 }
 
-func (s *Server) onOpened(c conn.Conn) ([]byte, frisbee.Action) {
+func (s *Server) onOpened(c frisbee.Conn) ([]byte, frisbee.Action) {
 	return s.UserOnOpened(s, c)
 }
 
-func (s *Server) onClosed(c conn.Conn, err error) frisbee.Action {
+func (s *Server) onClosed(c frisbee.Conn, err error) frisbee.Action {
 	return s.UserOnClosed(s, c, err)
 }
 
@@ -56,13 +55,13 @@ func (s *Server) tick() (time.Duration, frisbee.Action) {
 func (s *Server) Start() {
 
 	if s.UserOnClosed == nil {
-		s.UserOnClosed = func(_ *Server, _ conn.Conn, err error) frisbee.Action {
+		s.UserOnClosed = func(_ *Server, _ frisbee.Conn, err error) frisbee.Action {
 			return frisbee.None
 		}
 	}
 
 	if s.UserOnOpened == nil {
-		s.UserOnOpened = func(_ *Server, _ conn.Conn) ([]byte, frisbee.Action) {
+		s.UserOnOpened = func(_ *Server, _ frisbee.Conn) ([]byte, frisbee.Action) {
 			return nil, frisbee.None
 		}
 	}
