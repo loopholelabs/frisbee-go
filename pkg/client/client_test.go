@@ -33,12 +33,15 @@ func BenchmarkClientThroughput(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				c.Write(frisbee.Message{
+				err := c.Write(frisbee.Message{
 					Id:            uint32(q),
 					Operation:     protocol.MessagePing,
 					Routing:       uint32(i),
 					ContentLength: messageSize,
 				}, &data)
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 
