@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"net"
 	"sync"
-	"time"
 )
 
 type Client struct {
@@ -46,7 +45,7 @@ func (c *Client) Connect() (err error) {
 	c.conn = conn.(*net.TCPConn)
 	_ = c.conn.SetNoDelay(true)
 	_ = c.conn.SetKeepAlive(true)
-	_ = c.conn.SetKeepAlivePeriod(time.Minute * 3)
+	_ = c.conn.SetKeepAlivePeriod(c.options.KeepAlive)
 	c.bufConnReader = bufio.NewReaderSize(c.conn, 2<<15)
 	c.bufConnWrite = bufio.NewWriterSize(c.conn, 2<<15)
 	if err == nil {

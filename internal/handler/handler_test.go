@@ -27,7 +27,7 @@ func BenchmarkThroughput(b *testing.B) {
 
 	started := make(chan struct{})
 	emptyLogger := zerolog.New(ioutil.Discard)
-	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
+	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router, nil, nil, nil, nil, nil, nil)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
@@ -91,7 +91,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 
 	started := make(chan struct{})
 	emptyLogger := zerolog.New(ioutil.Discard)
-	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
+	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router, nil, nil, nil, nil, nil, nil)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")

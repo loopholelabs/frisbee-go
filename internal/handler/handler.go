@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/codec"
+	"github.com/loophole-labs/frisbee/internal/conn"
 	"github.com/loophole-labs/frisbee/internal/log"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/panjf2000/ants/v2"
@@ -16,28 +17,49 @@ import (
 
 type Handler struct {
 	*gnet.EventServer
-	addr       string
-	multicore  bool
-	async      bool
-	workerPool *goroutine.Pool
-	codec      *codec.ICodec
-	router     frisbee.Router
-	logger     log.Logger
-	started    chan struct{}
+	addr               string
+	multicore          bool
+	async              bool
+	workerPool         *goroutine.Pool
+	codec              *codec.ICodec
+	router             frisbee.Router
+	logger             log.Logger
+	started            chan struct{}
+	UserOnInitComplete func() frisbee.Action
+	UserOnOpened       func(c conn.Conn) ([]byte, frisbee.Action)
+	UserOnClosed       func(c conn.Conn, err error) frisbee.Action
+	UserOnShutdown     func()
+	UserPreWrite       func()
+	UserTick           func() (time.Duration, frisbee.Action)
 }
 
-func (handler *Handler) OnInitComplete(_ gnet.Server) (action gnet.Action) {
+func (handler *Handler) OnInitComplete(_ gnet.Server) gnet.Action {
 	handler.started <- struct{}{}
-	handler.logger.Infof("Startup Complete")
-	return 0
+	return gnet.Action(handler.UserOnInitComplete())
 }
 
-func (handler *Handler) OnOpened(_ gnet.Conn) (out []byte, action gnet.Action) {
-	handler.logger.Infof("Client Connected")
-	return nil, 0
+func (handler *Handler) OnOpened(c gnet.Conn) (out []byte, action gnet.Action) {
+	out, frisbeeAction := handler.UserOnOpened(conn.New(c))
+	action = gnet.Action(frisbeeAction)
+	return
+}
+
+func (handler *Handler) OnClosed(c gnet.Conn, err error) gnet.Action {
+	return gnet.Action(handler.UserOnClosed(conn.New(c), err))
+}
+
+func (handler *Handler) PreWrite() {
+	handler.UserPreWrite()
+}
+
+func (handler *Handler) Tick() (delay time.Duration, action gnet.Action) {
+	delay, frisbeeAction := handler.UserTick()
+	action = gnet.Action(frisbeeAction)
+	return
 }
 
 func (handler *Handler) OnShutdown(_ gnet.Server) {
+	handler.UserOnShutdown()
 }
 
 func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
@@ -79,12 +101,11 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 
 }
 
-func (handler *Handler) Stop() (err error) {
-	err = gnet.Stop(context.Background(), handler.addr)
-	return
+func (handler *Handler) Stop() error {
+	return gnet.Stop(context.Background(), handler.addr)
 }
 
-func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.Router) *Handler {
+func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.Router, UserOnInitComplete func() frisbee.Action, UserOnOpened func(c conn.Conn) ([]byte, frisbee.Action), UserOnClosed func(c conn.Conn, err error) frisbee.Action, UserOnShutdown func(), UserPreWrite func(), UserTick func() (time.Duration, frisbee.Action)) *Handler {
 	icCodec := &codec.ICodec{
 		Packets: make(map[uint32]*codec.Packet),
 	}
@@ -92,18 +113,56 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 	options := ants.Options{ExpiryDuration: time.Second * 10, Nonblocking: false}
 	defaultAntsPool, _ := ants.NewPool(1<<18, ants.WithOptions(options))
 
+	if UserOnClosed == nil {
+		UserOnClosed = func(_ conn.Conn, _ error) frisbee.Action {
+			return frisbee.None
+		}
+	}
+
+	if UserOnOpened == nil {
+		UserOnOpened = func(_ conn.Conn) ([]byte, frisbee.Action) {
+			return nil, frisbee.None
+		}
+	}
+
+	if UserOnInitComplete == nil {
+		UserOnInitComplete = func() frisbee.Action {
+			return frisbee.None
+		}
+	}
+
+	if UserOnShutdown == nil {
+		UserOnShutdown = func() {}
+	}
+
+	if UserPreWrite == nil {
+		UserPreWrite = func() {}
+	}
+
+	if UserTick == nil {
+		UserTick = func() (delay time.Duration, action frisbee.Action) {
+			return
+		}
+	}
+
 	handler := &Handler{
-		addr:       addr,
-		multicore:  multicore,
-		async:      async,
-		codec:      icCodec,
-		workerPool: defaultAntsPool,
-		router:     router,
-		logger:     log.Convert(logger),
-		started:    started,
+		addr:               addr,
+		multicore:          multicore,
+		async:              async,
+		codec:              icCodec,
+		workerPool:         defaultAntsPool,
+		router:             router,
+		logger:             log.Convert(logger),
+		started:            started,
+		UserOnInitComplete: UserOnInitComplete,
+		UserOnOpened:       UserOnOpened,
+		UserOnShutdown:     UserOnShutdown,
+		UserOnClosed:       UserOnClosed,
+		UserPreWrite:       UserPreWrite,
+		UserTick:           UserTick,
 	}
 	go func() {
-		gnetError := gnet.Serve(
+		err := gnet.Serve(
 			handler,
 			addr,
 			gnet.WithMulticore(multicore),
@@ -111,8 +170,8 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 			gnet.WithTCPKeepAlive(keepAlive),
 			gnet.WithLogger(log.Convert(logger)),
 			gnet.WithCodec(icCodec))
-		if gnetError != nil {
-			panic(gnetError)
+		if err != nil {
+			panic(err)
 		}
 	}()
 

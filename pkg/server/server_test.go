@@ -16,6 +16,6 @@ func TestNewServer(t *testing.T) {
 
 	server := NewServer(addr, router, WithAsync(true))
 	assert.Equal(t, router, server.router)
-	assert.Equal(t, LoadOptions(WithAsync(true)), server.options)
+	assert.Equal(t, LoadOptions(WithAsync(true)), server.Options)
 	assert.Equal(t, addr, server.addr)
 }
