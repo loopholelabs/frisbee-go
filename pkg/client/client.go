@@ -34,8 +34,8 @@ func NewClient(addr string, router frisbee.Router, opts ...frisbee.Option) *Clie
 		options:         frisbee.LoadOptions(opts...),
 		ringBufConnRead: ringbuffer.New(1 << 18),
 		packets:         make(map[uint32]*codec.Packet),
-		messages:        make(chan uint32, 8192),
-		writer:          make(chan []byte, 8192),
+		messages:        make(chan uint32, 2<<15),
+		writer:          make(chan []byte, 2<<15),
 		quit:            make(chan struct{}),
 	}
 }
