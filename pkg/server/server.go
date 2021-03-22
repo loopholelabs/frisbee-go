@@ -11,6 +11,7 @@ type Server struct {
 	*handler.Handler
 	addr               string
 	router             frisbee.Router
+	Custom             interface{}
 	Options            *Options
 	UserOnInitComplete func(server *Server) frisbee.Action
 	UserOnOpened       func(server *Server, c conn.Conn) ([]byte, frisbee.Action)
