@@ -9,11 +9,13 @@ import (
 	"github.com/pkg/errors"
 	"net"
 	"sync"
+	"time"
 )
 
 type Client struct {
 	addr            string
-	conn            *bufio.Reader
+	conn            *net.TCPConn
+	bufConnReader   *bufio.Reader
 	bufConnWrite    *bufio.Writer
 	ringBufConnRead *ringbuffer.RingBuffer
 	ringBufConnLock sync.Mutex
@@ -41,15 +43,19 @@ func NewClient(addr string, router frisbee.Router, opts ...frisbee.Option) *Clie
 func (c *Client) Connect() (err error) {
 	c.options.Logger.Info().Msgf("Connecting to client")
 	conn, err := net.Dial("tcp4", c.addr)
-	c.conn = bufio.NewReaderSize(conn, 2<<15)
-	c.bufConnWrite = bufio.NewWriterSize(conn, 2<<15)
+	c.conn = conn.(*net.TCPConn)
+	_ = c.conn.SetNoDelay(true)
+	_ = c.conn.SetKeepAlive(true)
+	_ = c.conn.SetKeepAlivePeriod(time.Minute * 3)
+	c.bufConnReader = bufio.NewReaderSize(c.conn, 2<<15)
+	c.bufConnWrite = bufio.NewWriterSize(c.conn, 2<<15)
 	if err == nil {
 		c.options.Logger.Info().Msg("Successfully connected client")
 		// Writes to the bufConnWrite
 		go BufConnWriter(&c.quit, c.bufConnWrite, &c.writer)
 
 		// Pushes data into the ringBuffer
-		go RingBufferWriter(&c.quit, &c.ringBufConnLock, c.ringBufConnRead, c.conn)
+		go RingBufferWriter(&c.quit, &c.ringBufConnLock, c.ringBufConnRead, c.bufConnReader)
 
 		// Reads data from the ringBuffer
 		go RingBufferReader(&c.quit, &c.ringBufConnLock, c.ringBufConnRead, &c.packets, &c.messages)
