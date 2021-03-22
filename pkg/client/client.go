@@ -5,6 +5,7 @@ import (
 	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/codec"
 	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/panjf2000/ants/v2"
 	"github.com/panjf2000/gnet/ringbuffer"
 	"github.com/pkg/errors"
 	"net"
@@ -13,7 +14,7 @@ import (
 
 type Client struct {
 	addr            string
-	conn            *net.TCPConn
+	Conn            *net.TCPConn
 	bufConnReader   *bufio.Reader
 	bufConnWrite    *bufio.Writer
 	ringBufConnRead *ringbuffer.RingBuffer
@@ -24,9 +25,12 @@ type Client struct {
 	options         *Options
 	writer          chan []byte
 	quit            chan struct{}
+	pool            *ants.Pool
 }
 
 func NewClient(addr string, router frisbee.Router, opts ...Option) *Client {
+	ants.Release()
+	pool, _ := ants.NewPool(1<<18, ants.WithNonblocking(false))
 	return &Client{
 		addr:            addr,
 		router:          router,
@@ -36,18 +40,19 @@ func NewClient(addr string, router frisbee.Router, opts ...Option) *Client {
 		messages:        make(chan uint32, 2<<15),
 		writer:          make(chan []byte, 2<<15),
 		quit:            make(chan struct{}),
+		pool:            pool,
 	}
 }
 
 func (c *Client) Connect() (err error) {
 	c.options.Logger.Info().Msgf("Connecting to client")
 	conn, err := net.Dial("tcp4", c.addr)
-	c.conn = conn.(*net.TCPConn)
-	_ = c.conn.SetNoDelay(true)
-	_ = c.conn.SetKeepAlive(true)
-	_ = c.conn.SetKeepAlivePeriod(c.options.KeepAlive)
-	c.bufConnReader = bufio.NewReaderSize(c.conn, 2<<15)
-	c.bufConnWrite = bufio.NewWriterSize(c.conn, 2<<15)
+	c.Conn = conn.(*net.TCPConn)
+	_ = c.Conn.SetNoDelay(true)
+	_ = c.Conn.SetKeepAlive(true)
+	_ = c.Conn.SetKeepAlivePeriod(c.options.KeepAlive)
+	c.bufConnReader = bufio.NewReaderSize(c.Conn, 2<<15)
+	c.bufConnWrite = bufio.NewWriterSize(c.Conn, 2<<15)
 	if err == nil {
 		c.options.Logger.Info().Msg("Successfully connected client")
 		// Writes to the bufConnWrite
@@ -58,14 +63,18 @@ func (c *Client) Connect() (err error) {
 
 		// Reads data from the ringBuffer
 		go RingBufferReader(&c.quit, &c.ringBufConnLock, c.ringBufConnRead, &c.packets, &c.messages)
+
+		// Reacts to incomming messages
+		go Reactor(c)
 	} else {
 		panic(err)
 	}
 	return
 }
 
-func (c *Client) Stop() {
+func (c *Client) Stop() error {
 	close(c.quit)
+	return c.Conn.Close()
 }
 
 func (c *Client) Write(message frisbee.Message, content *[]byte) error {
@@ -80,6 +89,34 @@ func (c *Client) Write(message frisbee.Message, content *[]byte) error {
 	c.writer <- encodedMessage[:]
 	c.writer <- *content
 	return nil
+}
+
+func Reactor(c *Client) {
+	for {
+		select {
+		case <-c.quit:
+			return
+		case id := <-c.messages:
+			packet := (c.packets)[id]
+			_ = c.pool.Submit(func() {
+				handlerFunc := c.router[packet.Message.Operation]
+				if handlerFunc != nil {
+					message, output, action := handlerFunc(frisbee.Message(*packet.Message), packet.Content)
+
+					if message != nil && message.ContentLength == uint32(len(output)) {
+						_ = c.Write(*message, &output)
+					}
+					switch action {
+					case frisbee.Close:
+						_ = c.Stop()
+					case frisbee.Shutdown:
+						_ = c.Stop()
+					default:
+					}
+				}
+			})
+		}
+	}
 }
 
 func BufConnWriter(quit *chan struct{}, bufConnWriter *bufio.Writer, writer *chan []byte) {

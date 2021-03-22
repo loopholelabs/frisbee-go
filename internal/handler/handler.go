@@ -77,17 +77,9 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 			}
 			if message.ContentLength > 0 {
 				if handler.async {
-					if handler.workerPool.Free() > 0 {
-						_ = handler.workerPool.Submit(func() {
-							_ = c.AsyncWrite(append(encodedMessage[:], output...))
-						})
-					} else {
-						go func() {
-							_ = handler.workerPool.Submit(func() {
-								_ = c.AsyncWrite(append(encodedMessage[:], output...))
-							})
-						}()
-					}
+					_ = handler.workerPool.Submit(func() {
+						_ = c.AsyncWrite(append(encodedMessage[:], output...))
+					})
 					return nil, action
 				}
 				return append(encodedMessage[:], output...), action
