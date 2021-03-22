@@ -24,5 +24,5 @@ func main() {
 	router[PING] = handlePing
 
 	s := server.NewServer(":8192", router)
-	_ = s.Start()
+	s.Start()
 }
