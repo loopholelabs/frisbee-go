@@ -15,9 +15,9 @@ import (
 )
 
 func BenchmarkThroughput(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
-	const bufferSize = messageSize << 8
+	const bufferSize = messageSize << 9
 	addr := "0.0.0.0:8192"
 	router := make(frisbee.Router)
 
@@ -26,9 +26,8 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 
 	started := make(chan struct{})
-	serverError := make(chan error)
 	emptyLogger := zerolog.New(ioutil.Discard)
-	handler := StartHandler(started, serverError, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
+	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
@@ -72,9 +71,9 @@ func BenchmarkThroughput(b *testing.B) {
 }
 
 func BenchmarkThroughputWithResponse(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
-	const bufferSize = messageSize << 8
+	const bufferSize = messageSize << 9
 	addr := "0.0.0.0:8192"
 	router := make(frisbee.Router)
 
@@ -91,9 +90,8 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	}
 
 	started := make(chan struct{})
-	serverError := make(chan error)
 	emptyLogger := zerolog.New(ioutil.Discard)
-	handler := StartHandler(started, serverError, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
+	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router)
 	<-started
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")

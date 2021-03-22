@@ -84,7 +84,7 @@ func (handler *Handler) Stop() (err error) {
 	return
 }
 
-func StartHandler(started chan struct{}, err chan error, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.Router) *Handler {
+func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.Router) *Handler {
 	icCodec := &codec.ICodec{
 		Packets: make(map[uint32]*codec.Packet),
 	}
@@ -111,7 +111,9 @@ func StartHandler(started chan struct{}, err chan error, addr string, multicore 
 			gnet.WithTCPKeepAlive(keepAlive),
 			gnet.WithLogger(log.Convert(logger)),
 			gnet.WithCodec(icCodec))
-		err <- gnetError
+		if gnetError != nil {
+			panic(gnetError)
+		}
 	}()
 
 	return handler

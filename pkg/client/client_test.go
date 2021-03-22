@@ -21,7 +21,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 	}
 	emptyLogger := zerolog.New(ioutil.Discard)
 	s := server.NewServer(addr, router, frisbee.WithAsync(true), frisbee.WithLogger(&emptyLogger), frisbee.WithMulticore(true), frisbee.WithLoops(16))
-	go s.Start()
+	s.Start()
 
 	c := NewClient("127.0.0.1:8192", router, frisbee.WithLogger(&emptyLogger))
 	_ = c.Connect()

@@ -20,25 +20,20 @@ func NewServer(addr string, router frisbee.Router, opts ...frisbee.Option) *Serv
 	}
 }
 
-func (s *Server) Start() error {
+func (s *Server) Start() {
 	started := make(chan struct{})
-	serverError := make(chan error)
 	s.options.Logger.Info().Msg("Starting Server")
 	s.Handler = handler.StartHandler(
 		started,
-		serverError,
-		s.addr, s.options.Multicore,
+		s.addr,
+		s.options.Multicore,
 		s.options.Async,
 		s.options.Loops,
 		s.options.KeepAlive,
 		s.options.Logger,
 		s.router)
 	<-started
-	err := <-serverError
-	if err != nil {
-		return err
-	}
-	return nil
+	return
 }
 
 func (s *Server) Stop() error {
