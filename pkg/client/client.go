@@ -78,8 +78,7 @@ func (c *Client) Write(message frisbee.Message, content *[]byte) error {
 	if err != nil {
 		return err
 	}
-	encodedMessageSlice := encodedMessage[:]
-	c.writer <- encodedMessageSlice
+	c.writer <- encodedMessage[:]
 	c.writer <- *content
 	return nil
 }
