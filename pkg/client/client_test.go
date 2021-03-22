@@ -11,7 +11,7 @@ import (
 )
 
 func BenchmarkClientThroughput(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
 	addr := ":8192"
 	router := make(frisbee.Router)
