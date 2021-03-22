@@ -9,14 +9,12 @@ import (
 	"github.com/pkg/errors"
 	"net"
 	"sync"
-	"time"
 )
 
 type Client struct {
 	addr            string
 	conn            *bufio.Reader
 	bufConnWrite    *bufio.Writer
-	bufConnLock     sync.Mutex
 	ringBufConnRead *ringbuffer.RingBuffer
 	ringBufConnLock sync.Mutex
 	packets         map[uint32]*codec.Packet
@@ -34,8 +32,8 @@ func NewClient(addr string, router frisbee.Router, opts ...frisbee.Option) *Clie
 		options:         frisbee.LoadOptions(opts...),
 		ringBufConnRead: ringbuffer.New(1 << 18),
 		packets:         make(map[uint32]*codec.Packet),
-		messages:        make(chan uint32, 4096),
-		writer:          make(chan *[]byte, 4096),
+		messages:        make(chan uint32, 8192),
+		writer:          make(chan *[]byte, 8192),
 		quit:            make(chan struct{}),
 	}
 }
@@ -46,8 +44,8 @@ func (c *Client) Connect() (err error) {
 	c.bufConnWrite = bufio.NewWriterSize(conn, 2<<15)
 	if err == nil {
 		c.options.Logger.Info().Msg("Successfully connected client")
-		// Flushes the bufConnWriter
-		go BufConnFlusher(&c.quit, &c.bufConnLock, c.bufConnWrite)
+		// Writes to the bufConnWrite
+		go BufConnWriter(&c.quit, c.bufConnWrite, &c.writer)
 
 		// Pushes data into the ringBuffer
 		go RingBufferWriter(&c.quit, &c.ringBufConnLock, c.ringBufConnRead, c.conn)
@@ -59,8 +57,6 @@ func (c *Client) Connect() (err error) {
 }
 
 func (c *Client) Stop() {
-	c.bufConnLock.Lock()
-	_ = c.bufConnWrite.Flush()
 	close(c.quit)
 }
 
@@ -73,25 +69,42 @@ func (c *Client) Write(message frisbee.Message, content *[]byte) error {
 	if err != nil {
 		return err
 	}
-
-	c.bufConnLock.Lock()
-	_, _ = c.bufConnWrite.Write(encodedMessage[:])
-	_, _ = c.bufConnWrite.Write(*content)
-	c.bufConnLock.Unlock()
+	encodedMessageSlice := encodedMessage[:]
+	c.writer <- &encodedMessageSlice
+	c.writer <- content
 	return nil
 }
 
-func BufConnFlusher(quit *chan struct{}, bufConnLock *sync.Mutex, bufConnWriter *bufio.Writer) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+func BufConnWriter(quit *chan struct{}, bufConnWriter *bufio.Writer, writer *chan *[]byte) {
 	for {
 		select {
+		case data := <-*writer:
+			dataLen := len(*data)
+			written := 0
+		FirstWrite:
+			n, _ := bufConnWriter.Write((*data)[written:])
+			written += n
+			if written != dataLen {
+				goto FirstWrite
+			}
+			for otherData := range *writer {
+				dataLen = len(*otherData)
+				written = 0
+			LoopedWrite:
+				n, _ := bufConnWriter.Write((*otherData)[written:])
+				written += n
+				if written != dataLen {
+					goto LoopedWrite
+				}
+				if len(*writer) < 1 {
+					break
+				}
+			}
 		case <-*quit:
-			return
-		case <-ticker.C:
-			bufConnLock.Lock()
 			_ = bufConnWriter.Flush()
-			bufConnLock.Unlock()
+			return
 		default:
+			_ = bufConnWriter.Flush()
 		}
 	}
 }
@@ -102,13 +115,13 @@ func RingBufferWriter(quit *chan struct{}, ringBufConnLock *sync.Mutex, ringBuf 
 		case <-*quit:
 			return
 		default:
-		}
-		var data []byte
-		n, err := (*conn).Read(data)
-		if err == nil && n > 0 {
-			ringBufConnLock.Lock()
-			_, _ = ringBuf.Write(data)
-			ringBufConnLock.Unlock()
+			var data []byte
+			n, err := (*conn).Read(data)
+			if err == nil && n > 0 {
+				ringBufConnLock.Lock()
+				_, _ = ringBuf.Write(data)
+				ringBufConnLock.Unlock()
+			}
 		}
 	}
 }
@@ -119,37 +132,37 @@ func RingBufferReader(quit *chan struct{}, ringBufConnLock *sync.Mutex, ringBuf 
 		case <-*quit:
 			return
 		default:
-		}
-		if ringBuf.Length() > protocol.HeaderLengthV0 {
-			if message, _ := ringBuf.LazyRead(protocol.HeaderLengthV0); len(message) == protocol.HeaderLengthV0 {
-				decodedMessage, err := protocol.DecodeV0(message)
-				if err != nil {
-					ringBufConnLock.Lock()
-					ringBuf.Reset()
-					ringBufConnLock.Unlock()
-					continue
-				}
-				packet := &codec.Packet{
-					Message: &decodedMessage,
-				}
-				if decodedMessage.ContentLength > 0 {
-					if content, _ := ringBuf.LazyRead(int(decodedMessage.ContentLength + protocol.HeaderLengthV0)); len(content) == int(decodedMessage.ContentLength+protocol.HeaderLengthV0) {
+			if ringBuf.Length() > protocol.HeaderLengthV0 {
+				if message, _ := ringBuf.LazyRead(protocol.HeaderLengthV0); len(message) == protocol.HeaderLengthV0 {
+					decodedMessage, err := protocol.DecodeV0(message)
+					if err != nil {
 						ringBufConnLock.Lock()
-						ringBuf.Shift(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
+						ringBuf.Reset()
 						ringBufConnLock.Unlock()
-
-						packet.Content = content[protocol.HeaderLengthV0:]
-						(*packets)[decodedMessage.Id] = packet
-						*messages <- decodedMessage.Id
+						continue
 					}
+					packet := &codec.Packet{
+						Message: &decodedMessage,
+					}
+					if decodedMessage.ContentLength > 0 {
+						if content, _ := ringBuf.LazyRead(int(decodedMessage.ContentLength + protocol.HeaderLengthV0)); len(content) == int(decodedMessage.ContentLength+protocol.HeaderLengthV0) {
+							ringBufConnLock.Lock()
+							ringBuf.Shift(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
+							ringBufConnLock.Unlock()
+
+							packet.Content = content[protocol.HeaderLengthV0:]
+							(*packets)[decodedMessage.Id] = packet
+							*messages <- decodedMessage.Id
+						}
+						continue
+					}
+					ringBufConnLock.Lock()
+					ringBuf.Shift(protocol.HeaderLengthV0)
+					ringBufConnLock.Unlock()
+					(*packets)[decodedMessage.Id] = packet
+					*messages <- decodedMessage.Id
 					continue
 				}
-				ringBufConnLock.Lock()
-				ringBuf.Shift(protocol.HeaderLengthV0)
-				ringBufConnLock.Unlock()
-				(*packets)[decodedMessage.Id] = packet
-				*messages <- decodedMessage.Id
-				continue
 			}
 		}
 	}
