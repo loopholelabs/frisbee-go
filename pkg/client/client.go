@@ -21,7 +21,7 @@ type Client struct {
 	messages        chan uint32
 	router          frisbee.Router
 	options         *frisbee.Options
-	writer          chan *[]byte
+	writer          chan []byte
 	quit            chan struct{}
 }
 
@@ -33,7 +33,7 @@ func NewClient(addr string, router frisbee.Router, opts ...frisbee.Option) *Clie
 		ringBufConnRead: ringbuffer.New(1 << 18),
 		packets:         make(map[uint32]*codec.Packet),
 		messages:        make(chan uint32, 8192),
-		writer:          make(chan *[]byte, 8192),
+		writer:          make(chan []byte, 8192),
 		quit:            make(chan struct{}),
 	}
 }
@@ -73,28 +73,28 @@ func (c *Client) Write(message frisbee.Message, content *[]byte) error {
 		return err
 	}
 	encodedMessageSlice := encodedMessage[:]
-	c.writer <- &encodedMessageSlice
-	c.writer <- content
+	c.writer <- encodedMessageSlice
+	c.writer <- *content
 	return nil
 }
 
-func BufConnWriter(quit *chan struct{}, bufConnWriter *bufio.Writer, writer *chan *[]byte) {
+func BufConnWriter(quit *chan struct{}, bufConnWriter *bufio.Writer, writer *chan []byte) {
 	for {
 		select {
 		case data := <-*writer:
-			dataLen := len(*data)
+			dataLen := len(data)
 			written := 0
 		FirstWrite:
-			n, _ := bufConnWriter.Write((*data)[written:])
+			n, _ := bufConnWriter.Write((data)[written:])
 			written += n
 			if written != dataLen {
 				goto FirstWrite
 			}
 			for otherData := range *writer {
-				dataLen = len(*otherData)
+				dataLen = len(otherData)
 				written = 0
 			LoopedWrite:
-				n, _ := bufConnWriter.Write((*otherData)[written:])
+				n, _ := bufConnWriter.Write((otherData)[written:])
 				written += n
 				if written != dataLen {
 					goto LoopedWrite
