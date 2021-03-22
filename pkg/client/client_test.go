@@ -31,6 +31,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 
 	b.Run("client-test", func(b *testing.B) {
 		b.ResetTimer()
+		amountWritten := 0
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
 				err := c.Write(frisbee.Message{
@@ -42,8 +43,10 @@ func BenchmarkClientThroughput(b *testing.B) {
 				if err != nil {
 					panic(err)
 				}
+				amountWritten += messageSize
 			}
 		}
+		b.SetBytes(int64(amountWritten / b.N))
 
 	})
 	b.StopTimer()
