@@ -39,6 +39,7 @@ func NewClient(addr string, router frisbee.Router, opts ...frisbee.Option) *Clie
 }
 
 func (c *Client) Connect() (err error) {
+	c.options.Logger.Info().Msgf("Connecting to client")
 	conn, err := net.Dial("tcp4", c.addr)
 	c.conn = bufio.NewReaderSize(conn, 2<<15)
 	c.bufConnWrite = bufio.NewWriterSize(conn, 2<<15)
@@ -52,6 +53,8 @@ func (c *Client) Connect() (err error) {
 
 		// Reads data from the ringBuffer
 		go RingBufferReader(&c.quit, &c.ringBufConnLock, c.ringBufConnRead, &c.packets, &c.messages)
+	} else {
+		panic(err)
 	}
 	return
 }
