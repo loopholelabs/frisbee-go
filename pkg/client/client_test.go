@@ -5,8 +5,6 @@ import (
 	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/loophole-labs/frisbee/pkg/server"
-	"github.com/rs/zerolog"
-	"io/ioutil"
 	"testing"
 )
 
@@ -19,11 +17,10 @@ func BenchmarkClientThroughput(b *testing.B) {
 	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		return
 	}
-	emptyLogger := zerolog.New(ioutil.Discard)
-	s := server.NewServer(addr, router, frisbee.WithAsync(true), frisbee.WithLogger(&emptyLogger), frisbee.WithMulticore(true), frisbee.WithLoops(16))
+	s := server.NewServer(addr, router, frisbee.WithAsync(true), frisbee.WithMulticore(true), frisbee.WithLoops(16))
 	go s.Start()
 
-	c := NewClient("127.0.0.1:8192", router, frisbee.WithLogger(&emptyLogger))
+	c := NewClient("127.0.0.1:8192", router)
 	_ = c.Connect()
 
 	data := make([]byte, messageSize)

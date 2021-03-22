@@ -28,10 +28,12 @@ type Handler struct {
 
 func (handler *Handler) OnInitComplete(_ gnet.Server) (action gnet.Action) {
 	handler.started <- struct{}{}
+	handler.logger.Infof("Startup Complete")
 	return 0
 }
 
 func (handler *Handler) OnOpened(_ gnet.Conn) (out []byte, action gnet.Action) {
+	handler.logger.Infof("Client Connected")
 	return nil, 0
 }
 
