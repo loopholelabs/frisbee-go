@@ -41,7 +41,7 @@ func BenchmarkThroughput(b *testing.B) {
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
-	b.Run("client-test", func(b *testing.B) {
+	b.Run("test", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
@@ -106,7 +106,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
-	b.Run("client-test", func(b *testing.B) {
+	b.Run("test", func(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {

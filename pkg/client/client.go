@@ -66,6 +66,7 @@ func (c *Client) Connect() (err error) {
 
 		// Reacts to incomming messages
 		go Reactor(c)
+
 	} else {
 		panic(err)
 	}
@@ -154,16 +155,16 @@ func BufConnWriter(quit *chan struct{}, bufConnWriter *bufio.Writer, writer *cha
 }
 
 func RingBufferWriter(quit *chan struct{}, ringBufConnLock *sync.Mutex, ringBuf *ringbuffer.RingBuffer, bufConnReader *bufio.Reader) {
+	var data [1 << 18]byte
 	for {
 		select {
 		case <-*quit:
 			return
 		default:
-			var data []byte
-			n, err := (*bufConnReader).Read(data)
+			n, err := (*bufConnReader).Read(data[:])
 			if err == nil && n > 0 {
 				ringBufConnLock.Lock()
-				_, _ = ringBuf.Write(data)
+				_, _ = ringBuf.Write(data[:])
 				ringBufConnLock.Unlock()
 			}
 		}
