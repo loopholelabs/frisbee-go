@@ -12,7 +12,7 @@ import (
 
 func BenchmarkClientThroughput(b *testing.B) {
 	const testSize = 100000
-	const messageSize = 2048
+	const messageSize = 512
 	addr := ":8192"
 	serverRouter := make(frisbee.ServerRouter)
 	clientRouter := make(frisbee.ClientRouter)

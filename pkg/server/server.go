@@ -13,7 +13,7 @@ type Server struct {
 	Custom             interface{}
 	Options            *Options
 	UserOnInitComplete func(server *Server) frisbee.Action
-	UserOnOpened       func(server *Server, c frisbee.Conn) ([]byte, frisbee.Action)
+	UserOnOpened       func(server *Server, c frisbee.Conn) frisbee.Action
 	UserOnClosed       func(server *Server, c frisbee.Conn, err error) frisbee.Action
 	UserOnShutdown     func(server *Server)
 	UserPreWrite       func(server *Server)
@@ -32,7 +32,7 @@ func (s *Server) onInitComplete() frisbee.Action {
 	return s.UserOnInitComplete(s)
 }
 
-func (s *Server) onOpened(c frisbee.Conn) ([]byte, frisbee.Action) {
+func (s *Server) onOpened(c frisbee.Conn) frisbee.Action {
 	return s.UserOnOpened(s, c)
 }
 
@@ -61,8 +61,8 @@ func (s *Server) Start() {
 	}
 
 	if s.UserOnOpened == nil {
-		s.UserOnOpened = func(_ *Server, _ frisbee.Conn) ([]byte, frisbee.Action) {
-			return nil, frisbee.None
+		s.UserOnOpened = func(_ *Server, _ frisbee.Conn) frisbee.Action {
+			return frisbee.None
 		}
 	}
 

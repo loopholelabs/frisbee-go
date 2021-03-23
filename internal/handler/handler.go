@@ -26,7 +26,7 @@ type Handler struct {
 	logger             log.Logger
 	started            chan struct{}
 	UserOnInitComplete func() frisbee.Action
-	UserOnOpened       func(c frisbee.Conn) ([]byte, frisbee.Action)
+	UserOnOpened       func(c frisbee.Conn) frisbee.Action
 	UserOnClosed       func(c frisbee.Conn, err error) frisbee.Action
 	UserOnShutdown     func()
 	UserPreWrite       func()
@@ -39,13 +39,12 @@ func (handler *Handler) OnInitComplete(_ gnet.Server) gnet.Action {
 }
 
 func (handler *Handler) OnOpened(c gnet.Conn) (out []byte, action gnet.Action) {
-	out, frisbeeAction := handler.UserOnOpened(frisbee.Conn{Conn: conn.New(c)})
-	action = gnet.Action(frisbeeAction)
+	action = gnet.Action(handler.UserOnOpened(frisbee.Conn{Conn: conn.Convert(c)}))
 	return
 }
 
 func (handler *Handler) OnClosed(c gnet.Conn, err error) gnet.Action {
-	return gnet.Action(handler.UserOnClosed(frisbee.Conn{Conn: conn.New(c)}, err))
+	return gnet.Action(handler.UserOnClosed(frisbee.Conn{Conn: conn.Convert(c)}, err))
 }
 
 func (handler *Handler) PreWrite() {
@@ -67,8 +66,7 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 	packet := handler.codec.Packets[id]
 	handlerFunc := handler.router[packet.Message.Operation]
 	if handlerFunc != nil {
-		message, output, frisbeeAction := handlerFunc(frisbee.Conn{Conn: conn.New(c)}, frisbee.Message(*packet.Message), packet.Content)
-
+		message, output, frisbeeAction := handlerFunc(frisbee.Conn{Conn: conn.Convert(c)}, frisbee.Message(*packet.Message), packet.Content)
 		action = gnet.Action(frisbeeAction)
 		if message != nil && message.ContentLength == uint32(len(output)) {
 			encodedMessage, err := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
@@ -88,16 +86,16 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 		}
 		return
 	}
-	out = nil
 	return
 
 }
 
 func (handler *Handler) Stop() error {
-	return gnet.Stop(context.Background(), handler.addr)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	return gnet.Stop(ctx, handler.addr)
 }
 
-func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.ServerRouter, UserOnInitComplete func() frisbee.Action, UserOnOpened func(c frisbee.Conn) ([]byte, frisbee.Action), UserOnClosed func(c frisbee.Conn, err error) frisbee.Action, UserOnShutdown func(), UserPreWrite func(), UserTick func() (time.Duration, frisbee.Action)) *Handler {
+func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.ServerRouter, UserOnInitComplete func() frisbee.Action, UserOnOpened func(c frisbee.Conn) frisbee.Action, UserOnClosed func(c frisbee.Conn, err error) frisbee.Action, UserOnShutdown func(), UserPreWrite func(), UserTick func() (time.Duration, frisbee.Action)) *Handler {
 	icCodec := &codec.ICodec{
 		Packets: make(map[uint32]*codec.Packet),
 	}
@@ -112,8 +110,8 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 	}
 
 	if UserOnOpened == nil {
-		UserOnOpened = func(_ frisbee.Conn) ([]byte, frisbee.Action) {
-			return nil, frisbee.None
+		UserOnOpened = func(_ frisbee.Conn) frisbee.Action {
+			return frisbee.None
 		}
 	}
 
@@ -161,7 +159,8 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 			gnet.WithNumEventLoop(loops),
 			gnet.WithTCPKeepAlive(keepAlive),
 			gnet.WithLogger(log.Convert(logger)),
-			gnet.WithCodec(icCodec))
+			gnet.WithCodec(icCodec),
+			gnet.WithReusePort(true))
 		if err != nil {
 			panic(err)
 		}
