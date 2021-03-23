@@ -92,8 +92,10 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 }
 
 func (handler *Handler) Stop() error {
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	return gnet.Stop(ctx, handler.addr)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = gnet.Stop(ctx, handler.addr)
+	return nil
 }
 
 func StartHandler(started chan struct{}, addr string, multicore bool, async bool, loops int, keepAlive time.Duration, logger *zerolog.Logger, router frisbee.ServerRouter, UserOnInitComplete func() frisbee.Action, UserOnOpened func(c frisbee.Conn) frisbee.Action, UserOnClosed func(c frisbee.Conn, err error) frisbee.Action, UserOnShutdown func(), UserPreWrite func(), UserTick func() (time.Duration, frisbee.Action)) *Handler {
