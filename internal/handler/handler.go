@@ -94,7 +94,9 @@ func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gne
 func (handler *Handler) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_ = gnet.Stop(ctx, handler.addr)
+	if handler != nil {
+		return gnet.Stop(ctx, handler.addr)
+	}
 	return nil
 }
 
