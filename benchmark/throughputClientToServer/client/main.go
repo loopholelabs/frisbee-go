@@ -38,7 +38,7 @@ func main() {
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
-	duration := time.Nanosecond
+	duration := time.Nanosecond * 0
 	for i := 1; i < runs+1; i++ {
 		start := time.Now()
 		for q := 0; q < testSize; q++ {
