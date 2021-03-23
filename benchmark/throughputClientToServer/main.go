@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-const testSize = 1000000
-const messageSize = 2048
-const runs = 10
+const testSize = 10000
+const messageSize = 512
+const runs = 100
 const port = 8192
 
 var complete = make(chan struct{})
@@ -68,10 +68,10 @@ func main() {
 		}
 		<-complete
 		runTime := time.Since(start)
-		log.Printf("Benchmark Time for test %d: %s", i, runTime)
+		log.Printf("Benchmark Time for test %d: %d ns", i, runTime.Nanoseconds())
 		duration += runTime
 	}
-	log.Printf("Average Benchmark time for %d runs: %s", runs, duration/runs)
+	log.Printf("Average Benchmark time for %d runs: %d ns", runs, duration.Nanoseconds()/runs)
 	_ = c.Stop()
 	_ = s.Stop()
 }

@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-const testSize = 1000
+const testSize = 10000
 const messageSize = 512
-const runs = 10
+const runs = 1
 const port = 8192
 
 var complete = make(chan struct{})
@@ -29,22 +29,16 @@ func main() {
 		return
 	}
 
-	sum := uint32(testSize * (testSize + 1) / 2)
-	receiveSum := uint32(0)
-
 	clientRouter := make(frisbee.ClientRouter)
 	clientRouter[protocol.MessagePing] = func(incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-		receiveSum += incomingMessage.Id
-		if receiveSum == sum {
+		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &frisbee.Message{
 				Id:            testSize,
 				Operation:     protocol.MessagePong,
 				Routing:       0,
 				ContentLength: 0,
 			}
-			receiveSum = 0
 		}
-		//log.Printf("Receive Sum: %d, id: %d", receiveSum, incomingMessage.Id)
 		return
 	}
 
@@ -67,7 +61,7 @@ func main() {
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
-	duration := time.Nanosecond
+	duration := time.Nanosecond * 0
 	<-connected
 	for i := 1; i < runs+1; i++ {
 		start := time.Now()
@@ -84,10 +78,10 @@ func main() {
 		}
 		<-complete
 		runTime := time.Since(start)
-		log.Printf("Benchmark Time for test %d: %s", i, runTime)
+		log.Printf("Benchmark Time for test %d: %d ns", i, runTime.Nanoseconds())
 		duration += runTime
 	}
-	log.Printf("Average Benchmark time for %d runs: %s", runs, duration/runs)
+	log.Printf("Average Benchmark time for %d runs: %d ns", runs, duration.Nanoseconds()/runs)
 	_ = s.Stop()
 	_ = c.Stop()
 }
