@@ -15,7 +15,7 @@ import (
 
 const testSize = 10000
 const messageSize = 512
-const runs = 1
+const runs = 10
 const port = 8192
 
 var complete = make(chan struct{})

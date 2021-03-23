@@ -64,6 +64,7 @@ func (handler *Handler) OnShutdown(_ gnet.Server) {
 func (handler *Handler) React(frame []byte, c gnet.Conn) (out []byte, action gnet.Action) {
 	id := binary.BigEndian.Uint32(frame)
 	packet := handler.codec.Packets[id]
+	handler.logger.Debugf("Received message %d", id)
 	handlerFunc := handler.router[packet.Message.Operation]
 	if handlerFunc != nil {
 		message, output, frisbeeAction := handlerFunc(frisbee.Conn{Conn: conn.Convert(c)}, frisbee.Message(*packet.Message), packet.Content)
@@ -160,6 +161,7 @@ func StartHandler(started chan struct{}, addr string, multicore bool, async bool
 			gnet.WithTCPKeepAlive(keepAlive),
 			gnet.WithLogger(log.Convert(logger)),
 			gnet.WithCodec(icCodec),
+			gnet.WithLockOSThread(true),
 			gnet.WithReusePort(true))
 		if err != nil {
 			panic(err)

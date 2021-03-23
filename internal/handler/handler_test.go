@@ -144,6 +144,5 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-
 	_ = handler.Stop()
 }

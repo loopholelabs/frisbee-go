@@ -35,7 +35,7 @@ func NewClient(addr string, router frisbee.ClientRouter, opts ...Option) *Client
 }
 
 func (c *Client) Connect() (err error) {
-	c.options.Logger.Info().Msgf("Connecting to client")
+	c.options.Logger.Debug().Msgf("Connecting to %s", c.addr)
 	conn, err := net.Dial("tcp4", c.addr)
 	c.Conn = conn.(*net.TCPConn)
 	_ = c.Conn.SetNoDelay(true)
@@ -46,7 +46,7 @@ func (c *Client) Connect() (err error) {
 	if err != nil {
 		panic(err)
 	}
-	c.options.Logger.Info().Msg("Successfully connected client")
+	c.options.Logger.Info().Msgf("Connected to %s", c.addr)
 	// Writes to the bufConnWrite
 	go Writer(&c.quit, c.bufConnWrite, &c.writer)
 
@@ -55,6 +55,8 @@ func (c *Client) Connect() (err error) {
 
 	// Reacts to incoming messages
 	go Reactor(c)
+
+	c.options.Logger.Debug().Msg("Event loops started")
 
 	return
 }
@@ -73,6 +75,7 @@ func (c *Client) Write(message frisbee.Message, content *[]byte) error {
 	if err != nil {
 		return err
 	}
+	c.options.Logger.Debug().Msgf("Queuing message %d", message.Id)
 	c.writer <- encodedMessage[:]
 	c.writer <- *content
 	return nil
@@ -86,6 +89,7 @@ func Reactor(c *Client) {
 		case id := <-c.messages:
 			packetInterface, _ := c.packets.Load(id)
 			packet := packetInterface.(*codec.Packet)
+			c.options.Logger.Debug().Msgf("Received message %d", packet.Message.Id)
 			handlerFunc := c.router[packet.Message.Operation]
 			if handlerFunc != nil {
 				message, output, action := handlerFunc(frisbee.Message(*packet.Message), packet.Content)
