@@ -30,9 +30,41 @@ blocks:
         - name: Test
           commands:
             - go test ./...
+      prologue:
+        commands:
+          - sem-version go 1.16
+          - export GO111MODULE=on
+          - export GOPATH=~/go
+          - 'export PATH=/home/semaphore/go/bin:$PATH'
+          - checkout
+          - cache restore
+          - go get ./...
+      epilogue:
+        always:
+          commands:
+            - cache save
+  - name: Benchmarking
+    task:
+      jobs:
         - name: Benchmark
           commands:
             - go test -bench=. ./...
+      prologue:
+        commands:
+          - sem-version go 1.16
+          - export GO111MODULE=on
+          - export GOPATH=~/go
+          - 'export PATH=/home/semaphore/go/bin:$PATH'
+          - checkout
+          - cache restore
+          - go get ./...
+      epilogue:
+        always:
+          commands:
+            - cache save
+  - name: Building
+    task:
+      jobs:
         - name: Build
           commands:
             - go build -v .
