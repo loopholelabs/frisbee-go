@@ -31,13 +31,13 @@ blocks:
       jobs:
         - name: Snyk
           commands:
-            - snyk-linux test
+            - './snyk-linux test'
       prologue:
         commands:
           - checkout
           - cache restore
           - 'wget https://github.com/snyk/snyk/releases/download/v1.509.0/snyk-linux'
-          - 'chmod u+x snyk-linux'
+          - 'chmod u+x ./snyk-linux'
       epilogue:
         always:
           commands:
