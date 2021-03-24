@@ -29,7 +29,7 @@ func handlePing(_ frisbee.Conn, incomingMessage frisbee.Message, _ []byte) (outg
 func main() {
 	router := make(frisbee.ServerRouter)
 	router[protocol.MessagePing] = handlePing
-	exit := make(chan os.Signal)
+	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt)
 
 	emptyLogger := zerolog.New(ioutil.Discard)
