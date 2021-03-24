@@ -34,8 +34,13 @@ blocks:
             - './snyk-linux test'
       prologue:
         commands:
+          - sem-version go 1.16
+          - export GO111MODULE=on
+          - export GOPATH=~/go
+          - 'export PATH=/home/semaphore/go/bin:$PATH'
           - checkout
           - cache restore
+          - go get ./...
           - 'wget https://github.com/snyk/snyk/releases/download/v1.509.0/snyk-linux'
           - 'chmod u+x ./snyk-linux'
       epilogue:
