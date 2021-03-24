@@ -8,7 +8,7 @@ blocks:
   - name: Linting
     task:
       jobs:
-        - name: golangci-lint
+        - name: Golangci-lint
           commands:
             - golangci-lint run
       prologue:
@@ -20,6 +20,24 @@ blocks:
           - checkout
           - cache restore
           - 'curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.38.0'
+      epilogue:
+        always:
+          commands:
+            - cache save
+  - name: Vulnerabilities
+    task:
+      secrets:
+        - name: SNYK-TOKEN
+      jobs:
+        - name: Snyk
+          commands:
+            - snyk-linux test
+      prologue:
+        commands:
+          - checkout
+          - cache restore
+          - 'wget https://github.com/snyk/snyk/releases/download/v1.509.0/snyk-linux'
+          - 'chmod u+x snyk-linux'
       epilogue:
         always:
           commands:
