@@ -8,7 +8,7 @@ blocks:
   - name: Linting
     task:
       jobs:
-        - name: go fmt
+        - name: golangci-lint
           commands:
             - golangci-lint run
       prologue:
