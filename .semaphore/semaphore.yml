@@ -18,7 +18,6 @@ blocks:
             - go get ./...
             - go test ./...
             - go build -v .
-          parallelism: 4
   - name: Step 2
     task:
       jobs:
