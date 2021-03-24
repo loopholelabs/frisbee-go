@@ -5,28 +5,47 @@ agent:
     type: e1-standard-2
     os_image: ubuntu1804
 blocks:
-  - name: Step 1
+  - name: Linting
+    task:
+      jobs:
+        - name: go fmt
+          commands:
+            - golangci-lint run
+      prologue:
+        commands:
+          - sem-version go 1.16
+          - export GO111MODULE=on
+          - export GOPATH=~/go
+          - 'export PATH=/home/semaphore/go/bin:$PATH'
+          - checkout
+          - cache restore
+          - 'curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.38.0'
+      epilogue:
+        always:
+          commands:
+            - cache save
+  - name: Testing
     task:
       jobs:
         - name: Test
           commands:
-            - sem-version go 1.16
-            - export GO111MODULE=on
-            - export GOPATH=~/go
-            - 'export PATH=/home/semaphore/go/bin:$PATH'
-            - checkout
-            - go get ./...
             - go test ./...
-            - go build -v .
-  - name: Step 2
-    task:
-      jobs:
         - name: Benchmark
           commands:
-            - sem-version go 1.16
-            - export GO111MODULE=on
-            - export GOPATH=~/go
-            - 'export PATH=/home/semaphore/go/bin:$PATH'
-            - checkout
-            - go get ./...
             - go test -bench=. ./...
+        - name: Build
+          commands:
+            - go build -v .
+      prologue:
+        commands:
+          - sem-version go 1.16
+          - export GO111MODULE=on
+          - export GOPATH=~/go
+          - 'export PATH=/home/semaphore/go/bin:$PATH'
+          - checkout
+          - cache restore
+          - go get ./...
+      epilogue:
+        always:
+          commands:
+            - cache save
