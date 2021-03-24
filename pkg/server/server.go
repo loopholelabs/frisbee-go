@@ -104,7 +104,6 @@ func (s *Server) Start() {
 		s.preWrite,
 		s.tick)
 	<-started
-	return
 }
 
 func (s *Server) Stop() error {
