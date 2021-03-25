@@ -67,7 +67,7 @@ func (c *Client) Stop() error {
 }
 
 func (c *Client) Write(message frisbee.Message, content *[]byte) error {
-	if int(message.ContentLength) != len(*content) {
+	if content != nil && int(message.ContentLength) != len(*content) {
 		return errors.New("invalid content length")
 	}
 
@@ -77,7 +77,9 @@ func (c *Client) Write(message frisbee.Message, content *[]byte) error {
 	}
 	c.options.Logger.Debug().Msgf("Queuing message %d", message.Id)
 	c.writer <- encodedMessage[:]
-	c.writer <- *content
+	if content != nil {
+		c.writer <- *content
+	}
 	return nil
 }
 
