@@ -30,9 +30,12 @@ func BenchmarkThroughput(b *testing.B) {
 	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router, nil, nil, nil, nil, nil, nil)
 	<-started
 
-	tcpAddr, _ := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
+	if err != nil {
+		panic(err)
+	}
 
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -94,9 +97,12 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	handler := StartHandler(started, addr, true, true, 16, time.Minute*5, &emptyLogger, router, nil, nil, nil, nil, nil, nil)
 	<-started
 
-	tcpAddr, _ := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8192")
+	if err != nil {
+		panic(err)
+	}
 
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	if err != nil {
 		panic(err)
 	}

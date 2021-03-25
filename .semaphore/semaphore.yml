@@ -10,7 +10,7 @@ blocks:
       jobs:
         - name: Golangci-lint
           commands:
-            - golangci-lint run
+            - golangci-lint run --skip-dirs-use-default
       prologue:
         commands:
           - sem-version go 1.16
