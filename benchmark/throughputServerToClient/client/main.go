@@ -16,7 +16,7 @@ const port = 8192
 
 func main() {
 	router := make(frisbee.ClientRouter)
-	exit := make(chan os.Signal)
+	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt)
 
 	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
