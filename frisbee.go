@@ -17,7 +17,7 @@ type Conn struct {
 }
 
 func (c Conn) Write(message Message, content *[]byte) error {
-	if int(message.ContentLength) != len(*content) {
+	if content != nil && int(message.ContentLength) != len(*content) {
 		return errors.New("invalid content length")
 	}
 
@@ -25,8 +25,10 @@ func (c Conn) Write(message Message, content *[]byte) error {
 	if err != nil {
 		return err
 	}
-
-	return c.AsyncWrite(append(encodedMessage[:], *content...))
+	if content != nil {
+		return c.AsyncWrite(append(encodedMessage[:], *content...))
+	}
+	return c.AsyncWrite(encodedMessage[:])
 }
 
 const None = Action(0)
