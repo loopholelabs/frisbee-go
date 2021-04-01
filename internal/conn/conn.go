@@ -2,11 +2,10 @@ package conn
 
 import (
 	"bufio"
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/gobwas/pool/pbufio"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
-	"hash/crc32"
 	"net"
 	"sync"
 )
@@ -16,8 +15,8 @@ const (
 )
 
 type packet struct {
-	message protocol.MessageV0
-	content []byte
+	message *protocol.MessageV0
+	content *[]byte
 }
 
 type Conn struct {
@@ -27,16 +26,16 @@ type Conn struct {
 	flush    chan struct{}
 	reader   *bufio.Reader
 	context  interface{}
-	messages chan packet
+	messages *queue.RingBuffer
 }
 
 func New(c net.Conn) (conn *Conn) {
 	conn = &Conn{
 		conn:     c,
-		writer:   pbufio.GetWriter(c, defaultSize),
+		writer:   bufio.NewWriterSize(c, defaultSize),
 		flush:    make(chan struct{}, 1024),
-		reader:   pbufio.GetReader(c, defaultSize),
-		messages: make(chan packet, defaultSize),
+		reader:   bufio.NewReaderSize(c, defaultSize),
+		messages: queue.NewRingBuffer(defaultSize),
 		context:  nil,
 	}
 
@@ -80,6 +79,10 @@ func (c *Conn) Write(message *protocol.MessageV0, content *[]byte) error {
 		return errors.New("invalid content length")
 	}
 
+	if c.messages.IsDisposed() {
+		return errors.New("connection closed")
+	}
+
 	encodedMessage, err := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
 	if err != nil {
 		return err
@@ -87,7 +90,6 @@ func (c *Conn) Write(message *protocol.MessageV0, content *[]byte) error {
 	c.Lock()
 	_, _ = c.writer.Write(encodedMessage[:])
 	if content != nil {
-		log.Printf("Writing Message of length: %d with crc32: %v", message.ContentLength, crc32.ChecksumIEEE(*content))
 		_, _ = c.writer.Write(*content)
 	}
 
@@ -115,40 +117,40 @@ func (c *Conn) readLoop() {
 			if decodedMessage.ContentLength > 0 {
 				if content, _ := c.reader.Peek(int(decodedMessage.ContentLength + protocol.HeaderLengthV0)); len(content) == int(decodedMessage.ContentLength+protocol.HeaderLengthV0) {
 					_, _ = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
-					readContent := content[protocol.HeaderLengthV0:]
-					log.Printf("Decoding Message of length: %d with crc32: %v", decodedMessage.ContentLength, crc32.ChecksumIEEE(readContent))
-					readPacket := packet{
-						message: decodedMessage,
-						content: readContent,
+					readContent := make([]byte, decodedMessage.ContentLength)
+					copy(readContent[:decodedMessage.ContentLength], content[protocol.HeaderLengthV0:])
+					readPacket := &packet{
+						message: &decodedMessage,
+						content: &readContent,
 					}
-					c.messages <- readPacket
+					_ = c.messages.Put(readPacket)
 				}
 				continue
 			}
 			_, _ = c.reader.Discard(protocol.HeaderLengthV0)
-			readPacket := packet{
-				message: decodedMessage,
+			readPacket := &packet{
+				message: &decodedMessage,
 				content: nil,
 			}
-			c.messages <- readPacket
+			_ = c.messages.Put(readPacket)
 		}
 		// TODO: Check if running Gosched here adds performance
 		//runtime.Gosched()
 	}
 }
 
-func (c *Conn) Read() (protocol.MessageV0, []byte, error) {
+func (c *Conn) Read() (*protocol.MessageV0, *[]byte, error) {
 
-	readPacket, ok := <-c.messages
-	if !ok {
-		return protocol.MessageV0{}, nil, errors.New("connection closed")
+	if c.messages.IsDisposed() {
+		return nil, nil, errors.New("connection closed")
 	}
 
-	if readPacket.content != nil {
-		log.Printf("Reading Message of length: %d with crc32: %v", readPacket.message.ContentLength, crc32.ChecksumIEEE(readPacket.content))
+	readPacket, err := c.messages.Get()
 
+	if err != nil {
+		return nil, nil, err
 	}
-	return readPacket.message, readPacket.content, nil
+	return readPacket.(*packet).message, readPacket.(*packet).content, nil
 }
 
 func (c *Conn) Close() error {
@@ -157,6 +159,6 @@ func (c *Conn) Close() error {
 	pbufio.PutWriter(c.writer)
 	pbufio.PutReader(c.reader)
 	close(c.flush)
-	close(c.messages)
+	c.messages.Dispose()
 	return c.conn.Close()
 }
