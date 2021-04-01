@@ -1,4 +1,4 @@
-package server
+package frisbee
 
 import (
 	"github.com/rs/zerolog"
@@ -20,6 +20,7 @@ func LoadOptions(options ...Option) *Options {
 	for _, option := range options {
 		option(opts)
 	}
+
 	if opts.Logger == nil {
 		opts.Logger = &DefaultLogger
 	}

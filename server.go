@@ -1,28 +1,25 @@
-package server
+package frisbee
 
 import (
-	"github.com/loophole-labs/frisbee/internal/common"
-	"github.com/loophole-labs/frisbee/internal/conn"
-	"github.com/loophole-labs/frisbee/internal/protocol"
 	"net"
 )
 
-type RouterFunc func(c *conn.Conn, incomingMessage protocol.MessageV0, incomingContent []byte) (outgoingMessage *protocol.MessageV0, outgoingContent []byte, action int)
-type Router map[uint16]RouterFunc
+type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+type ServerRouter map[uint16]ServerRouterFunc
 
 type Server struct {
 	listener       *net.TCPListener
 	addr           string
-	router         Router
+	router         ServerRouter
 	shutdown       bool
 	Options        *Options
-	UserOnOpened   func(server *Server, c *conn.Conn) int
-	UserOnClosed   func(server *Server, c *conn.Conn, err error) int
+	UserOnOpened   func(server *Server, c *Conn) Action
+	UserOnClosed   func(server *Server, c *Conn, err error) Action
 	UserOnShutdown func(server *Server)
 	UserPreWrite   func(server *Server)
 }
 
-func NewServer(addr string, router Router, opts ...Option) *Server {
+func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	return &Server{
 		addr:    addr,
 		router:  router,
@@ -30,11 +27,11 @@ func NewServer(addr string, router Router, opts ...Option) *Server {
 	}
 }
 
-func (s *Server) onOpened(c *conn.Conn) int {
+func (s *Server) onOpened(c *Conn) Action {
 	return s.UserOnOpened(s, c)
 }
 
-func (s *Server) onClosed(c *conn.Conn, err error) int {
+func (s *Server) onClosed(c *Conn, err error) Action {
 	return s.UserOnClosed(s, c, err)
 }
 
@@ -49,14 +46,14 @@ func (s *Server) preWrite() {
 func (s *Server) Start() error {
 
 	if s.UserOnClosed == nil {
-		s.UserOnClosed = func(_ *Server, _ *conn.Conn, err error) int {
-			return common.None
+		s.UserOnClosed = func(_ *Server, _ *Conn, err error) Action {
+			return None
 		}
 	}
 
 	if s.UserOnOpened == nil {
-		s.UserOnOpened = func(_ *Server, _ *conn.Conn) int {
-			return common.None
+		s.UserOnOpened = func(_ *Server, _ *Conn) Action {
+			return None
 		}
 	}
 
@@ -94,16 +91,16 @@ func (s *Server) Start() error {
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
 	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.Options.KeepAlive)
-	frisbeeConn := conn.New(newConn)
+	frisbeeConn := New(newConn)
 
 	openedAction := s.UserOnOpened(s, frisbeeConn)
-	if openedAction == common.Close {
+	if openedAction == Close {
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		return
 	}
 
-	if openedAction == common.Shutdown {
+	if openedAction == Shutdown {
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		_ = s.Shutdown()
@@ -120,7 +117,14 @@ func (s *Server) handleConn(newConn net.Conn) {
 		}
 		routerFunc := s.router[incomingMessage.Operation]
 		if routerFunc != nil {
-			outgoingMessage, outgoingContent, action := routerFunc(frisbeeConn, *incomingMessage, *incomingContent)
+			var outgoingMessage *Message
+			var outgoingContent []byte
+			var action Action
+			if incomingMessage.ContentLength == 0 || incomingContent == nil {
+				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, Message(*incomingMessage), nil)
+			} else {
+				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, Message(*incomingMessage), *incomingContent)
+			}
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint32(len(outgoingContent)) {
 				s.preWrite()
@@ -133,11 +137,11 @@ func (s *Server) handleConn(newConn net.Conn) {
 			}
 
 			switch action {
-			case common.Close:
+			case Close:
 				_ = frisbeeConn.Close()
 				s.onClosed(frisbeeConn, nil)
 				return
-			case common.Shutdown:
+			case Shutdown:
 				_ = frisbeeConn.Close()
 				s.UserOnClosed(s, frisbeeConn, nil)
 				_ = s.Shutdown()

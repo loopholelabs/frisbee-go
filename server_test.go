@@ -1,23 +1,23 @@
-package server
+package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loophole-labs/frisbee/internal/conn"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"io/ioutil"
 	"testing"
+	"time"
 )
 
 func BenchmarkThroughput(b *testing.B) {
 	const testSize = 10000
 	const messageSize = 512
 	addr := ":8192"
-	router := make(Router)
+	router := make(ServerRouter)
 
-	router[protocol.MessagePing] = func(_ *conn.Conn, _ protocol.MessageV0, _ []byte) (outgoingMessage *protocol.MessageV0, outgoingContent []byte, action int) {
+	router[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		return
 	}
 
@@ -29,7 +29,7 @@ func BenchmarkThroughput(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := conn.Connect("tcp", addr)
+	frisbeeConn, err := Connect("tcp", addr, time.Minute*3)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
@@ -42,7 +42,7 @@ func BenchmarkThroughput(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := frisbeeConn.Write(&protocol.MessageV0{
+				err := frisbeeConn.Write(&Message{
 					Id:            uint32(q),
 					Operation:     protocol.MessagePing,
 					Routing:       uint32(i),
@@ -72,11 +72,11 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	const testSize = 10000
 	const messageSize = 512
 	addr := ":8192"
-	router := make(Router)
+	router := make(ServerRouter)
 
-	router[protocol.MessagePing] = func(_ *conn.Conn, incomingMessage protocol.MessageV0, _ []byte) (outgoingMessage *protocol.MessageV0, outgoingContent []byte, action int) {
+	router[protocol.MessagePing] = func(_ *Conn, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		if incomingMessage.Id == testSize-1 {
-			outgoingMessage = &protocol.MessageV0{
+			outgoingMessage = &Message{
 				Id:            testSize,
 				Operation:     protocol.MessagePong,
 				Routing:       0,
@@ -94,7 +94,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := conn.Connect("tcp", addr)
+	frisbeeConn, err := Connect("tcp", addr, time.Minute*3)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
@@ -108,7 +108,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := frisbeeConn.Write(&protocol.MessageV0{
+				err := frisbeeConn.Write(&Message{
 					Id:            uint32(q),
 					Operation:     protocol.MessagePing,
 					Routing:       uint32(i),

@@ -1,4 +1,4 @@
-package conn
+package frisbee
 
 import (
 	"bufio"
@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"net"
 	"sync"
+	"time"
 )
 
 const (
@@ -28,8 +29,10 @@ type Conn struct {
 	closed   bool
 }
 
-func Connect(network string, addr string) (*Conn, error) {
+func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
+	_ = conn.(*net.TCPConn).SetKeepAlive(true)
+	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +99,7 @@ func (c *Conn) flushLoop() {
 	}
 }
 
-func (c *Conn) Write(message *protocol.MessageV0, content *[]byte) error {
+func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
 		return errors.New("invalid content length")
 	}
@@ -166,7 +169,7 @@ func (c *Conn) readLoop() {
 	}
 }
 
-func (c *Conn) Read() (*protocol.MessageV0, *[]byte, error) {
+func (c *Conn) Read() (*Message, *[]byte, error) {
 
 	if c.closed {
 		return nil, nil, errors.New("connection closed")
@@ -175,7 +178,7 @@ func (c *Conn) Read() (*protocol.MessageV0, *[]byte, error) {
 	if !ok {
 		return nil, nil, errors.New("unable to retrieve packet")
 	}
-	return readPacket.message, readPacket.content, nil
+	return (*Message)(readPacket.message), readPacket.content, nil
 }
 
 func (c *Conn) Close() (err error) {

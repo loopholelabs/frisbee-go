@@ -1,8 +1,7 @@
-package conn
+package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
@@ -20,7 +19,7 @@ func TestNewConn(t *testing.T) {
 	assert.Equal(t, "TEST", readerConn.Context())
 	assert.Nil(t, writerConn.Context())
 
-	message := &protocol.MessageV0{
+	message := &Message{
 		Id:            16,
 		Operation:     32,
 		Routing:       64,
@@ -57,7 +56,7 @@ func TestLargeWrite(t *testing.T) {
 
 	randomData := make([][]byte, testSize)
 
-	message := &protocol.MessageV0{
+	message := &Message{
 		Id:            16,
 		Operation:     32,
 		Routing:       64,
@@ -95,7 +94,7 @@ func BenchmarkThroughputPipe32(b *testing.B) {
 
 	randomData := make([]byte, messageSize)
 
-	message := &protocol.MessageV0{
+	message := &Message{
 		Id:            16,
 		Operation:     32,
 		Routing:       64,
@@ -136,7 +135,7 @@ func BenchmarkThroughputPipe512(b *testing.B) {
 
 	randomData := make([]byte, messageSize)
 
-	message := &protocol.MessageV0{
+	message := &Message{
 		Id:            16,
 		Operation:     32,
 		Routing:       64,
@@ -188,7 +187,7 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 
 	randomData := make([]byte, messageSize)
 
-	message := &protocol.MessageV0{
+	message := &Message{
 		Id:            16,
 		Operation:     32,
 		Routing:       64,
@@ -241,7 +240,7 @@ func BenchmarkThroughputNetwork512(b *testing.B) {
 
 	randomData := make([]byte, messageSize)
 
-	message := &protocol.MessageV0{
+	message := &Message{
 		Id:            16,
 		Operation:     32,
 		Routing:       64,
