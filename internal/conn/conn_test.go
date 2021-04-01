@@ -77,4 +77,9 @@ func TestLargeWrite(t *testing.T) {
 		assert.Equal(t, *message, *readMessage)
 		assert.Equal(t, randomData[i], *data)
 	}
+
+	err := readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
 }

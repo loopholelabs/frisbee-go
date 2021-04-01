@@ -3,7 +3,6 @@ package conn
 import (
 	"bufio"
 	"github.com/Workiva/go-datastructures/queue"
-	"github.com/gobwas/pool/pbufio"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/pkg/errors"
 	"net"
@@ -156,8 +155,6 @@ func (c *Conn) Read() (*protocol.MessageV0, *[]byte, error) {
 func (c *Conn) Close() error {
 	c.Lock()
 	defer c.Unlock()
-	pbufio.PutWriter(c.writer)
-	pbufio.PutReader(c.reader)
 	close(c.flush)
 	c.messages.Dispose()
 	return c.conn.Close()
