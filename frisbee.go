@@ -3,7 +3,6 @@ package frisbee
 import (
 	"github.com/loophole-labs/frisbee/internal/conn"
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/pkg/errors"
 )
 
 type Message protocol.MessageV0
@@ -14,21 +13,6 @@ type ClientRouter map[uint16]ClientRouteFunc
 type Action int
 type Conn struct {
 	conn.Conn
-}
-
-func (c Conn) Write(message Message, content *[]byte) error {
-	if content != nil && int(message.ContentLength) != len(*content) {
-		return errors.New("invalid content length")
-	}
-
-	encodedMessage, err := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
-	if err != nil {
-		return err
-	}
-	if content != nil {
-		return c.AsyncWrite(append(encodedMessage[:], *content...))
-	}
-	return c.AsyncWrite(encodedMessage[:])
 }
 
 const None = Action(0)
