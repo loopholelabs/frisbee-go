@@ -28,6 +28,14 @@ type Conn struct {
 	closed   bool
 }
 
+func Connect(network string, addr string) (*Conn, error) {
+	conn, err := net.Dial(network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return New(conn), nil
+}
+
 func New(c net.Conn) (conn *Conn) {
 	conn = &Conn{
 		conn:     c,
@@ -43,6 +51,20 @@ func New(c net.Conn) (conn *Conn) {
 	go conn.readLoop()
 
 	return
+}
+
+func (c *Conn) Raw() (err error, conn net.Conn) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+	c.Lock()
+	defer c.Unlock()
+	close(c.flush)
+	close(c.messages)
+	c.closed = true
+	return nil, c.conn
 }
 
 func (c *Conn) Context() interface{} {
@@ -149,7 +171,10 @@ func (c *Conn) Read() (*protocol.MessageV0, *[]byte, error) {
 	if c.closed {
 		return nil, nil, errors.New("connection closed")
 	}
-	readPacket := <-c.messages
+	readPacket, ok := <-c.messages
+	if !ok {
+		return nil, nil, errors.New("unable to retrieve packet")
+	}
 	return readPacket.message, readPacket.content, nil
 }
 

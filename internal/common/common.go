@@ -5,6 +5,12 @@ import (
 	"unsafe"
 )
 
+const (
+	None = iota
+	Close
+	Shutdown
+)
+
 func BytesToString(bytes []byte) string {
 	var length = len(bytes)
 

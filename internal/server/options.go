@@ -11,9 +11,6 @@ type Option func(opts *Options)
 var DefaultLogger = zerolog.New(os.Stdout)
 
 type Options struct {
-	Multicore bool
-	Async     bool
-	Loops     int
 	KeepAlive time.Duration
 	Logger    *zerolog.Logger
 }
@@ -23,11 +20,6 @@ func LoadOptions(options ...Option) *Options {
 	for _, option := range options {
 		option(opts)
 	}
-
-	if opts.Loops <= 0 {
-		opts.Loops = 16
-	}
-
 	if opts.Logger == nil {
 		opts.Logger = &DefaultLogger
 	}
@@ -42,24 +34,6 @@ func LoadOptions(options ...Option) *Options {
 func WithOptions(options Options) Option {
 	return func(opts *Options) {
 		*opts = options
-	}
-}
-
-func WithMulticore(multicore bool) Option {
-	return func(opts *Options) {
-		opts.Multicore = multicore
-	}
-}
-
-func WithAsync(async bool) Option {
-	return func(opts *Options) {
-		opts.Async = async
-	}
-}
-
-func WithLoops(loops int) Option {
-	return func(opts *Options) {
-		opts.Loops = loops
 	}
 }
 
