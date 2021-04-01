@@ -2,7 +2,6 @@ package conn
 
 import (
 	"bufio"
-	"github.com/Workiva/go-datastructures/queue"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/pkg/errors"
 	"net"
@@ -10,7 +9,7 @@ import (
 )
 
 const (
-	defaultSize = 1 << 16
+	defaultSize = 1 << 18
 )
 
 type packet struct {
@@ -25,7 +24,8 @@ type Conn struct {
 	flush    chan struct{}
 	reader   *bufio.Reader
 	context  interface{}
-	messages *queue.RingBuffer
+	messages chan *packet
+	closed   bool
 }
 
 func New(c net.Conn) (conn *Conn) {
@@ -34,7 +34,8 @@ func New(c net.Conn) (conn *Conn) {
 		writer:   bufio.NewWriterSize(c, defaultSize),
 		flush:    make(chan struct{}, 1024),
 		reader:   bufio.NewReaderSize(c, defaultSize),
-		messages: queue.NewRingBuffer(defaultSize),
+		messages: make(chan *packet, defaultSize),
+		closed:   false,
 		context:  nil,
 	}
 
@@ -78,7 +79,7 @@ func (c *Conn) Write(message *protocol.MessageV0, content *[]byte) error {
 		return errors.New("invalid content length")
 	}
 
-	if c.messages.IsDisposed() {
+	if c.closed {
 		return errors.New("connection closed")
 	}
 
@@ -107,7 +108,8 @@ func (c *Conn) Write(message *protocol.MessageV0, content *[]byte) error {
 
 func (c *Conn) readLoop() {
 	for {
-		if message, _ := c.reader.Peek(protocol.HeaderLengthV0); len(message) == protocol.HeaderLengthV0 {
+		message, err := c.reader.Peek(protocol.HeaderLengthV0)
+		if len(message) == protocol.HeaderLengthV0 {
 			decodedMessage, err := protocol.DecodeV0(message)
 			if err != nil {
 				_, _ = c.reader.Discard(c.reader.Buffered())
@@ -115,14 +117,14 @@ func (c *Conn) readLoop() {
 			}
 			if decodedMessage.ContentLength > 0 {
 				if content, _ := c.reader.Peek(int(decodedMessage.ContentLength + protocol.HeaderLengthV0)); len(content) == int(decodedMessage.ContentLength+protocol.HeaderLengthV0) {
-					_, _ = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
 					readContent := make([]byte, decodedMessage.ContentLength)
-					copy(readContent[:decodedMessage.ContentLength], content[protocol.HeaderLengthV0:])
+					copy(readContent, content[protocol.HeaderLengthV0:])
+					_, _ = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
 					readPacket := &packet{
 						message: &decodedMessage,
 						content: &readContent,
 					}
-					_ = c.messages.Put(readPacket)
+					c.messages <- readPacket
 				}
 				continue
 			}
@@ -131,7 +133,11 @@ func (c *Conn) readLoop() {
 				message: &decodedMessage,
 				content: nil,
 			}
-			_ = c.messages.Put(readPacket)
+			c.messages <- readPacket
+		}
+		if err != nil {
+			_ = c.Close()
+			return
 		}
 		// TODO: Check if running Gosched here adds performance
 		//runtime.Gosched()
@@ -140,22 +146,23 @@ func (c *Conn) readLoop() {
 
 func (c *Conn) Read() (*protocol.MessageV0, *[]byte, error) {
 
-	if c.messages.IsDisposed() {
+	if c.closed {
 		return nil, nil, errors.New("connection closed")
 	}
-
-	readPacket, err := c.messages.Get()
-
-	if err != nil {
-		return nil, nil, err
-	}
-	return readPacket.(*packet).message, readPacket.(*packet).content, nil
+	readPacket := <-c.messages
+	return readPacket.message, readPacket.content, nil
 }
 
-func (c *Conn) Close() error {
+func (c *Conn) Close() (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	c.messages.Dispose()
+	close(c.messages)
+	c.closed = true
 	return c.conn.Close()
 }

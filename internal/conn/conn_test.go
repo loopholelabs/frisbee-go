@@ -47,8 +47,8 @@ func TestNewConn(t *testing.T) {
 }
 
 func TestLargeWrite(t *testing.T) {
-	const testSize = defaultSize / 2
-	const messageSize = defaultSize / 2
+	const testSize = 10000
+	const messageSize = 512
 
 	reader, writer := net.Pipe()
 
@@ -82,4 +82,192 @@ func TestLargeWrite(t *testing.T) {
 	assert.NoError(t, err)
 	err = writerConn.Close()
 	assert.NoError(t, err)
+}
+
+func BenchmarkThroughputPipe32(b *testing.B) {
+	const testSize = 10000
+	const messageSize = 32
+
+	reader, writer := net.Pipe()
+
+	readerConn := New(reader)
+	writerConn := New(writer)
+
+	randomData := make([]byte, messageSize)
+
+	message := &protocol.MessageV0{
+		Id:            16,
+		Operation:     32,
+		Routing:       64,
+		ContentLength: messageSize,
+	}
+
+	done := make(chan struct{}, 1)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func() {
+			for i := 0; i < testSize; i++ {
+				readMessage, data, _ := readerConn.Read()
+				_ = data
+				_ = readMessage
+			}
+			done <- struct{}{}
+		}()
+		for i := 0; i < testSize; i++ {
+			_ = writerConn.Write(message, &randomData)
+		}
+		<-done
+	}
+	b.StopTimer()
+
+	_ = readerConn.Close()
+	_ = writerConn.Close()
+}
+
+func BenchmarkThroughputPipe512(b *testing.B) {
+	const testSize = 10000
+	const messageSize = 512
+
+	reader, writer := net.Pipe()
+
+	readerConn := New(reader)
+	writerConn := New(writer)
+
+	randomData := make([]byte, messageSize)
+
+	message := &protocol.MessageV0{
+		Id:            16,
+		Operation:     32,
+		Routing:       64,
+		ContentLength: messageSize,
+	}
+
+	done := make(chan struct{}, 1)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func() {
+			for i := 0; i < testSize; i++ {
+				readMessage, data, _ := readerConn.Read()
+				_ = data
+				_ = readMessage
+			}
+			done <- struct{}{}
+		}()
+		for i := 0; i < testSize; i++ {
+			_ = writerConn.Write(message, &randomData)
+		}
+		<-done
+	}
+	b.StopTimer()
+
+	_ = readerConn.Close()
+	_ = writerConn.Close()
+}
+
+func BenchmarkThroughputNetwork32(b *testing.B) {
+	const testSize = 10000
+	const messageSize = 32
+
+	var reader, writer net.Conn
+	start := make(chan struct{}, 1)
+
+	l, _ := net.Listen("tcp", ":3000")
+
+	go func() {
+		reader, _ = l.Accept()
+		start <- struct{}{}
+	}()
+
+	writer, _ = net.Dial("tcp", ":3000")
+	<-start
+
+	readerConn := New(reader)
+	writerConn := New(writer)
+
+	randomData := make([]byte, messageSize)
+
+	message := &protocol.MessageV0{
+		Id:            16,
+		Operation:     32,
+		Routing:       64,
+		ContentLength: messageSize,
+	}
+
+	done := make(chan struct{}, 1)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func() {
+			for i := 0; i < testSize; i++ {
+				readMessage, data, _ := readerConn.Read()
+				_ = data
+				_ = readMessage
+			}
+			done <- struct{}{}
+		}()
+		for i := 0; i < testSize; i++ {
+			_ = writerConn.Write(message, &randomData)
+		}
+		<-done
+	}
+	b.StopTimer()
+
+	_ = readerConn.Close()
+	_ = writerConn.Close()
+	_ = l.Close()
+}
+
+func BenchmarkThroughputNetwork512(b *testing.B) {
+	const testSize = 10000
+	const messageSize = 512
+
+	var reader, writer net.Conn
+	start := make(chan struct{}, 1)
+
+	l, _ := net.Listen("tcp", ":3000")
+
+	go func() {
+		reader, _ = l.Accept()
+		start <- struct{}{}
+	}()
+
+	writer, _ = net.Dial("tcp", ":3000")
+	<-start
+
+	readerConn := New(reader)
+	writerConn := New(writer)
+
+	randomData := make([]byte, messageSize)
+
+	message := &protocol.MessageV0{
+		Id:            16,
+		Operation:     32,
+		Routing:       64,
+		ContentLength: messageSize,
+	}
+
+	done := make(chan struct{}, 1)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func() {
+			for i := 0; i < testSize; i++ {
+				readMessage, data, _ := readerConn.Read()
+				_ = data
+				_ = readMessage
+			}
+			done <- struct{}{}
+		}()
+		for i := 0; i < testSize; i++ {
+			_ = writerConn.Write(message, &randomData)
+		}
+		<-done
+	}
+	b.StopTimer()
+
+	_ = readerConn.Close()
+	_ = writerConn.Close()
+	_ = l.Close()
 }
