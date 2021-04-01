@@ -79,11 +79,11 @@ func (c *Conn) SetContext(ctx interface{}) {
 }
 
 func (c *Conn) LocalAddr() net.Addr {
-	return c.LocalAddr()
+	return c.conn.LocalAddr()
 }
 
 func (c *Conn) RemoteAddr() net.Addr {
-	return c.RemoteAddr()
+	return c.conn.RemoteAddr()
 }
 
 func (c *Conn) flushLoop() {

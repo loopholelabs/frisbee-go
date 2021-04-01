@@ -93,7 +93,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.Options.KeepAlive)
 	frisbeeConn := New(newConn)
 
-	openedAction := s.UserOnOpened(s, frisbeeConn)
+	openedAction := s.onOpened(frisbeeConn)
 	if openedAction == Close {
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)

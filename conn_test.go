@@ -38,6 +38,7 @@ func TestNewConn(t *testing.T) {
 
 	message.ContentLength = messageSize
 	err = writerConn.Write(message, &data)
+	assert.NoError(t, err)
 
 	readMessage, content, err = readerConn.Read()
 	assert.NoError(t, err)
