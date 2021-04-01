@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/loophole-labs/frisbee"
-	"github.com/loophole-labs/frisbee/pkg/server"
 	"github.com/rs/zerolog/log"
 	"hash/crc32"
 	"os"
@@ -12,9 +11,9 @@ import (
 const PUB = uint16(1)
 const SUB = uint16(2)
 
-var subscribers = make(map[uint32][]frisbee.Conn)
+var subscribers = make(map[uint32][]*frisbee.Conn)
 
-func handleSub(c frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func handleSub(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
 		log.Printf("Server Received SUB on topic %s from %s", string(incomingContent), c.RemoteAddr())
 		checksum := crc32.ChecksumIEEE(incomingContent)
@@ -23,12 +22,12 @@ func handleSub(c frisbee.Conn, incomingMessage frisbee.Message, incomingContent 
 	return
 }
 
-func handlePub(_ frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func handlePub(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
 		log.Printf("Server Received PUB on hashed topic %d with content %s", incomingMessage.Routing, string(incomingContent))
 		if connections := subscribers[incomingMessage.Routing]; connections != nil {
 			for _, c := range connections {
-				_ = c.Write(frisbee.Message{
+				_ = c.Write(&frisbee.Message{
 					Id:            0,
 					Operation:     PUB,
 					Routing:       incomingMessage.Routing,
@@ -48,11 +47,11 @@ func main() {
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
 
-	s := server.NewServer(":8192", router)
-	s.Start()
+	s := frisbee.NewServer(":8192", router)
+	_ = s.Start()
 
 	<-exit
-	err := s.Stop()
+	err := s.Shutdown()
 	if err != nil {
 		panic(err)
 	}

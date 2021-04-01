@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/loophole-labs/frisbee/pkg/client"
 	"github.com/rs/zerolog"
 	"io/ioutil"
 	"os"
@@ -33,11 +32,11 @@ func main() {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	c := client.NewClient(fmt.Sprintf("127.0.0.1:%d", port), router, client.WithLogger(&emptyLogger))
+	c := frisbee.NewClient(fmt.Sprintf("127.0.0.1:%d", port), router, frisbee.WithLogger(&emptyLogger))
 	_ = c.Connect()
 
 	<-exit
-	err := c.Stop()
+	err := c.Close()
 	if err != nil {
 		panic(err)
 	}
