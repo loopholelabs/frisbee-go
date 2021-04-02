@@ -16,14 +16,15 @@ const (
 
 type Conn struct {
 	sync.Mutex
-	conn       net.Conn
-	writer     *bufio.Writer
-	flush      chan struct{}
-	reader     *bufio.Reader
-	context    interface{}
-	readQueue  *ringbuffer.RingBuffer
-	writeQueue *ringbuffer.RingBuffer
-	closed     bool
+	conn        net.Conn
+	writer      *bufio.Writer
+	writeBuffer net.Buffers
+	flush       chan struct{}
+	reader      *bufio.Reader
+	context     interface{}
+	readQueue   *ringbuffer.RingBuffer
+	writeQueue  *ringbuffer.RingBuffer
+	closed      bool
 }
 
 func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error) {
@@ -50,8 +51,9 @@ func New(c net.Conn) (conn *Conn) {
 		context:    nil,
 	}
 
-	go conn.flushLoop()
+	//go conn.flushLoop()
 	go conn.readLoop()
+	go conn.writeLoop()
 
 	return
 }
@@ -99,6 +101,38 @@ func (c *Conn) flushLoop() {
 	}
 }
 
+func (c *Conn) writeLoop() {
+	var writeBuffer net.Buffers
+	for {
+		writePacket, err := c.writeQueue.Pop()
+		if err != nil {
+			_ = c.Close()
+			return
+		}
+		encodedMessage, _ := protocol.EncodeV0(writePacket.Message.Id, writePacket.Message.Operation, writePacket.Message.Routing, writePacket.Message.ContentLength)
+		writeBuffer = append(writeBuffer, encodedMessage[:])
+		//_, _ = c.writer.Write(encodedMessage[:])
+		if writePacket.Content != nil {
+			//_, _ = c.writer.Write(*writePacket.Content)
+			writeBuffer = append(writeBuffer, *writePacket.Content)
+		}
+		for c.writeQueue.Length() > 0 {
+			writePacket, _ := c.writeQueue.Pop()
+			encodedMessage, _ := protocol.EncodeV0(writePacket.Message.Id, writePacket.Message.Operation, writePacket.Message.Routing, writePacket.Message.ContentLength)
+			//_, _ = c.writer.Write(encodedMessage[:])
+			writeBuffer = append(writeBuffer, encodedMessage[:])
+			if writePacket.Content != nil {
+				//_, _ = c.writer.Write(*writePacket.Content)
+				writeBuffer = append(writeBuffer, *writePacket.Content)
+			}
+		}
+		_, _ = writeBuffer.WriteTo(c.conn)
+		//if c.writer.Buffered() > 0 {
+		//	_ = c.writer.Flush()
+		//}
+	}
+}
+
 func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
 		return errors.New("invalid content length")
@@ -107,21 +141,26 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	if c.closed {
 		return errors.New("connection closed")
 	}
-	encodedMessage, _ := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
-	c.Lock()
-	_, _ = c.writer.Write(encodedMessage[:])
-	if content != nil {
-		_, _ = c.writer.Write(*content)
-	}
+	//encodedMessage, _ := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
+	//c.Lock()
+	//_, _ = c.writer.Write(encodedMessage[:])
+	//if content != nil {
+	//	_, _ = c.writer.Write(*content)
+	//}
+	//
+	//if len(c.flush) == 0 {
+	//	select {
+	//	case c.flush <- struct{}{}:
+	//	default:
+	//	}
+	//}
+	//
+	//c.Unlock()
 
-	if len(c.flush) == 0 {
-		select {
-		case c.flush <- struct{}{}:
-		default:
-		}
-	}
-
-	c.Unlock()
+	_ = c.writeQueue.Push(&protocol.PacketV0{
+		Message: (*protocol.MessageV0)(message),
+		Content: content,
+	})
 
 	return nil
 }
