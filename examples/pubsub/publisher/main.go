@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/loophole-labs/frisbee"
-	"github.com/loophole-labs/frisbee/pkg/client"
 	"hash/crc32"
 	"os"
 	"os/signal"
@@ -20,7 +19,7 @@ func main() {
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
 
-	c := client.NewClient("127.0.0.1:8192", router)
+	c := frisbee.NewClient("127.0.0.1:8192", router)
 	err := c.Connect()
 	if err != nil {
 		panic(err)
@@ -30,7 +29,7 @@ func main() {
 		i := 0
 		for {
 			message := []byte(fmt.Sprintf("PUBLISHED MESSAGE: %d", i))
-			err := c.Write(frisbee.Message{
+			err := c.Write(&frisbee.Message{
 				Id:            uint32(i),
 				Operation:     PUB,
 				Routing:       topicHash,
@@ -45,7 +44,7 @@ func main() {
 	}()
 
 	<-exit
-	err = c.Stop()
+	err = c.Close()
 	if err != nil {
 		panic(err)
 	}
