@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/loophole-labs/frisbee/pkg/server"
 	"github.com/rs/zerolog"
 	"io/ioutil"
 	"os"
@@ -14,7 +13,7 @@ import (
 const testSize = 100000
 const port = 8192
 
-func handlePing(_ frisbee.Conn, incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func handlePing(_ *frisbee.Conn, incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.Id == testSize-1 {
 		outgoingMessage = &frisbee.Message{
 			Id:            testSize,
@@ -34,16 +33,16 @@ func main() {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	s := server.NewServer(fmt.Sprintf(":%d", port), router, server.WithAsync(true), server.WithMulticore(true), server.WithLoops(16), server.WithLogger(&emptyLogger))
-	s.UserOnOpened = func(server *server.Server, c frisbee.Conn) frisbee.Action {
+	s := frisbee.NewServer(fmt.Sprintf(":%d", port), router, frisbee.WithLogger(&emptyLogger))
+	s.UserOnOpened = func(server *frisbee.Server, c *frisbee.Conn) frisbee.Action {
 		server.Options.Logger.Debug().Msgf("Client connected: %s", c.RemoteAddr())
 		return frisbee.None
 	}
 
-	s.Start()
+	_ = s.Start()
 
 	<-exit
-	err := s.Stop()
+	err := s.Shutdown()
 	if err != nil {
 		panic(err)
 	}
