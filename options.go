@@ -1,4 +1,4 @@
-package client
+package frisbee
 
 import (
 	"github.com/rs/zerolog"
