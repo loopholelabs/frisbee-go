@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/loophole-labs/frisbee"
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/loophole-labs/frisbee/pkg/client"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"io/ioutil"
@@ -32,7 +31,7 @@ func main() {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	c := client.NewClient(fmt.Sprintf("127.0.0.1:%d", port), router, client.WithLogger(&emptyLogger))
+	c := frisbee.NewClient(fmt.Sprintf("127.0.0.1:%d", port), router, frisbee.WithLogger(&emptyLogger))
 	_ = c.Connect()
 
 	data := make([]byte, messageSize)
@@ -42,7 +41,7 @@ func main() {
 	for i := 1; i < runs+1; i++ {
 		start := time.Now()
 		for q := 0; q < testSize; q++ {
-			err := c.Write(frisbee.Message{
+			err := c.Write(&frisbee.Message{
 				Id:            uint32(q),
 				Operation:     protocol.MessagePing,
 				Routing:       uint32(i),
@@ -58,5 +57,5 @@ func main() {
 		duration += runTime
 	}
 	log.Printf("Average Benchmark time for %d runs: %d ns", runs, duration.Nanoseconds()/runs)
-	_ = c.Stop()
+	_ = c.Close()
 }
