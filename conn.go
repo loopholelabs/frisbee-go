@@ -16,14 +16,13 @@ const (
 
 type Conn struct {
 	sync.Mutex
-	conn         net.Conn
-	writer       *bufio.Writer
-	flush        chan struct{}
-	flushTrigger *sync.Cond
-	reader       *bufio.Reader
-	context      interface{}
-	messages     *ringbuffer.RingBuffer
-	closed       bool
+	conn     net.Conn
+	writer   *bufio.Writer
+	flush    *sync.Cond
+	reader   *bufio.Reader
+	context  interface{}
+	messages *ringbuffer.RingBuffer
+	closed   bool
 }
 
 func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error) {
@@ -42,14 +41,13 @@ func New(c net.Conn) (conn *Conn) {
 	conn = &Conn{
 		conn:     c,
 		writer:   bufio.NewWriterSize(c, defaultSize),
-		flush:    make(chan struct{}, 1<<10),
 		reader:   bufio.NewReaderSize(c, defaultSize),
 		messages: ringbuffer.NewRingBuffer(defaultSize),
 		closed:   false,
 		context:  nil,
 	}
 
-	conn.flushTrigger = sync.NewCond(conn)
+	conn.flush = sync.NewCond(conn)
 
 	go conn.flushLoop()
 	go conn.readLoop()
@@ -65,9 +63,9 @@ func (c *Conn) Raw() (err error, conn net.Conn) {
 	}()
 	c.Lock()
 	defer c.Unlock()
-	close(c.flush)
 	c.messages.Close()
 	c.closed = true
+	c.flush.Broadcast()
 	return nil, c.conn
 }
 
@@ -89,16 +87,16 @@ func (c *Conn) RemoteAddr() net.Addr {
 
 func (c *Conn) flushLoop() {
 	for {
-		c.flushTrigger.L.Lock()
+		c.flush.L.Lock()
 		for c.writer.Buffered() == 0 {
-			c.flushTrigger.Wait()
+			c.flush.Wait()
 		}
 		if c.closed {
-			c.flushTrigger.L.Unlock()
+			c.flush.L.Unlock()
 			return
 		}
 		_ = c.writer.Flush()
-		c.flushTrigger.L.Unlock()
+		c.flush.L.Unlock()
 	}
 }
 
@@ -118,7 +116,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	}
 	c.Unlock()
 
-	c.flushTrigger.Signal()
+	c.flush.Signal()
 
 	return nil
 }
@@ -180,8 +178,8 @@ func (c *Conn) Close() (err error) {
 	}()
 	c.Lock()
 	defer c.Unlock()
-	close(c.flush)
 	c.messages.Close()
 	c.closed = true
+	c.flush.Broadcast()
 	return c.conn.Close()
 }
