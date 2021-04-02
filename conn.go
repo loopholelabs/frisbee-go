@@ -16,14 +16,14 @@ const (
 
 type Conn struct {
 	sync.Mutex
-	conn    net.Conn
-	writer  *bufio.Writer
-	flush   chan struct{}
-	reader  *bufio.Reader
-	context interface{}
-	//messages chan *ringbuffer.Packet
-	messages *ringbuffer.RingBuffer
-	closed   bool
+	conn       net.Conn
+	writer     *bufio.Writer
+	flush      chan struct{}
+	reader     *bufio.Reader
+	context    interface{}
+	readQueue  *ringbuffer.RingBuffer
+	writeQueue *ringbuffer.RingBuffer
+	closed     bool
 }
 
 func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error) {
@@ -40,14 +40,14 @@ func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error
 
 func New(c net.Conn) (conn *Conn) {
 	conn = &Conn{
-		conn:   c,
-		writer: bufio.NewWriterSize(c, defaultSize),
-		flush:  make(chan struct{}, 1024),
-		reader: bufio.NewReaderSize(c, defaultSize),
-		//messages: make(chan *packet, defaultSize),
-		messages: ringbuffer.NewRingBuffer(defaultSize),
-		closed:   false,
-		context:  nil,
+		conn:       c,
+		writer:     bufio.NewWriterSize(c, defaultSize),
+		flush:      make(chan struct{}, 1024),
+		reader:     bufio.NewReaderSize(c, defaultSize),
+		readQueue:  ringbuffer.NewRingBuffer(defaultSize),
+		writeQueue: ringbuffer.NewRingBuffer(defaultSize),
+		closed:     false,
+		context:    nil,
 	}
 
 	go conn.flushLoop()
@@ -65,8 +65,7 @@ func (c *Conn) Raw() (err error, conn net.Conn) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	//close(c.messages)
-	c.messages.Close()
+	c.readQueue.Close()
 	c.closed = true
 	return nil, c.conn
 }
@@ -108,11 +107,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	if c.closed {
 		return errors.New("connection closed")
 	}
-
-	encodedMessage, err := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
-	if err != nil {
-		return err
-	}
+	encodedMessage, _ := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
 	c.Lock()
 	_, _ = c.writer.Write(encodedMessage[:])
 	if content != nil {
@@ -145,22 +140,20 @@ func (c *Conn) readLoop() {
 					readContent := make([]byte, decodedMessage.ContentLength)
 					copy(readContent, content[protocol.HeaderLengthV0:])
 					_, _ = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
-					readPacket := &ringbuffer.Packet{
+					readPacket := &protocol.PacketV0{
 						Message: &decodedMessage,
 						Content: &readContent,
 					}
-					//c.messages <- readPacket
-					_ = c.messages.Push(readPacket)
+					_ = c.readQueue.Push(readPacket)
 				}
 				continue
 			}
 			_, _ = c.reader.Discard(protocol.HeaderLengthV0)
-			readPacket := &ringbuffer.Packet{
+			readPacket := &protocol.PacketV0{
 				Message: &decodedMessage,
 				Content: nil,
 			}
-			//c.messages <- readPacket
-			_ = c.messages.Push(readPacket)
+			_ = c.readQueue.Push(readPacket)
 		}
 		if err != nil {
 			_ = c.Close()
@@ -170,17 +163,11 @@ func (c *Conn) readLoop() {
 }
 
 func (c *Conn) Read() (*Message, *[]byte, error) {
-
 	if c.closed {
 		return nil, nil, errors.New("connection closed")
 	}
 
-	//readPacket, ok := <- c.messages
-	//if !ok {
-	//	return nil, nil, errors.New("unable to retrieve packet")
-	//}
-
-	readPacket, err := c.messages.Pop()
+	readPacket, err := c.readQueue.Pop()
 	if err != nil {
 		return nil, nil, errors.New("unable to retrieve packet")
 	}
@@ -197,8 +184,7 @@ func (c *Conn) Close() (err error) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	//close(c.messages)
-	c.messages.Close()
+	c.readQueue.Close()
 	c.closed = true
 	return c.conn.Close()
 }

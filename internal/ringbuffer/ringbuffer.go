@@ -19,14 +19,9 @@ func round(value uint64) uint64 {
 	return value
 }
 
-type Packet struct {
-	Message *protocol.MessageV0
-	Content *[]byte
-}
-
 type node struct {
 	position uint64
-	data     *Packet
+	data     *protocol.PacketV0
 }
 
 type nodes []node
@@ -51,7 +46,7 @@ func (rb *RingBuffer) init(size uint64) {
 	rb.mask = size - 1
 }
 
-func (rb *RingBuffer) Push(item *Packet) error {
+func (rb *RingBuffer) Push(item *protocol.PacketV0) error {
 	var newNode *node
 	position := atomic.LoadUint64(&rb.head)
 RETRY:
@@ -72,6 +67,7 @@ RETRY:
 		default:
 			position = atomic.LoadUint64(&rb.head)
 		}
+
 		runtime.Gosched()
 	}
 	newNode.data = item
@@ -79,7 +75,7 @@ RETRY:
 	return nil
 }
 
-func (rb *RingBuffer) Pop() (*Packet, error) {
+func (rb *RingBuffer) Pop() (*protocol.PacketV0, error) {
 	var oldNode *node
 	var oldPosition = atomic.LoadUint64(&rb.tail)
 RETRY:
