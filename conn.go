@@ -2,8 +2,8 @@ package frisbee
 
 import (
 	"bufio"
-	"github.com/Workiva/go-datastructures/queue"
 	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/loophole-labs/frisbee/internal/ringbuffer"
 	"github.com/pkg/errors"
 	"net"
 	"sync"
@@ -14,19 +14,15 @@ const (
 	defaultSize = 1 << 18
 )
 
-type packet struct {
-	message *protocol.MessageV0
-	content *[]byte
-}
-
 type Conn struct {
 	sync.Mutex
-	conn     net.Conn
-	writer   *bufio.Writer
-	reader   *bufio.Reader
-	flush    chan struct{}
-	messages *queue.RingBuffer
-	context  interface{}
+	conn    net.Conn
+	writer  *bufio.Writer
+	flush   chan struct{}
+	reader  *bufio.Reader
+	context interface{}
+	//messages chan *ringbuffer.Packet
+	messages *ringbuffer.RingBuffer
 	closed   bool
 }
 
@@ -44,11 +40,12 @@ func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error
 
 func New(c net.Conn) (conn *Conn) {
 	conn = &Conn{
-		conn:     c,
-		writer:   bufio.NewWriterSize(c, defaultSize),
-		flush:    make(chan struct{}, 1024),
-		reader:   bufio.NewReaderSize(c, defaultSize),
-		messages: queue.NewRingBuffer(defaultSize),
+		conn:   c,
+		writer: bufio.NewWriterSize(c, defaultSize),
+		flush:  make(chan struct{}, 1024),
+		reader: bufio.NewReaderSize(c, defaultSize),
+		//messages: make(chan *packet, defaultSize),
+		messages: ringbuffer.NewRingBuffer(defaultSize),
 		closed:   false,
 		context:  nil,
 	}
@@ -68,7 +65,8 @@ func (c *Conn) Raw() (err error, conn net.Conn) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	c.messages.Dispose()
+	//close(c.messages)
+	c.messages.Close()
 	c.closed = true
 	return nil, c.conn
 }
@@ -147,20 +145,22 @@ func (c *Conn) readLoop() {
 					readContent := make([]byte, decodedMessage.ContentLength)
 					copy(readContent, content[protocol.HeaderLengthV0:])
 					_, _ = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
-					readPacket := &packet{
-						message: &decodedMessage,
-						content: &readContent,
+					readPacket := &ringbuffer.Packet{
+						Message: &decodedMessage,
+						Content: &readContent,
 					}
-					_ = c.messages.Put(readPacket)
+					//c.messages <- readPacket
+					_ = c.messages.Push(readPacket)
 				}
 				continue
 			}
 			_, _ = c.reader.Discard(protocol.HeaderLengthV0)
-			readPacket := &packet{
-				message: &decodedMessage,
-				content: nil,
+			readPacket := &ringbuffer.Packet{
+				Message: &decodedMessage,
+				Content: nil,
 			}
-			_ = c.messages.Put(readPacket)
+			//c.messages <- readPacket
+			_ = c.messages.Push(readPacket)
 		}
 		if err != nil {
 			_ = c.Close()
@@ -175,12 +175,17 @@ func (c *Conn) Read() (*Message, *[]byte, error) {
 		return nil, nil, errors.New("connection closed")
 	}
 
-	readPacket, err := c.messages.Get()
+	//readPacket, ok := <- c.messages
+	//if !ok {
+	//	return nil, nil, errors.New("unable to retrieve packet")
+	//}
+
+	readPacket, err := c.messages.Pop()
 	if err != nil {
 		return nil, nil, errors.New("unable to retrieve packet")
 	}
 
-	return (*Message)(readPacket.(*packet).message), readPacket.(*packet).content, nil
+	return (*Message)(readPacket.Message), readPacket.Content, nil
 }
 
 func (c *Conn) Close() (err error) {
@@ -192,7 +197,8 @@ func (c *Conn) Close() (err error) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	c.messages.Dispose()
+	//close(c.messages)
+	c.messages.Close()
 	c.closed = true
 	return c.conn.Close()
 }
