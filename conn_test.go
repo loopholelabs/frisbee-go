@@ -12,8 +12,8 @@ func TestNewConn(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader)
-	writerConn := New(writer)
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
 
 	readerConn.SetContext("TEST")
 	assert.Equal(t, "TEST", readerConn.Context())
@@ -52,8 +52,8 @@ func TestLargeWrite(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader)
-	writerConn := New(writer)
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
 
 	randomData := make([][]byte, testSize)
 
@@ -90,8 +90,8 @@ func BenchmarkThroughputPipe32(b *testing.B) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader)
-	writerConn := New(writer)
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
 
 	randomData := make([]byte, messageSize)
 
@@ -131,8 +131,8 @@ func BenchmarkThroughputPipe512(b *testing.B) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader)
-	writerConn := New(writer)
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
 
 	randomData := make([]byte, messageSize)
 
@@ -183,8 +183,8 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader)
-	writerConn := New(writer)
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
 
 	randomData := make([]byte, messageSize)
 
@@ -236,8 +236,8 @@ func BenchmarkThroughputNetwork512(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader)
-	writerConn := New(writer)
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
 
 	randomData := make([]byte, messageSize)
 

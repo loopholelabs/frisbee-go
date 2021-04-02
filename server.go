@@ -1,6 +1,7 @@
 package frisbee
 
 import (
+	"github.com/rs/zerolog"
 	"net"
 )
 
@@ -78,7 +79,7 @@ func (s *Server) Start() error {
 				if s.shutdown {
 					return
 				}
-				s.Options.Logger.Fatal().Msgf("unable to accept connections: %+v", err)
+				s.logger().Fatal().Msgf("unable to accept connections: %+v", err)
 				return
 			}
 			go s.handleConn(newConn)
@@ -91,21 +92,22 @@ func (s *Server) Start() error {
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
 	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.Options.KeepAlive)
-	frisbeeConn := New(newConn)
+	frisbeeConn := New(newConn, nil)
 
 	openedAction := s.onOpened(frisbeeConn)
-	if openedAction == Close {
+
+	switch openedAction {
+	case Close:
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		return
-	}
-
-	if openedAction == Shutdown {
+	case Shutdown:
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		_ = s.Shutdown()
 		s.onShutdown()
 		return
+	default:
 	}
 
 	for {
@@ -151,6 +153,10 @@ func (s *Server) handleConn(newConn net.Conn) {
 			}
 		}
 	}
+}
+
+func (s *Server) logger() *zerolog.Logger {
+	return s.Options.Logger
 }
 
 func (s *Server) Shutdown() error {

@@ -5,6 +5,8 @@ import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/loophole-labs/frisbee/internal/ringbuffer"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"io/ioutil"
 	"net"
 	"sync"
 	"time"
@@ -13,6 +15,8 @@ import (
 const (
 	defaultSize = 1 << 18
 )
+
+var silentLogger = zerolog.New(ioutil.Discard)
 
 type Conn struct {
 	sync.Mutex
@@ -23,9 +27,11 @@ type Conn struct {
 	context  interface{}
 	messages *ringbuffer.RingBuffer
 	closed   bool
+	logger   *zerolog.Logger
+	Error    error
 }
 
-func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error) {
+func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
@@ -34,10 +40,10 @@ func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error
 	if err != nil {
 		return nil, err
 	}
-	return New(conn), nil
+	return New(conn, l), nil
 }
 
-func New(c net.Conn) (conn *Conn) {
+func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 	conn = &Conn{
 		conn:     c,
 		writer:   bufio.NewWriterSize(c, defaultSize),
@@ -45,6 +51,11 @@ func New(c net.Conn) (conn *Conn) {
 		messages: ringbuffer.NewRingBuffer(defaultSize),
 		closed:   false,
 		context:  nil,
+		logger:   l,
+	}
+
+	if l == nil {
+		conn.logger = &silentLogger
 	}
 
 	conn.flush = sync.NewCond(conn)
@@ -55,18 +66,13 @@ func New(c net.Conn) (conn *Conn) {
 	return
 }
 
-func (c *Conn) Raw() (err error, conn net.Conn) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = r.(error)
-		}
-	}()
+func (c *Conn) Raw() net.Conn {
 	c.Lock()
 	defer c.Unlock()
 	c.messages.Close()
 	c.closed = true
 	c.flush.Broadcast()
-	return nil, c.conn
+	return c.conn
 }
 
 func (c *Conn) Context() interface{} {
@@ -95,7 +101,10 @@ func (c *Conn) flushLoop() {
 			c.flush.L.Unlock()
 			return
 		}
-		_ = c.writer.Flush()
+		err := c.writer.Flush()
+		if err != nil {
+			_ = c.close(err)
+		}
 		c.flush.L.Unlock()
 	}
 }
@@ -110,9 +119,15 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	}
 	encodedMessage, _ := protocol.EncodeV0(message.Id, message.Operation, message.Routing, message.ContentLength)
 	c.Lock()
-	_, _ = c.writer.Write(encodedMessage[:])
+	_, err := c.writer.Write(encodedMessage[:])
+	if err != nil {
+		c.logger.Error().Msgf("Short write to write buffer %+v", err)
+	}
 	if content != nil {
-		_, _ = c.writer.Write(*content)
+		_, err = c.writer.Write(*content)
+		if err != nil {
+			c.logger.Error().Msgf("Short write to write buffer %+v", err)
+		}
 	}
 	c.Unlock()
 
@@ -127,31 +142,47 @@ func (c *Conn) readLoop() {
 		if len(message) == protocol.HeaderLengthV0 {
 			decodedMessage, err := protocol.DecodeV0(message)
 			if err != nil {
-				_, _ = c.reader.Discard(c.reader.Buffered())
+				c.logger.Error().Msgf("Invalid read buffer contents, discarding")
+				_, err = c.reader.Discard(c.reader.Buffered())
+				if err != nil {
+					c.logger.Debug().Msgf("Error while discarding from read buffer: %+v", err)
+				}
 				continue
 			}
 			if decodedMessage.ContentLength > 0 {
 				if content, _ := c.reader.Peek(int(decodedMessage.ContentLength + protocol.HeaderLengthV0)); len(content) == int(decodedMessage.ContentLength+protocol.HeaderLengthV0) {
 					readContent := make([]byte, decodedMessage.ContentLength)
 					copy(readContent, content[protocol.HeaderLengthV0:])
-					_, _ = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
+					_, err = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
+					if err != nil {
+						c.logger.Debug().Msgf("Error while discarding from read buffer: %+v", err)
+					}
 					readPacket := &protocol.PacketV0{
 						Message: &decodedMessage,
 						Content: &readContent,
 					}
-					_ = c.messages.Push(readPacket)
+					err = c.messages.Push(readPacket)
+					if err != nil {
+						c.logger.Debug().Msgf("Error pushing read packet to message queue %+v", err)
+					}
 				}
 				continue
 			}
-			_, _ = c.reader.Discard(protocol.HeaderLengthV0)
+			_, err = c.reader.Discard(protocol.HeaderLengthV0)
+			if err != nil {
+				c.logger.Debug().Msgf("Error while discarding from read buffer: %+v", err)
+			}
 			readPacket := &protocol.PacketV0{
 				Message: &decodedMessage,
 				Content: nil,
 			}
-			_ = c.messages.Push(readPacket)
+			err = c.messages.Push(readPacket)
+			if err != nil {
+				c.logger.Debug().Msgf("Error pushing read packet to message queue %+v", err)
+			}
 		}
 		if err != nil {
-			_ = c.Close()
+			_ = c.close(err)
 			return
 		}
 	}
@@ -170,16 +201,31 @@ func (c *Conn) Read() (*Message, *[]byte, error) {
 	return (*Message)(readPacket.Message), readPacket.Content, nil
 }
 
-func (c *Conn) Close() (err error) {
+func (c *Conn) Logger() *zerolog.Logger {
+	return c.logger
+}
+
+func (c *Conn) close(connError error) (err error) {
+	if c.closed {
+		return c.Error
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
 		}
 	}()
-	c.Lock()
-	defer c.Unlock()
-	c.messages.Close()
-	c.closed = true
-	c.flush.Broadcast()
-	return c.conn.Close()
+	conn := c.Raw()
+	if connError != nil {
+		c.logger.Error().Msgf("Closing connection with error %+v", connError)
+		c.Error = connError
+		closeError := conn.Close()
+		c.logger.Error().Msgf("Error while closing connection %+v", closeError)
+		return c.Error
+	}
+	c.Error = conn.Close()
+	return c.Error
+}
+
+func (c *Conn) Close() (err error) {
+	return c.close(nil)
 }

@@ -1,5 +1,7 @@
 package frisbee
 
+import "github.com/rs/zerolog"
+
 type ClientRouterFunc func(incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
 type ClientRouter map[uint16]ClientRouterFunc
 
@@ -7,7 +9,7 @@ type Client struct {
 	addr    string
 	Conn    *Conn
 	router  ClientRouter
-	options *Options
+	Options *Options
 	closed  bool
 }
 
@@ -15,26 +17,30 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	return &Client{
 		addr:    addr,
 		router:  router,
-		options: LoadOptions(opts...),
+		Options: LoadOptions(opts...),
 		closed:  false,
 	}
 }
 
 func (c *Client) Connect() error {
-	c.options.Logger.Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive)
+	c.Options.Logger.Debug().Msgf("Connecting to %s", c.addr)
+	frisbeeConn, err := Connect("tcp", c.addr, c.Options.KeepAlive, nil)
 	if err != nil {
 		return err
 	}
 	c.Conn = frisbeeConn
-	c.options.Logger.Info().Msgf("Connected to %s", c.addr)
+	c.logger().Info().Msgf("Connected to %s", c.addr)
 
 	// Reacts to incoming messages
 	go c.reactor()
 
-	c.options.Logger.Debug().Msg("Reactor started")
+	c.logger().Debug().Msg("Reactor started")
 
 	return nil
+}
+
+func (c *Client) logger() *zerolog.Logger {
+	return c.Options.Logger
 }
 
 func (c *Client) Close() error {
