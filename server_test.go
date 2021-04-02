@@ -12,7 +12,7 @@ import (
 )
 
 func BenchmarkThroughput(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
 	addr := ":8192"
 	router := make(ServerRouter)
@@ -69,7 +69,7 @@ func BenchmarkThroughput(b *testing.B) {
 }
 
 func BenchmarkThroughputWithResponse(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
 	addr := ":8192"
 	router := make(ServerRouter)

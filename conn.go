@@ -16,13 +16,14 @@ const (
 
 type Conn struct {
 	sync.Mutex
-	conn      net.Conn
-	writer    *bufio.Writer
-	flush     chan struct{}
-	reader    *bufio.Reader
-	context   interface{}
-	readQueue *ringbuffer.RingBuffer
-	closed    bool
+	conn         net.Conn
+	writer       *bufio.Writer
+	flush        chan struct{}
+	flushTrigger *sync.Cond
+	reader       *bufio.Reader
+	context      interface{}
+	messages     *ringbuffer.RingBuffer
+	closed       bool
 }
 
 func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error) {
@@ -39,14 +40,16 @@ func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error
 
 func New(c net.Conn) (conn *Conn) {
 	conn = &Conn{
-		conn:      c,
-		writer:    bufio.NewWriterSize(c, defaultSize),
-		flush:     make(chan struct{}, 1024),
-		reader:    bufio.NewReaderSize(c, defaultSize),
-		readQueue: ringbuffer.NewRingBuffer(defaultSize),
-		closed:    false,
-		context:   nil,
+		conn:     c,
+		writer:   bufio.NewWriterSize(c, defaultSize),
+		flush:    make(chan struct{}, 1<<10),
+		reader:   bufio.NewReaderSize(c, defaultSize),
+		messages: ringbuffer.NewRingBuffer(defaultSize),
+		closed:   false,
+		context:  nil,
 	}
+
+	conn.flushTrigger = sync.NewCond(conn)
 
 	go conn.flushLoop()
 	go conn.readLoop()
@@ -63,7 +66,7 @@ func (c *Conn) Raw() (err error, conn net.Conn) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	c.readQueue.Close()
+	c.messages.Close()
 	c.closed = true
 	return nil, c.conn
 }
@@ -86,14 +89,16 @@ func (c *Conn) RemoteAddr() net.Addr {
 
 func (c *Conn) flushLoop() {
 	for {
-		if _, ok := <-c.flush; !ok {
+		c.flushTrigger.L.Lock()
+		for c.writer.Buffered() == 0 {
+			c.flushTrigger.Wait()
+		}
+		if c.closed {
+			c.flushTrigger.L.Unlock()
 			return
 		}
-		c.Lock()
-		if c.writer.Buffered() > 0 {
-			_ = c.writer.Flush()
-		}
-		c.Unlock()
+		_ = c.writer.Flush()
+		c.flushTrigger.L.Unlock()
 	}
 }
 
@@ -111,15 +116,9 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil {
 		_, _ = c.writer.Write(*content)
 	}
-
-	if len(c.flush) == 0 {
-		select {
-		case c.flush <- struct{}{}:
-		default:
-		}
-	}
-
 	c.Unlock()
+
+	c.flushTrigger.Signal()
 
 	return nil
 }
@@ -142,7 +141,7 @@ func (c *Conn) readLoop() {
 						Message: &decodedMessage,
 						Content: &readContent,
 					}
-					_ = c.readQueue.Push(readPacket)
+					_ = c.messages.Push(readPacket)
 				}
 				continue
 			}
@@ -151,7 +150,7 @@ func (c *Conn) readLoop() {
 				Message: &decodedMessage,
 				Content: nil,
 			}
-			_ = c.readQueue.Push(readPacket)
+			_ = c.messages.Push(readPacket)
 		}
 		if err != nil {
 			_ = c.Close()
@@ -165,7 +164,7 @@ func (c *Conn) Read() (*Message, *[]byte, error) {
 		return nil, nil, errors.New("connection closed")
 	}
 
-	readPacket, err := c.readQueue.Pop()
+	readPacket, err := c.messages.Pop()
 	if err != nil {
 		return nil, nil, errors.New("unable to retrieve packet")
 	}
@@ -182,7 +181,7 @@ func (c *Conn) Close() (err error) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	c.readQueue.Close()
+	c.messages.Close()
 	c.closed = true
 	return c.conn.Close()
 }

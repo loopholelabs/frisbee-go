@@ -27,13 +27,13 @@ type node struct {
 type nodes []node
 
 type RingBuffer struct {
-	_padding0    [8]uint64
+	_padding0    [8]uint64 //nolint:structcheck,unused
 	head         uint64
-	_padding1    [8]uint64
+	_padding1    [8]uint64 //nolint:structcheck,unused
 	tail         uint64
-	_padding2    [8]uint64
+	_padding2    [8]uint64 //nolint:structcheck,unused
 	mask, closed uint64
-	_padding3    [8]uint64
+	_padding3    [8]uint64 //nolint:structcheck,unused
 	nodes        nodes
 }
 
@@ -62,8 +62,6 @@ RETRY:
 			if atomic.CompareAndSwapUint64(&rb.head, position, position+1) {
 				break RETRY
 			}
-		case dif < 0:
-			panic(errors.New("ring buffer invalid during push"))
 		default:
 			position = atomic.LoadUint64(&rb.head)
 		}
@@ -91,8 +89,6 @@ RETRY:
 			if atomic.CompareAndSwapUint64(&rb.tail, oldPosition, oldPosition+1) {
 				break RETRY
 			}
-		case dif < 0:
-			panic(errors.New("ring buffer invalid during pop"))
 		default:
 			oldPosition = atomic.LoadUint64(&rb.tail)
 		}

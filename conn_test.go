@@ -47,7 +47,7 @@ func TestNewConn(t *testing.T) {
 }
 
 func TestLargeWrite(t *testing.T) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
 
 	reader, writer := net.Pipe()
@@ -85,7 +85,7 @@ func TestLargeWrite(t *testing.T) {
 }
 
 func BenchmarkThroughputPipe32(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 32
 
 	reader, writer := net.Pipe()
@@ -126,7 +126,7 @@ func BenchmarkThroughputPipe32(b *testing.B) {
 }
 
 func BenchmarkThroughputPipe512(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
 
 	reader, writer := net.Pipe()
@@ -167,7 +167,7 @@ func BenchmarkThroughputPipe512(b *testing.B) {
 }
 
 func BenchmarkThroughputNetwork32(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 32
 
 	var reader, writer net.Conn
@@ -220,7 +220,7 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 }
 
 func BenchmarkThroughputNetwork512(b *testing.B) {
-	const testSize = 10000
+	const testSize = 100000
 	const messageSize = 512
 
 	var reader, writer net.Conn
