@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/loophole-labs/frisbee"
-	"github.com/loophole-labs/frisbee/pkg/client"
 	"github.com/rs/zerolog/log"
 	"hash/crc32"
 	"os"
@@ -29,7 +28,7 @@ func main() {
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
 
-	c := client.NewClient("127.0.0.1:8192", router)
+	c := frisbee.NewClient("127.0.0.1:8192", router)
 	err := c.Connect()
 	if err != nil {
 		panic(err)
@@ -38,7 +37,7 @@ func main() {
 	i := 0
 
 	// First subscribe to the topic
-	err = c.Write(frisbee.Message{
+	err = c.Write(&frisbee.Message{
 		Id:            uint32(i),
 		Operation:     SUB,
 		Routing:       0,
@@ -52,7 +51,7 @@ func main() {
 	// automatically whenever a message that matches the topic arrives
 
 	<-exit
-	err = c.Stop()
+	err = c.Close()
 	if err != nil {
 		panic(err)
 	}
