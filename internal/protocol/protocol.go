@@ -24,6 +24,11 @@ type MessageV0 struct {
 	ContentLength uint32 // 4 Bytes
 }
 
+type PacketV0 struct {
+	Message *MessageV0
+	Content *[]byte
+}
+
 type V0Handler struct{}
 
 func NewDefaultHandler() V0Handler {
