@@ -44,7 +44,7 @@ func main() {
 	router := make(frisbee.ServerRouter)
 	router[SUB] = handleSub
 	router[PUB] = handlePub
-	exit := make(chan os.Signal)
+	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt)
 
 	s := frisbee.NewServer(":8192", router)
