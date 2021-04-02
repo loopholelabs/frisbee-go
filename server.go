@@ -121,9 +121,9 @@ func (s *Server) handleConn(newConn net.Conn) {
 			var outgoingContent []byte
 			var action Action
 			if incomingMessage.ContentLength == 0 || incomingContent == nil {
-				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, Message(*incomingMessage), nil)
+				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, *incomingMessage, nil)
 			} else {
-				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, Message(*incomingMessage), *incomingContent)
+				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, *incomingMessage, *incomingContent)
 			}
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint32(len(outgoingContent)) {

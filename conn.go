@@ -2,6 +2,7 @@ package frisbee
 
 import (
 	"bufio"
+	"github.com/Workiva/go-datastructures/queue"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/pkg/errors"
 	"net"
@@ -22,10 +23,10 @@ type Conn struct {
 	sync.Mutex
 	conn     net.Conn
 	writer   *bufio.Writer
-	flush    chan struct{}
 	reader   *bufio.Reader
+	flush    chan struct{}
+	messages *queue.RingBuffer
 	context  interface{}
-	messages chan *packet
 	closed   bool
 }
 
@@ -33,6 +34,8 @@ func Connect(network string, addr string, keepAlive time.Duration) (*Conn, error
 	conn, err := net.Dial(network, addr)
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
+	_ = conn.(*net.TCPConn).SetReadBuffer(defaultSize)
+	_ = conn.(*net.TCPConn).SetWriteBuffer(defaultSize)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +48,7 @@ func New(c net.Conn) (conn *Conn) {
 		writer:   bufio.NewWriterSize(c, defaultSize),
 		flush:    make(chan struct{}, 1024),
 		reader:   bufio.NewReaderSize(c, defaultSize),
-		messages: make(chan *packet, defaultSize),
+		messages: queue.NewRingBuffer(defaultSize),
 		closed:   false,
 		context:  nil,
 	}
@@ -65,7 +68,7 @@ func (c *Conn) Raw() (err error, conn net.Conn) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	close(c.messages)
+	c.messages.Dispose()
 	c.closed = true
 	return nil, c.conn
 }
@@ -125,7 +128,6 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		}
 	}
 
-	// TODO: benchmark this before the len(c.flush) if statement
 	c.Unlock()
 
 	return nil
@@ -149,7 +151,7 @@ func (c *Conn) readLoop() {
 						message: &decodedMessage,
 						content: &readContent,
 					}
-					c.messages <- readPacket
+					_ = c.messages.Put(readPacket)
 				}
 				continue
 			}
@@ -158,14 +160,12 @@ func (c *Conn) readLoop() {
 				message: &decodedMessage,
 				content: nil,
 			}
-			c.messages <- readPacket
+			_ = c.messages.Put(readPacket)
 		}
 		if err != nil {
 			_ = c.Close()
 			return
 		}
-		// TODO: Check if running Gosched here adds performance
-		//runtime.Gosched()
 	}
 }
 
@@ -174,11 +174,13 @@ func (c *Conn) Read() (*Message, *[]byte, error) {
 	if c.closed {
 		return nil, nil, errors.New("connection closed")
 	}
-	readPacket, ok := <-c.messages
-	if !ok {
+
+	readPacket, err := c.messages.Get()
+	if err != nil {
 		return nil, nil, errors.New("unable to retrieve packet")
 	}
-	return (*Message)(readPacket.message), readPacket.content, nil
+
+	return (*Message)(readPacket.(*packet).message), readPacket.(*packet).content, nil
 }
 
 func (c *Conn) Close() (err error) {
@@ -190,7 +192,7 @@ func (c *Conn) Close() (err error) {
 	c.Lock()
 	defer c.Unlock()
 	close(c.flush)
-	close(c.messages)
+	c.messages.Dispose()
 	c.closed = true
 	return c.conn.Close()
 }

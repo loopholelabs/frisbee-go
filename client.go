@@ -60,9 +60,9 @@ func (c *Client) reactor() {
 			var outgoingContent []byte
 			var action Action
 			if incomingMessage.ContentLength == 0 || incomingContent == nil {
-				outgoingMessage, outgoingContent, action = routerFunc(Message(*incomingMessage), nil)
+				outgoingMessage, outgoingContent, action = routerFunc(*incomingMessage, nil)
 			} else {
-				outgoingMessage, outgoingContent, action = routerFunc(Message(*incomingMessage), *incomingContent)
+				outgoingMessage, outgoingContent, action = routerFunc(*incomingMessage, *incomingContent)
 			}
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint32(len(outgoingContent)) {

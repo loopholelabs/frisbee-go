@@ -12,7 +12,7 @@ import (
 )
 
 const testSize = 100000
-const messageSize = 1024
+const messageSize = 32
 const runs = 100
 const port = 8192
 
@@ -63,6 +63,6 @@ func main() {
 		log.Printf("Benchmark Time for test %d: %d ns", i, runTime.Nanoseconds())
 		duration += runTime
 	}
-	log.Printf("Average Benchmark time for %d runs: %d ns, throughput: %f gb/s", runs, duration.Nanoseconds()/runs, (1/((duration.Seconds()/runs)/testSize)*messageSize)/(1024*1024*1024))
+	log.Printf("Average Benchmark time for %d runs: %d ns, throughput: %f mb/s", runs, duration.Nanoseconds()/runs, (1/((duration.Seconds()/runs)/testSize)*messageSize)/(1024*1024))
 	_ = s.Shutdown()
 }
