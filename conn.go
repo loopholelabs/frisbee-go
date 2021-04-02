@@ -6,8 +6,9 @@ import (
 	"github.com/loophole-labs/frisbee/internal/ringbuffer"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"io/ioutil"
+	"io"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -16,7 +17,7 @@ const (
 	defaultSize = 1 << 18
 )
 
-var silentLogger = zerolog.New(ioutil.Discard)
+var silentLogger = zerolog.New(os.Stdout)
 
 type Conn struct {
 	sync.Mutex
@@ -139,6 +140,10 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 func (c *Conn) readLoop() {
 	for {
 		message, err := c.reader.Peek(protocol.HeaderLengthV0)
+		if err != nil {
+			_ = c.close(err)
+			return
+		}
 		if len(message) == protocol.HeaderLengthV0 {
 			decodedMessage, err := protocol.DecodeV0(message)
 			if err != nil {
@@ -150,7 +155,12 @@ func (c *Conn) readLoop() {
 				continue
 			}
 			if decodedMessage.ContentLength > 0 {
-				if content, _ := c.reader.Peek(int(decodedMessage.ContentLength + protocol.HeaderLengthV0)); len(content) == int(decodedMessage.ContentLength+protocol.HeaderLengthV0) {
+				content, err := c.reader.Peek(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
+				if err != nil {
+					_ = c.close(err)
+					return
+				}
+				if len(content) == int(decodedMessage.ContentLength+protocol.HeaderLengthV0) {
 					readContent := make([]byte, decodedMessage.ContentLength)
 					copy(readContent, content[protocol.HeaderLengthV0:])
 					_, err = c.reader.Discard(int(decodedMessage.ContentLength + protocol.HeaderLengthV0))
@@ -180,10 +190,6 @@ func (c *Conn) readLoop() {
 			if err != nil {
 				c.logger.Debug().Msgf("Error pushing read packet to message queue %+v", err)
 			}
-		}
-		if err != nil {
-			_ = c.close(err)
-			return
 		}
 	}
 }
@@ -215,11 +221,13 @@ func (c *Conn) close(connError error) (err error) {
 		}
 	}()
 	conn := c.Raw()
-	if connError != nil {
+	if connError != nil && connError != io.EOF {
 		c.logger.Error().Msgf("Closing connection with error %+v", connError)
 		c.Error = connError
 		closeError := conn.Close()
-		c.logger.Error().Msgf("Error while closing connection %+v", closeError)
+		if closeError != nil {
+			c.logger.Error().Msgf("Error while closing connection %+v", closeError)
+		}
 		return c.Error
 	}
 	c.Error = conn.Close()
