@@ -13,10 +13,6 @@ import (
 	"time"
 )
 
-const (
-	defaultSize = 1 << 18
-)
-
 var silentLogger = zerolog.New(os.Stdout)
 
 type Conn struct {
@@ -36,8 +32,6 @@ func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Lo
 	conn, err := net.Dial(network, addr)
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
-	_ = conn.(*net.TCPConn).SetReadBuffer(defaultSize)
-	_ = conn.(*net.TCPConn).SetWriteBuffer(defaultSize)
 	if err != nil {
 		return nil, err
 	}
@@ -47,9 +41,9 @@ func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Lo
 func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 	conn = &Conn{
 		conn:     c,
-		writer:   bufio.NewWriterSize(c, defaultSize),
-		reader:   bufio.NewReaderSize(c, defaultSize),
-		messages: ringbuffer.NewRingBuffer(defaultSize),
+		writer:   bufio.NewWriterSize(c, 1<<18),
+		reader:   bufio.NewReaderSize(c, 1<<22),
+		messages: ringbuffer.NewRingBuffer(1 << 18),
 		closed:   false,
 		context:  nil,
 		logger:   l,
