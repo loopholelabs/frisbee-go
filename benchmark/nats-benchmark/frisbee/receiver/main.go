@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/loophole-labs/frisbee"
-	"github.com/rs/zerolog/log"
 	"hash/crc32"
 	"os"
 	"os/signal"
@@ -11,13 +10,25 @@ import (
 const PUB = uint16(1)
 const SUB = uint16(2)
 
-var topic = []byte("TOPIC 1")
+var topic = []byte("SENDING")
 var topicHash = crc32.ChecksumIEEE(topic)
+
+var receiveTopic = []byte("RECEIVING")
+var receiveTopicHash = crc32.ChecksumIEEE(receiveTopic)
+
+const END = "END"
 
 // Handle the PUB message type
 func handlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.Routing == topicHash {
-		log.Printf("Client Received Message on Topic %s: %s", string(topic), string(incomingContent))
+		if string(incomingContent) == END {
+			outgoingMessage = &frisbee.Message{
+				Id:            0,
+				Operation:     PUB,
+				Routing:       receiveTopicHash,
+				ContentLength: 0,
+			}
+		}
 	}
 	return
 }
@@ -25,7 +36,7 @@ func handlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoin
 func main() {
 	router := make(frisbee.ClientRouter)
 	router[PUB] = handlePub
-	exit := make(chan os.Signal)
+	exit := make(chan os.Signal, 1)
 	signal.Notify(exit, os.Interrupt)
 
 	c := frisbee.NewClient("127.0.0.1:8192", router)
