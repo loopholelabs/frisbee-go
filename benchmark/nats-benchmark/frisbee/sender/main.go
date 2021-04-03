@@ -5,24 +5,34 @@ import (
 	"github.com/loophole-labs/frisbee"
 	"github.com/loov/hrtime"
 	"hash/crc32"
-	"os"
-	"os/signal"
+	"log"
 )
 
 const PUB = uint16(1)
+const SUB = uint16(2)
 const testSize = 100000
-const messageSize = 512
+const messageSize = 2048
 const runs = 100
 
-//var complete = make(chan struct{})
+var complete = make(chan struct{})
 
 var topic = []byte("SENDING")
 var topicHash = crc32.ChecksumIEEE(topic)
 
+var receiveTopic = []byte("RECEIVING")
+var receiveTopicHash = crc32.ChecksumIEEE(receiveTopic)
+
+func handlePub(incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	if incomingMessage.Routing == receiveTopicHash {
+		complete <- struct{}{}
+	}
+	return
+}
+
 func main() {
 	router := make(frisbee.ClientRouter)
-	exit := make(chan os.Signal, 1)
-	signal.Notify(exit, os.Interrupt)
+
+	router[PUB] = handlePub
 
 	c := frisbee.NewClient("127.0.0.1:8192", router)
 	err := c.Connect()
@@ -33,27 +43,46 @@ func main() {
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
-	go func() {
-		i := 0
-		bench := hrtime.NewBenchmark(runs)
-		for bench.Next() {
-			for q := 0; q < testSize; q++ {
-				err := c.Write(&frisbee.Message{
-					Id:            uint32(i),
-					Operation:     PUB,
-					Routing:       topicHash,
-					ContentLength: uint32(len(data)),
-				}, &data)
-				if err != nil {
-					panic(err)
-				}
+	END := []byte("END")
+
+	err = c.Write(&frisbee.Message{
+		Id:            0,
+		Operation:     SUB,
+		Routing:       0,
+		ContentLength: uint32(len(receiveTopic)),
+	}, &receiveTopic)
+	if err != nil {
+		panic(err)
+	}
+
+	i := 0
+	bench := hrtime.NewBenchmark(runs)
+	for bench.Next() {
+		for q := 0; q < testSize; q++ {
+			err := c.Write(&frisbee.Message{
+				Id:            uint32(i),
+				Operation:     PUB,
+				Routing:       topicHash,
+				ContentLength: uint32(len(data)),
+			}, &data)
+			if err != nil {
+				panic(err)
 			}
-			i++
-
 		}
-	}()
+		err := c.Write(&frisbee.Message{
+			Id:            uint32(i),
+			Operation:     PUB,
+			Routing:       topicHash,
+			ContentLength: uint32(len(END)),
+		}, &END)
+		if err != nil {
+			panic(err)
+		}
+		i++
+		<-complete
+	}
+	log.Println(bench.Histogram(10))
 
-	<-exit
 	err = c.Close()
 	if err != nil {
 		panic(err)
