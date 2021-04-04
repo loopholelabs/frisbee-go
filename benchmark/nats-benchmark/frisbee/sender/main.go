@@ -23,7 +23,6 @@ var receiveTopic = []byte("RECEIVING")
 var receiveTopicHash = crc32.ChecksumIEEE(receiveTopic)
 
 func handlePub(incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-	log.Printf("RECEIVED MESSAGE")
 	if incomingMessage.Routing == receiveTopicHash {
 		complete <- struct{}{}
 	}
