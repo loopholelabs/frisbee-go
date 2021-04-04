@@ -1,7 +1,6 @@
 package ringbuffer
 
 import (
-	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/pkg/errors"
 	"runtime"
 	"sync/atomic"
@@ -19,9 +18,14 @@ func round(value uint64) uint64 {
 	return value
 }
 
+type Buffer struct {
+	N   int
+	Buf *[]byte
+}
+
 type node struct {
 	position uint64
-	data     *protocol.PacketV0
+	data     *Buffer
 }
 
 type nodes []node
@@ -46,18 +50,17 @@ func (rb *RingBuffer) init(size uint64) {
 	rb.mask = size - 1
 }
 
-func (rb *RingBuffer) Push(item *protocol.PacketV0) error {
+func (rb *RingBuffer) Push(item *Buffer) error {
 	var newNode *node
 	position := atomic.LoadUint64(&rb.head)
 RETRY:
 	for {
 		if atomic.LoadUint64(&rb.closed) == 1 {
-			return errors.New("ring buffer is disposed")
+			return errors.New("ring Buffer is closed")
 		}
 
 		newNode = &rb.nodes[position&rb.mask]
-		seq := atomic.LoadUint64(&newNode.position)
-		switch dif := seq - position; {
+		switch dif := atomic.LoadUint64(&newNode.position) - position; {
 		case dif == 0:
 			if atomic.CompareAndSwapUint64(&rb.head, position, position+1) {
 				break RETRY
@@ -73,18 +76,17 @@ RETRY:
 	return nil
 }
 
-func (rb *RingBuffer) Pop() (*protocol.PacketV0, error) {
+func (rb *RingBuffer) Pop() (*Buffer, error) {
 	var oldNode *node
 	var oldPosition = atomic.LoadUint64(&rb.tail)
 RETRY:
 	for {
 		if atomic.LoadUint64(&rb.closed) == 1 {
-			return nil, errors.New("ring buffer is disposed")
+			return nil, errors.New("ring Buffer is disposed")
 		}
 
 		oldNode = &rb.nodes[oldPosition&rb.mask]
-		seq := atomic.LoadUint64(&oldNode.position)
-		switch dif := seq - (oldPosition + 1); {
+		switch dif := atomic.LoadUint64(&oldNode.position) - (oldPosition + 1); {
 		case dif == 0:
 			if atomic.CompareAndSwapUint64(&rb.tail, oldPosition, oldPosition+1) {
 				break RETRY

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/loophole-labs/frisbee"
+	"github.com/rs/zerolog/log"
 	"hash/crc32"
 	"os"
 	"os/signal"
@@ -21,6 +22,7 @@ func handleSub(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent
 }
 
 func handlePub(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	log.Printf("RECEIVED MESSAGE")
 	if connections := subscribers[incomingMessage.Routing]; connections != nil {
 		for _, c := range connections {
 			_ = c.Write(&frisbee.Message{

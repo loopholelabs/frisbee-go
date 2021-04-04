@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/loophole-labs/frisbee"
+	"github.com/rs/zerolog/log"
 	"hash/crc32"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ const END = "END"
 
 // Handle the PUB message type
 func handlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	log.Printf("RECEIVED MESSAGE")
 	if incomingMessage.Routing == topicHash {
 		if string(incomingContent) == END {
 			outgoingMessage = &frisbee.Message{
