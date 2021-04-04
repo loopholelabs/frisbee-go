@@ -378,7 +378,6 @@ func BenchmarkThroughputNetwork2048(b *testing.B) {
 	_ = l.Close()
 }
 
-
 func BenchmarkThroughputNetwork4096(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 4096

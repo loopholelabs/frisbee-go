@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 )
 
-
 func round(value uint64) uint64 {
 	value--
 	value |= value >> 1

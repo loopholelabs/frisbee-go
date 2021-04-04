@@ -148,7 +148,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 
 func (c *Conn) readLoop() {
 	defer c.wg.Done()
-	buf := make([]byte, 1<<18, 1<<18)
+	buf := make([]byte, 1<<18)
 	var index int
 	for {
 		n, err := io.ReadAtLeast(c.conn, buf[:cap(buf)], protocol.HeaderLengthV0)
@@ -165,7 +165,7 @@ func (c *Conn) readLoop() {
 			}
 			index += protocol.HeaderLengthV0
 			if decodedMessage.ContentLength > 0 {
-				readContent := make([]byte, decodedMessage.ContentLength, decodedMessage.ContentLength)
+				readContent := make([]byte, decodedMessage.ContentLength)
 				if n-index < int(decodedMessage.ContentLength) {
 					for cap(buf) < int(decodedMessage.ContentLength) {
 						buf = append(buf[:cap(buf)], 0)
