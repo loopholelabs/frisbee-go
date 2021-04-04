@@ -158,10 +158,16 @@ func (c *Conn) readLoop() {
 		}
 		index = 0
 		for index < n {
-			decodedMessage, err := protocol.DecodeV0(buf[index : protocol.HeaderLengthV0+index])
-			if err != nil {
+			if buf[index+1] != protocol.Version0 {
 				c.Logger().Error().Msgf("invalid buf contents, discarding")
 				break
+			}
+
+			decodedMessage := protocol.MessageV0{
+				Id:            binary.BigEndian.Uint32(buf[index+2 : index+6]),
+				Operation:     binary.BigEndian.Uint16(buf[index+6 : index+8]),
+				Routing:       binary.BigEndian.Uint32(buf[index+8 : index+12]),
+				ContentLength: binary.BigEndian.Uint32(buf[index+12 : index+16]),
 			}
 			index += protocol.HeaderLengthV0
 			if decodedMessage.ContentLength > 0 {
