@@ -154,7 +154,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 
 func (c *Conn) readLoop() {
 	defer c.wg.Done()
-	buf := make([]byte, 1<<18)
+	buf := make([]byte, 1<<19)
 	var index int
 	for {
 		n, err := io.ReadAtLeast(c.conn, buf[:cap(buf)], protocol.HeaderLengthV0)
