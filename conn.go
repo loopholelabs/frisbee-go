@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+const (
+	readDeadline = time.Millisecond * 500
+)
+
 var (
 	writePool    = pbufio.NewWriterPool(1024, 1<<32)
 	silentLogger = zerolog.New(os.Stdout)
@@ -68,7 +72,6 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 }
 
 func (c *Conn) Raw() net.Conn {
-	c.wg.Done()
 	c.Lock()
 	defer c.Unlock()
 	c.messages.Close()
@@ -99,11 +102,14 @@ func (c *Conn) flushLoop() {
 	for {
 		c.flush.L.Lock()
 		for c.writer.Buffered() == 0 {
+			if c.closed {
+				break
+			}
 			c.flush.Wait()
 		}
 		if c.closed {
 			c.flush.L.Unlock()
-			return
+			break
 		}
 		err := c.writer.Flush()
 		if err != nil {
@@ -154,7 +160,7 @@ func (c *Conn) readLoop() {
 		n, err := io.ReadAtLeast(c.conn, buf[:cap(buf)], protocol.HeaderLengthV0)
 		if err != nil {
 			_ = c.close(err)
-			return
+			break
 		}
 		index = 0
 		for index < n {
@@ -177,6 +183,7 @@ func (c *Conn) readLoop() {
 						buf = append(buf[:cap(buf)], 0)
 					}
 					cp := copy(readContent, buf[index:n])
+					_ = c.conn.SetReadDeadline(time.Now().Add(readDeadline))
 					n, err = io.ReadAtLeast(c.conn, buf[:cap(buf)], int(decodedMessage.ContentLength)-cp)
 					if err != nil {
 						_ = c.close(err)
@@ -206,6 +213,7 @@ func (c *Conn) readLoop() {
 			}
 			if n == index {
 				index = 0
+				_ = c.conn.SetReadDeadline(time.Now().Add(readDeadline))
 				n, err = io.ReadAtLeast(c.conn, buf[:cap(buf)], protocol.HeaderLengthV0)
 				if err != nil {
 					_ = c.close(err)
@@ -215,6 +223,7 @@ func (c *Conn) readLoop() {
 				copy(buf, buf[index:n])
 				n -= index
 				index = n
+				_ = c.conn.SetReadDeadline(time.Now().Add(readDeadline))
 				n, err = io.ReadAtLeast(c.conn, buf[n:cap(buf)], protocol.HeaderLengthV0-index)
 				if err != nil {
 					_ = c.close(err)
@@ -254,16 +263,18 @@ func (c *Conn) close(connError error) (err error) {
 		}
 	}()
 	conn := c.Raw()
-	if connError != nil && connError != io.EOF {
+	if connError != nil && connError != io.EOF && !os.IsTimeout(connError) {
 		c.logger.Error().Msgf("Closing connection with error %+v", connError)
 		c.Error = connError
 		closeError := conn.Close()
-		if closeError != nil {
+		if closeError != nil && closeError != io.EOF {
 			c.logger.Error().Msgf("Error while closing connection %+v", closeError)
 		}
+		c.wg.Wait()
 		return c.Error
 	}
 	c.Error = conn.Close()
+	c.wg.Wait()
 	return c.Error
 }
 
