@@ -3,6 +3,7 @@ module github.com/loophole-labs/frisbee
 go 1.15
 
 require (
+	github.com/gobwas/pool v0.2.1
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/loov/hrtime v1.0.3
 	github.com/nats-io/nats-server/v2 v2.2.0 // indirect
