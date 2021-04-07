@@ -430,3 +430,56 @@ func BenchmarkThroughputNetwork4096(b *testing.B) {
 	_ = writerConn.Close()
 	_ = l.Close()
 }
+
+func BenchmarkThroughputNetwork1mb(b *testing.B) {
+	const testSize = 10
+	const messageSize = 1 << 20
+
+	var reader, writer net.Conn
+	start := make(chan struct{}, 1)
+
+	l, _ := net.Listen("tcp", ":3000")
+
+	go func() {
+		reader, _ = l.Accept()
+		start <- struct{}{}
+	}()
+
+	writer, _ = net.Dial("tcp", ":3000")
+	<-start
+
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
+
+	randomData := make([]byte, messageSize)
+
+	message := &Message{
+		Id:            16,
+		Operation:     32,
+		Routing:       64,
+		ContentLength: messageSize,
+	}
+
+	done := make(chan struct{}, 1)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		go func() {
+			for i := 0; i < testSize; i++ {
+				readMessage, data, _ := readerConn.Read()
+				_ = data
+				_ = readMessage
+			}
+			done <- struct{}{}
+		}()
+		for i := 0; i < testSize; i++ {
+			_ = writerConn.Write(message, &randomData)
+		}
+		<-done
+	}
+	b.StopTimer()
+
+	_ = readerConn.Close()
+	_ = writerConn.Close()
+	_ = l.Close()
+}

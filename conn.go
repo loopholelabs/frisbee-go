@@ -47,8 +47,8 @@ func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Lo
 func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 	conn = &Conn{
 		conn:     c,
-		writer:   writePool.Get(c, 1<<18),
-		messages: ringbuffer.NewRingBuffer(1 << 18),
+		writer:   writePool.Get(c, 1<<19),
+		messages: ringbuffer.NewRingBuffer(1 << 19),
 		closed:   false,
 		context:  nil,
 		logger:   l,
@@ -177,6 +177,7 @@ func (c *Conn) readLoop() {
 				if n-index < int(decodedMessage.ContentLength) {
 					for cap(buf) < int(decodedMessage.ContentLength) {
 						buf = append(buf[:cap(buf)], 0)
+						buf = buf[:cap(buf)]
 					}
 					cp := copy(readContent, buf[index:n])
 					n, err = io.ReadAtLeast(c.conn, buf[:cap(buf)], int(decodedMessage.ContentLength)-cp)
