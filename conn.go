@@ -35,11 +35,11 @@ type Conn struct {
 
 func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
-	_ = conn.(*net.TCPConn).SetKeepAlive(true)
-	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 	if err != nil {
 		return nil, err
 	}
+	_ = conn.(*net.TCPConn).SetKeepAlive(true)
+	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 
 	return New(conn, l), nil
 }
