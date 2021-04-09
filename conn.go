@@ -69,11 +69,14 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 
 func (c *Conn) Raw() net.Conn {
 	c.Lock()
-	defer c.Unlock()
 	c.messages.Close()
 	c.closed = true
 	c.flush.Broadcast()
 	writePool.Put(c.writer)
+	_ = c.conn.SetReadDeadline(time.Now())
+	c.Unlock()
+	c.wg.Wait()
+	_ = c.conn.SetReadDeadline(time.Time{})
 	return c.conn
 }
 
@@ -148,16 +151,36 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	return nil
 }
 
+func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
+	if len(buf) < min {
+		return 0, errors.New("length of buffer too small")
+	}
+	for n < min && err == nil {
+		var nn int
+		nn, err = c.conn.Read(buf[n:])
+		n += nn
+	}
+	if n >= min {
+		err = nil
+	} else if n > 0 && err == io.EOF {
+		err = errors.New("unexpected EOF")
+	}
+	return
+}
+
 func (c *Conn) readLoop() {
 	defer c.wg.Done()
 	buf := make([]byte, 1<<19)
 	var index int
 	for {
-		n, err := io.ReadAtLeast(c.conn, buf[:cap(buf)], protocol.HeaderLengthV0)
+		n, err := c.readAtLeast(buf[:cap(buf)], protocol.HeaderLengthV0)
 		if err != nil {
-			_ = c.close(err)
+			if !os.IsTimeout(err) {
+				_ = c.close(err)
+			}
 			break
 		}
+
 		index = 0
 		for index < n {
 			if buf[index+1] != protocol.Version0 {
@@ -180,9 +203,11 @@ func (c *Conn) readLoop() {
 						buf = buf[:cap(buf)]
 					}
 					cp := copy(readContent, buf[index:n])
-					n, err = io.ReadAtLeast(c.conn, buf[:cap(buf)], int(decodedMessage.ContentLength)-cp)
+					n, err = c.readAtLeast(buf[:cap(buf)], int(decodedMessage.ContentLength)-cp)
 					if err != nil {
-						_ = c.close(err)
+						if !os.IsTimeout(err) {
+							_ = c.close(err)
+						}
 						return
 					}
 					copy(readContent[cp:], buf[:int(decodedMessage.ContentLength)-cp])
@@ -209,18 +234,22 @@ func (c *Conn) readLoop() {
 			}
 			if n == index {
 				index = 0
-				n, err = io.ReadAtLeast(c.conn, buf[:cap(buf)], protocol.HeaderLengthV0)
+				n, err = c.readAtLeast(buf[:cap(buf)], protocol.HeaderLengthV0)
 				if err != nil {
-					_ = c.close(err)
+					if !os.IsTimeout(err) {
+						_ = c.close(err)
+					}
 					return
 				}
 			} else if n-index < protocol.HeaderLengthV0 {
 				copy(buf, buf[index:n])
 				n -= index
 				index = n
-				n, err = io.ReadAtLeast(c.conn, buf[n:cap(buf)], protocol.HeaderLengthV0-index)
+				n, err = c.readAtLeast(buf[n:cap(buf)], protocol.HeaderLengthV0-index)
 				if err != nil {
-					_ = c.close(err)
+					if !os.IsTimeout(err) {
+						_ = c.close(err)
+					}
 					return
 				}
 				n += index
@@ -264,11 +293,9 @@ func (c *Conn) close(connError error) (err error) {
 		if closeError != nil && closeError != io.EOF {
 			c.logger.Error().Msgf("Error while closing connection %+v", closeError)
 		}
-		c.wg.Wait()
 		return c.Error
 	}
 	c.Error = conn.Close()
-	c.wg.Wait()
 	return c.Error
 }
 
