@@ -49,8 +49,8 @@ func (rb *RingBuffer) init(size uint64) {
 func (rb *RingBuffer) Push(item *protocol.PacketV0) error {
 	var newNode *node
 	position := atomic.LoadUint64(&rb.head)
-	if rb.Length() == rb.Capacity() {
-		tail := atomic.LoadUint64(&rb.tail)
+	tail := atomic.LoadUint64(&rb.tail)
+	if rb.Capacity() == position-tail {
 		atomic.StoreUint64(&rb.head, tail)
 		position = tail
 	}
