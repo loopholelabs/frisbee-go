@@ -49,6 +49,11 @@ func (rb *RingBuffer) init(size uint64) {
 func (rb *RingBuffer) Push(item *protocol.PacketV0) error {
 	var newNode *node
 	position := atomic.LoadUint64(&rb.head)
+	if rb.Length() == rb.Capacity() {
+		tail := atomic.LoadUint64(&rb.tail)
+		atomic.StoreUint64(&rb.head, tail)
+		position = tail
+	}
 RETRY:
 	for {
 		if atomic.LoadUint64(&rb.closed) == 1 {
@@ -61,6 +66,8 @@ RETRY:
 			if atomic.CompareAndSwapUint64(&rb.head, position, position+1) {
 				break RETRY
 			}
+		case dif == 1:
+			newNode.position -= 1
 		default:
 			position = atomic.LoadUint64(&rb.head)
 		}
@@ -78,7 +85,7 @@ func (rb *RingBuffer) Pop() (*protocol.PacketV0, error) {
 RETRY:
 	for {
 		if atomic.LoadUint64(&rb.closed) == 1 {
-			return nil, errors.New("ring buffer is disposed")
+			return nil, errors.New("ring buffer is closed")
 		}
 
 		oldNode = &rb.nodes[oldPosition&rb.mask]
@@ -117,6 +124,9 @@ func (rb *RingBuffer) IsClosed() bool {
 
 func NewRingBuffer(size uint64) *RingBuffer {
 	rb := &RingBuffer{}
+	if size < 1 {
+		size = 1
+	}
 	rb.init(size)
 	return rb
 }
