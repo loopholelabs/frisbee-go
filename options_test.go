@@ -9,7 +9,7 @@ import (
 )
 
 func TestWithoutOptions(t *testing.T) {
-	options := LoadOptions()
+	options := loadOptions()
 
 	assert.Equal(t, time.Minute*3, options.KeepAlive)
 	assert.Equal(t, &DefaultLogger, options.Logger)
@@ -21,7 +21,7 @@ func TestWithOptions(t *testing.T) {
 		Logger:    nil,
 	})
 
-	options := LoadOptions(option)
+	options := loadOptions(option)
 
 	assert.Equal(t, time.Minute*3, options.KeepAlive)
 	assert.Equal(t, &DefaultLogger, options.Logger)
@@ -34,7 +34,7 @@ func TestIndividualOptions(t *testing.T) {
 
 	loggerOption := WithLogger(&logger)
 
-	options := LoadOptions(keepAliveOption, loggerOption)
+	options := loadOptions(keepAliveOption, loggerOption)
 
 	assert.Equal(t, time.Minute*3, options.KeepAlive)
 	assert.Equal(t, &logger, options.Logger)

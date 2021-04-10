@@ -15,7 +15,7 @@ type Options struct {
 	Logger    *zerolog.Logger
 }
 
-func LoadOptions(options ...Option) *Options {
+func loadOptions(options ...Option) *Options {
 	opts := new(Options)
 	for _, option := range options {
 		option(opts)
