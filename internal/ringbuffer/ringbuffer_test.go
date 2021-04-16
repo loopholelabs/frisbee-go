@@ -3,6 +3,7 @@ package ringbuffer
 import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -33,9 +34,13 @@ func TestHelpers(t *testing.T) {
 }
 
 func TestRingBuffer(t *testing.T) {
-
 	testPacket := func() *protocol.PacketV0 {
 		return &protocol.PacketV0{}
+	}
+	testPacket2 := func() *protocol.PacketV0 {
+		return &protocol.PacketV0{
+			Content: &[]byte{1},
+		}
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -52,9 +57,13 @@ func TestRingBuffer(t *testing.T) {
 	})
 	t.Run("out of capacity with non zero capacity", func(t *testing.T) {
 		rb := NewRingBuffer(1)
-		_ = rb.Push(testPacket())
-		_ = rb.Push(testPacket())
-		_, _ = rb.Pop()
+		err := rb.Push(testPacket())
+		assert.NoError(t, err)
+		err = rb.Push(testPacket2())
+		assert.NoError(t, err)
+		actual, err := rb.Pop()
+		require.NoError(t, err)
+		assert.Equal(t, testPacket2(), actual)
 	})
 	t.Run("buffer closed", func(t *testing.T) {
 		rb := NewRingBuffer(1)
