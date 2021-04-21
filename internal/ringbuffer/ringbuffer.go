@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"runtime"
 	"sync/atomic"
+	"unsafe"
 )
 
 func round(value uint64) uint64 {
@@ -21,7 +22,7 @@ func round(value uint64) uint64 {
 
 type node struct {
 	position uint64
-	data     *protocol.PacketV0
+	data     unsafe.Pointer
 }
 
 type nodes []node
@@ -74,7 +75,7 @@ RETRY:
 
 		runtime.Gosched()
 	}
-	newNode.data = item
+	newNode.data = unsafe.Pointer(item)
 	atomic.StoreUint64(&newNode.position, position+1)
 	return nil
 }
@@ -103,7 +104,7 @@ RETRY:
 	data := oldNode.data
 	oldNode.data = nil
 	atomic.StoreUint64(&oldNode.position, oldPosition+rb.mask+1)
-	return data, nil
+	return (*protocol.PacketV0)(data), nil
 }
 
 func (rb *RingBuffer) Length() uint64 {
