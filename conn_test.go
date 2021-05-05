@@ -81,6 +81,76 @@ func TestLargeWrite(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestRawConn(t *testing.T) {
+	const testSize = 100000
+	const messageSize = 32
+
+	var reader, writer net.Conn
+	start := make(chan struct{}, 1)
+
+	l, _ := net.Listen("tcp", ":3000")
+
+	go func() {
+		reader, _ = l.Accept()
+		start <- struct{}{}
+	}()
+
+	writer, _ = net.Dial("tcp", ":3000")
+	<-start
+
+	readerConn := New(reader, nil)
+	writerConn := New(writer, nil)
+
+	randomData := make([]byte, messageSize)
+	_, _ = rand.Read(randomData)
+
+	message := &Message{
+		Id:            16,
+		Operation:     32,
+		Routing:       64,
+		ContentLength: messageSize,
+	}
+
+	for i := 0; i < testSize; i++ {
+		err := writerConn.Write(message, &randomData)
+		assert.NoError(t, err)
+	}
+
+	for i := 0; i < testSize; i++ {
+		readMessage, data, err := readerConn.Read()
+		assert.NoError(t, err)
+		assert.Equal(t, *message, *readMessage)
+		assert.Equal(t, randomData, *data)
+	}
+
+	rawReaderConn := readerConn.Raw()
+	rawWriterConn := writerConn.Raw()
+
+	rawWriteMessage := []byte("TEST CASE MESSAGE")
+
+	written, err := rawReaderConn.Write(rawWriteMessage)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), written)
+	rawReadMessage := make([]byte, len(rawWriteMessage))
+	read, err := rawWriterConn.Read(rawReadMessage)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), read)
+	assert.Equal(t, rawWriteMessage, rawReadMessage)
+
+	err = readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
+
+	err = rawReaderConn.Close()
+	assert.NoError(t, err)
+	err = rawWriterConn.Close()
+	assert.NoError(t, err)
+
+	err = l.Close()
+	assert.NoError(t, err)
+}
+
 func BenchmarkThroughputPipe32(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 32
