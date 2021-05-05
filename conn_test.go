@@ -15,10 +15,6 @@ func TestNewConn(t *testing.T) {
 	readerConn := New(reader, nil)
 	writerConn := New(writer, nil)
 
-	readerConn.SetContext("TEST")
-	assert.Equal(t, "TEST", readerConn.Context())
-	assert.Nil(t, writerConn.Context())
-
 	message := &Message{
 		Id:            16,
 		Operation:     32,
@@ -30,6 +26,7 @@ func TestNewConn(t *testing.T) {
 
 	readMessage, content, err := readerConn.Read()
 	assert.NoError(t, err)
+	assert.NotNil(t, readMessage)
 	assert.Equal(t, *message, *readMessage)
 	assert.Nil(t, content)
 

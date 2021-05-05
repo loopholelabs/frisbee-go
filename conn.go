@@ -24,8 +24,7 @@ type Conn struct {
 	sync.Mutex
 	conn     net.Conn
 	writer   *bufio.Writer
-	flush    *sync.Cond
-	context  interface{}
+	flush    chan struct{}
 	messages *ringbuffer.RingBuffer
 	closed   bool
 	logger   *zerolog.Logger
@@ -50,15 +49,13 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 		writer:   writePool.Get(c, 1<<19),
 		messages: ringbuffer.NewRingBuffer(1 << 19),
 		closed:   false,
-		context:  nil,
+		flush:    make(chan struct{}, 1024),
 		logger:   l,
 	}
 
 	if l == nil {
 		conn.logger = &silentLogger
 	}
-
-	conn.flush = sync.NewCond(conn)
 
 	conn.wg.Add(2)
 	go conn.flushLoop()
@@ -71,21 +68,13 @@ func (c *Conn) Raw() net.Conn {
 	c.Lock()
 	c.messages.Close()
 	c.closed = true
-	c.flush.Broadcast()
+	close(c.flush)
 	writePool.Put(c.writer)
 	_ = c.conn.SetReadDeadline(time.Now())
 	c.Unlock()
 	c.wg.Wait()
 	_ = c.conn.SetReadDeadline(time.Time{})
 	return c.conn
-}
-
-func (c *Conn) Context() interface{} {
-	return c.context
-}
-
-func (c *Conn) SetContext(ctx interface{}) {
-	c.context = ctx
 }
 
 func (c *Conn) LocalAddr() net.Addr {
@@ -99,22 +88,34 @@ func (c *Conn) RemoteAddr() net.Addr {
 func (c *Conn) flushLoop() {
 	defer c.wg.Done()
 	for {
-		c.flush.L.Lock()
-		for c.writer.Buffered() == 0 {
-			if c.closed {
-				break
+		if _, ok := <-c.flush; !ok {
+			return
+		}
+		c.Lock()
+		if c.writer.Buffered() > 0 {
+			err := c.writer.Flush()
+			if err != nil {
+				_ = c.close(err)
 			}
-			c.flush.Wait()
 		}
-		if c.closed {
-			c.flush.L.Unlock()
-			break
-		}
-		err := c.writer.Flush()
-		if err != nil {
-			_ = c.close(err)
-		}
-		c.flush.L.Unlock()
+		c.Unlock()
+
+		//c.flush.L.Lock()
+		//for c.writer.Buffered() == 0 {
+		//	if c.closed {
+		//		break
+		//	}
+		//	c.flush.Wait()
+		//}
+		//if c.closed {
+		//	c.flush.L.Unlock()
+		//	break
+		//}
+		//err := c.writer.Flush()
+		//if err != nil {
+		//	_ = c.close(err)
+		//}
+		//c.flush.L.Unlock()
 	}
 }
 
@@ -146,7 +147,13 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	}
 	c.Unlock()
 
-	c.flush.Signal()
+	//c.flush.Signal()
+	if len(c.flush) == 0 {
+		select {
+		case c.flush <- struct{}{}:
+		default:
+		}
+	}
 
 	return nil
 }
