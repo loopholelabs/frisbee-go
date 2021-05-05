@@ -65,10 +65,16 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 }
 
 func (c *Conn) Raw() net.Conn {
+	if c.closed {
+		return c.conn
+	}
 	c.Lock()
 	c.messages.Close()
 	c.closed = true
 	close(c.flush)
+	if c.writer.Buffered() > 0 {
+		_ = c.writer.Flush()
+	}
 	writePool.Put(c.writer)
 	_ = c.conn.SetReadDeadline(time.Now())
 	c.Unlock()
