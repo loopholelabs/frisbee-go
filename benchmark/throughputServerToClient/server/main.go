@@ -32,7 +32,7 @@ func main() {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 	s := frisbee.NewServer(fmt.Sprintf(":%d", port), router, frisbee.WithLogger(&emptyLogger))
-	s.UserOnOpened = func(s *frisbee.Server, c *frisbee.Conn) frisbee.Action {
+	s.OnOpened = func(s *frisbee.Server, c *frisbee.Conn) frisbee.Action {
 		benchmarkConnection = c
 		connected <- struct{}{}
 		return frisbee.None

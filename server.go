@@ -9,15 +9,15 @@ type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []b
 type ServerRouter map[uint16]ServerRouterFunc
 
 type Server struct {
-	listener       *net.TCPListener
-	addr           string
-	router         ServerRouter
-	shutdown       bool
-	Options        *Options
-	UserOnOpened   func(server *Server, c *Conn) Action
-	UserOnClosed   func(server *Server, c *Conn, err error) Action
-	UserOnShutdown func(server *Server)
-	UserPreWrite   func(server *Server)
+	listener   *net.TCPListener
+	addr       string
+	router     ServerRouter
+	shutdown   bool
+	Options    *Options
+	OnOpened   func(server *Server, c *Conn) Action
+	OnClosed   func(server *Server, c *Conn, err error) Action
+	OnShutdown func(server *Server)
+	PreWrite   func(server *Server)
 }
 
 func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
@@ -29,41 +29,41 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 }
 
 func (s *Server) onOpened(c *Conn) Action {
-	return s.UserOnOpened(s, c)
+	return s.OnOpened(s, c)
 }
 
 func (s *Server) onClosed(c *Conn, err error) Action {
-	return s.UserOnClosed(s, c, err)
+	return s.OnClosed(s, c, err)
 }
 
 func (s *Server) onShutdown() {
-	s.UserOnShutdown(s)
+	s.OnShutdown(s)
 }
 
 func (s *Server) preWrite() {
-	s.UserPreWrite(s)
+	s.PreWrite(s)
 }
 
 func (s *Server) Start() error {
 
-	if s.UserOnClosed == nil {
-		s.UserOnClosed = func(_ *Server, _ *Conn, err error) Action {
+	if s.OnClosed == nil {
+		s.OnClosed = func(_ *Server, _ *Conn, err error) Action {
 			return None
 		}
 	}
 
-	if s.UserOnOpened == nil {
-		s.UserOnOpened = func(_ *Server, _ *Conn) Action {
+	if s.OnOpened == nil {
+		s.OnOpened = func(_ *Server, _ *Conn) Action {
 			return None
 		}
 	}
 
-	if s.UserOnShutdown == nil {
-		s.UserOnShutdown = func(_ *Server) {}
+	if s.OnShutdown == nil {
+		s.OnShutdown = func(_ *Server) {}
 	}
 
-	if s.UserPreWrite == nil {
-		s.UserPreWrite = func(_ *Server) {}
+	if s.PreWrite == nil {
+		s.PreWrite = func(_ *Server) {}
 	}
 
 	l, err := net.Listen("tcp", s.addr)
@@ -112,6 +112,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 	for {
 		incomingMessage, incomingContent, err := frisbeeConn.Read()
+		s.logger().Printf("READ MESSAGE")
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.onClosed(frisbeeConn, err)
@@ -145,9 +146,9 @@ func (s *Server) handleConn(newConn net.Conn) {
 				return
 			case Shutdown:
 				_ = frisbeeConn.Close()
-				s.UserOnClosed(s, frisbeeConn, nil)
+				s.OnClosed(s, frisbeeConn, nil)
 				_ = s.Shutdown()
-				s.UserOnShutdown(s)
+				s.OnShutdown(s)
 				return
 			default:
 			}
