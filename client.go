@@ -1,6 +1,7 @@
 package frisbee
 
 import (
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"net"
 )
@@ -26,8 +27,8 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 }
 
 func (c *Client) Connect() error {
-	c.Options.Logger.Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.Options.KeepAlive, nil)
+	c.logger().Debug().Msgf("Connecting to %s", c.addr)
+	frisbeeConn, err := Connect("tcp", c.addr, c.Options.KeepAlive, c.logger())
 	if err != nil {
 		return err
 	}
@@ -54,8 +55,12 @@ func (c *Client) Write(message *Message, content *[]byte) error {
 	return c.Conn.Write(message, content)
 }
 
-func (c *Client) Raw() net.Conn {
-	return c.Conn.Raw()
+func (c *Client) Raw() (net.Conn, error) {
+	if c.Conn == nil {
+		return nil, errors.New("connection not initialized")
+	}
+	c.closed = true
+	return c.Conn.Raw(), nil
 }
 
 func (c *Client) reactor() {

@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
 	"testing"
@@ -40,11 +41,14 @@ func TestServerRaw(t *testing.T) {
 	emptyLogger := zerolog.New(ioutil.Discard)
 	s := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
 	err := s.Start()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	_, err = c.Raw()
+	assert.Error(t, err)
+
 	err = c.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
@@ -67,7 +71,8 @@ func TestServerRaw(t *testing.T) {
 	}, nil)
 	assert.NoError(t, err)
 
-	rawClientConn = c.Raw()
+	rawClientConn, err = c.Raw()
+	require.NoError(t, err)
 
 	<-serverIsRaw
 
