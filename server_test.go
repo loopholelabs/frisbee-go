@@ -6,10 +6,99 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
+	"net"
 	"testing"
 	"time"
 )
+
+func TestServerRaw(t *testing.T) {
+	const testSize = 100
+	const messageSize = 512
+	addr := ":8192"
+	clientRouter := make(ClientRouter)
+	serverRouter := make(ServerRouter)
+
+	serverIsRaw := make(chan struct{}, 1)
+
+	serverRouter[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		return
+	}
+
+	var rawServerConn, rawClientConn net.Conn
+	serverRouter[protocol.MessagePacket] = func(c *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		rawServerConn = c.Raw()
+		serverIsRaw <- struct{}{}
+		return
+	}
+
+	clientRouter[protocol.MessagePing] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		return
+	}
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+	s := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
+	err := s.Start()
+	require.NoError(t, err)
+
+	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	_, err = c.Raw()
+	assert.Error(t, err)
+
+	err = c.Connect()
+	require.NoError(t, err)
+
+	data := make([]byte, messageSize)
+	_, _ = rand.Read(data)
+
+	for q := 0; q < testSize; q++ {
+		err := c.Write(&Message{
+			Id:            uint32(q),
+			Operation:     protocol.MessagePing,
+			Routing:       0,
+			ContentLength: messageSize,
+		}, &data)
+		assert.NoError(t, err)
+	}
+
+	err = c.Write(&Message{
+		Id:            0,
+		Operation:     protocol.MessagePacket,
+		Routing:       0,
+		ContentLength: 0,
+	}, nil)
+	assert.NoError(t, err)
+
+	rawClientConn, err = c.Raw()
+	require.NoError(t, err)
+
+	<-serverIsRaw
+
+	serverBytes := []byte("SERVER WRITE")
+
+	write, err := rawServerConn.Write(serverBytes)
+	assert.NoError(t, err)
+	assert.Equal(t, len(serverBytes), write)
+
+	clientBuffer := make([]byte, len(serverBytes))
+	read, err := rawClientConn.Read(clientBuffer)
+	assert.NoError(t, err)
+	assert.Equal(t, len(serverBytes), read)
+
+	assert.Equal(t, serverBytes, clientBuffer)
+
+	err = c.Close()
+	assert.NoError(t, err)
+	err = rawClientConn.Close()
+	assert.NoError(t, err)
+
+	err = s.Shutdown()
+	assert.NoError(t, err)
+	err = rawServerConn.Close()
+	assert.NoError(t, err)
+}
 
 func BenchmarkThroughput(b *testing.B) {
 	const testSize = 100000
