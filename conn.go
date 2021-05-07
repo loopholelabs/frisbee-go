@@ -6,7 +6,7 @@ import (
 	"github.com/gobwas/pool/pbufio"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/loophole-labs/frisbee/internal/ringbuffer"
-	"github.com/pkg/errors"
+	"github.com/loophole-labs/frisbee/pkg/errors"
 	"github.com/rs/zerolog"
 	"io"
 	"net"
@@ -35,7 +35,7 @@ type Conn struct {
 func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		return nil, err
+		return nil, errors.NewDialError(err)
 	}
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
@@ -105,33 +105,16 @@ func (c *Conn) flushLoop() {
 			}
 		}
 		c.Unlock()
-
-		//c.flush.L.Lock()
-		//for c.writer.Buffered() == 0 {
-		//	if c.closed {
-		//		break
-		//	}
-		//	c.flush.Wait()
-		//}
-		//if c.closed {
-		//	c.flush.L.Unlock()
-		//	break
-		//}
-		//err := c.writer.Flush()
-		//if err != nil {
-		//	_ = c.close(err)
-		//}
-		//c.flush.L.Unlock()
 	}
 }
 
 func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
-		return errors.New("invalid content length")
+		return errors.InvalidContentLength
 	}
 
 	if c.closed {
-		return errors.New("connection closed")
+		return errors.ConnectionClosed
 	}
 
 	var encodedMessage [protocol.HeaderLengthV0]byte
@@ -143,17 +126,16 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	c.Lock()
 	_, err := c.writer.Write(encodedMessage[:])
 	if err != nil {
-		c.logger.Error().Msgf("short write to write buffer %+v", err)
+		c.logger.Error().Msgf(errors.NewShortWriteError(err).Error())
 	}
 	if content != nil {
 		_, err = c.writer.Write(*content)
 		if err != nil {
-			c.logger.Error().Msgf("short write to write buffer %+v", err)
+			c.logger.Error().Msgf(errors.NewShortWriteError(err).Error())
 		}
 	}
 	c.Unlock()
 
-	//c.flush.Signal()
 	if len(c.flush) == 0 {
 		select {
 		case c.flush <- struct{}{}:
@@ -166,7 +148,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 
 func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
 	if len(buf) < min {
-		return 0, errors.New("length of buffer too small")
+		return 0, errors.InvalidBufferLength
 	}
 	for n < min && err == nil {
 		var nn int
@@ -176,7 +158,7 @@ func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
 	if n >= min {
 		err = nil
 	} else if n > 0 && err == io.EOF {
-		err = errors.New("unexpected EOF")
+		err = errors.UnexpectedEOF
 	}
 	return
 }
@@ -197,7 +179,7 @@ func (c *Conn) readLoop() {
 		index = 0
 		for index < n {
 			if buf[index+1] != protocol.Version0 {
-				c.Logger().Error().Msgf("invalid buf contents, discarding")
+				c.Logger().Error().Msgf(errors.InvalidBufferContents.Error())
 				break
 			}
 
@@ -234,7 +216,7 @@ func (c *Conn) readLoop() {
 					Content: &readContent,
 				})
 				if err != nil {
-					c.Logger().Debug().Msgf("Error pushing read packet to message queue %+v", err)
+					c.Logger().Debug().Msgf(errors.NewPushError(err).Error())
 				}
 			} else {
 				err = c.messages.Push(&protocol.PacketV0{
@@ -242,7 +224,7 @@ func (c *Conn) readLoop() {
 					Content: nil,
 				})
 				if err != nil {
-					c.Logger().Debug().Msgf("Error pushing read packet to message queue %+v", err)
+					c.Logger().Debug().Msgf(errors.NewPushError(err).Error())
 				}
 			}
 			if n == index {
@@ -274,12 +256,12 @@ func (c *Conn) readLoop() {
 
 func (c *Conn) Read() (*Message, *[]byte, error) {
 	if c.closed {
-		return nil, nil, errors.New("connection closed")
+		return nil, nil, errors.ConnectionClosed
 	}
 
 	readPacket, err := c.messages.Pop()
 	if err != nil {
-		return nil, nil, errors.New("unable to retrieve packet")
+		return nil, nil, errors.NewPopError(err)
 	}
 
 	return (*Message)(readPacket.Message), readPacket.Content, nil
@@ -300,11 +282,11 @@ func (c *Conn) close(connError error) (err error) {
 	}()
 	conn := c.Raw()
 	if connError != nil && connError != io.EOF {
-		c.logger.Error().Msgf("Closing connection with error %+v", connError)
+		c.logger.Error().Msgf(errors.NewCloseError(connError).Error())
 		c.Error = connError
 		closeError := conn.Close()
 		if closeError != nil && closeError != io.EOF {
-			c.logger.Error().Msgf("Error while closing connection %+v", closeError)
+			c.logger.Error().Msgf(errors.NewCloseError(closeError).Error())
 		}
 		return c.Error
 	}
