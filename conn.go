@@ -126,12 +126,12 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	c.Lock()
 	_, err := c.writer.Write(encodedMessage[:])
 	if err != nil {
-		c.logger.Error().Msgf(errors.NewShortWriteError(err).Error())
+		c.logger.Error().Msgf(errors.NewWriteError(err).Error())
 	}
 	if content != nil {
 		_, err = c.writer.Write(*content)
 		if err != nil {
-			c.logger.Error().Msgf(errors.NewShortWriteError(err).Error())
+			c.logger.Error().Msgf(errors.NewWriteError(err).Error())
 		}
 	}
 	c.Unlock()
