@@ -2,7 +2,7 @@ package ringbuffer
 
 import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/pkg/errors"
+	"github.com/loophole-labs/frisbee/pkg/errors"
 	"runtime"
 	"sync/atomic"
 	"unsafe"
@@ -58,7 +58,7 @@ func (rb *RingBuffer) Push(item *protocol.PacketV0) error {
 RETRY:
 	for {
 		if atomic.LoadUint64(&rb.closed) == 1 {
-			return errors.New("ring buffer is closed")
+			return errors.RingerBufferClosed
 		}
 
 		newNode = &rb.nodes[position&rb.mask]
@@ -86,7 +86,7 @@ func (rb *RingBuffer) Pop() (*protocol.PacketV0, error) {
 RETRY:
 	for {
 		if atomic.LoadUint64(&rb.closed) == 1 {
-			return nil, errors.New("ring buffer is closed")
+			return nil, errors.RingerBufferClosed
 		}
 
 		oldNode = &rb.nodes[oldPosition&rb.mask]
