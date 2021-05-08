@@ -6,9 +6,13 @@ import (
 	"net"
 )
 
+// ClientRouterFunc defines a message handler type
 type ClientRouterFunc func(incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+
+// ClientRouter defines map of message handlers
 type ClientRouter map[uint16]ClientRouterFunc
 
+// Client accepts and handles inbound messages
 type Client struct {
 	addr    string
 	Conn    *Conn
@@ -17,11 +21,12 @@ type Client struct {
 	closed  bool
 }
 
+// NewClient returns an initialized client
 func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	return &Client{
 		addr:    addr,
 		router:  router,
-		Options: LoadOptions(opts...),
+		Options: loadOptions(opts...),
 		closed:  false,
 	}
 }

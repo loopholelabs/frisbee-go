@@ -72,7 +72,6 @@ RETRY:
 		default:
 			position = atomic.LoadUint64(&rb.head)
 		}
-
 		runtime.Gosched()
 	}
 	newNode.data = unsafe.Pointer(item)
@@ -98,7 +97,6 @@ RETRY:
 		default:
 			oldPosition = atomic.LoadUint64(&rb.tail)
 		}
-
 		runtime.Gosched()
 	}
 	data := oldNode.data
