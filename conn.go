@@ -20,6 +20,7 @@ var (
 	silentLogger = zerolog.New(os.Stdout)
 )
 
+// Conn is a Frisbee connection
 type Conn struct {
 	sync.Mutex
 	conn     net.Conn
