@@ -24,7 +24,7 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	return &Server{
 		addr:    addr,
 		router:  router,
-		Options: LoadOptions(opts...),
+		Options: loadOptions(opts...),
 	}
 }
 
