@@ -73,7 +73,7 @@ func TestEncodeDecodeHandlerV0(t *testing.T) {
 	assert.Equal(t, MessagePing, emptyMessage.Operation)
 
 	invalidMessage, err := handlerV0.Decode(emptyEncodedBytes[8:])
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, errors.New("invalid buffer length").Error(), err.Error())
 	assert.Equal(t, uint64(0), invalidMessage.ContentLength)
 	assert.Equal(t, uint32(0), invalidMessage.Id)
@@ -105,7 +105,7 @@ func TestEncodeDecodeV0(t *testing.T) {
 	assert.Equal(t, MessagePing, emptyMessage.Operation)
 
 	invalidMessage, err := DecodeV0(emptyEncodedBytes[1:])
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, errors.New("invalid buffer length").Error(), err.Error())
 	assert.Equal(t, uint64(0), invalidMessage.ContentLength)
 	assert.Equal(t, uint32(0), invalidMessage.Id)
