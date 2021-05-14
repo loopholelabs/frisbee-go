@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -30,13 +31,13 @@ func TestMessageV0EncodeDecode(t *testing.T) {
 	binary.BigEndian.PutUint64(correct[ContentLengthV0Offset:ContentLengthV0Offset+ContentLengthV0Size], uint64(0))
 
 	encoded, err := message.Encode()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, correct, encoded)
 
 	decoderMessage := &MessageV0{}
 
 	err = decoderMessage.Decode(encoded)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, message, decoderMessage)
 
 }
@@ -53,7 +54,7 @@ func TestEncodeDecodeHandlerV0(t *testing.T) {
 	assert.NoError(t, err)
 
 	message, err := handlerV0.Decode(encodedBytes[:])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(512), message.ContentLength)
 	assert.Equal(t, uint32(64), message.Id)
 	assert.Equal(t, uint32(32), message.To)
@@ -64,7 +65,7 @@ func TestEncodeDecodeHandlerV0(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	emptyMessage, err := handlerV0.Decode(emptyEncodedBytes[:])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(0), emptyMessage.ContentLength)
 	assert.Equal(t, uint32(64), emptyMessage.Id)
 	assert.Equal(t, uint32(32), emptyMessage.To)
@@ -85,7 +86,7 @@ func TestEncodeDecodeV0(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	message, err := DecodeV0(encodedBytes[:])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(512), message.ContentLength)
 	assert.Equal(t, uint32(64), message.Id)
 	assert.Equal(t, uint32(32), message.To)
@@ -96,7 +97,7 @@ func TestEncodeDecodeV0(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	emptyMessage, err := DecodeV0(emptyEncodedBytes[:])
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(0), emptyMessage.ContentLength)
 	assert.Equal(t, uint32(64), emptyMessage.Id)
 	assert.Equal(t, uint32(32), emptyMessage.To)
