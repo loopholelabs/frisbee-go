@@ -117,14 +117,14 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		return errors.New("connection closed")
 	}
 
-	var encodedMessage [protocol.HeaderLengthV0]byte
+	var encodedMessage [protocol.MessageV0Size]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[6:8], protocol.Version0)
-	binary.BigEndian.PutUint32(encodedMessage[8:12], message.From)
-	binary.BigEndian.PutUint32(encodedMessage[12:16], message.To)
-	binary.BigEndian.PutUint32(encodedMessage[16:20], message.Id)
-	binary.BigEndian.PutUint32(encodedMessage[20:24], message.Operation)
-	binary.BigEndian.PutUint64(encodedMessage[24:32], message.ContentLength)
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 
 	c.Lock()
 	_, err := c.writer.Write(encodedMessage[:])
@@ -171,7 +171,7 @@ func (c *Conn) readLoop() {
 	buf := make([]byte, 1<<19)
 	var index int
 	for {
-		n, err := c.readAtLeast(buf[:cap(buf)], protocol.HeaderLengthV0)
+		n, err := c.readAtLeast(buf[:cap(buf)], protocol.MessageV0Size)
 		if err != nil {
 			if !os.IsTimeout(err) {
 				_ = c.close(err)
@@ -181,19 +181,19 @@ func (c *Conn) readLoop() {
 
 		index = 0
 		for index < n {
-			if binary.BigEndian.Uint16(buf[index+6:index+8]) != protocol.Version0 {
+			if binary.BigEndian.Uint16(buf[index+protocol.VersionV0Offset:index+protocol.VersionV0Offset+protocol.VersionV0Size]) != protocol.Version0 {
 				c.Logger().Error().Msgf("invalid buf contents, discarding")
 				break
 			}
 
 			decodedMessage := protocol.MessageV0{
-				From:          binary.BigEndian.Uint32(buf[index+8 : index+12]),
-				To:            binary.BigEndian.Uint32(buf[index+12 : index+16]),
-				Id:            binary.BigEndian.Uint32(buf[index+16 : index+20]),
-				Operation:     binary.BigEndian.Uint32(buf[index+20 : index+24]),
-				ContentLength: binary.BigEndian.Uint64(buf[index+24 : index+32]),
+				From:          binary.BigEndian.Uint32(buf[index+protocol.FromV0Offset : index+protocol.FromV0Offset+protocol.FromV0Size]),
+				To:            binary.BigEndian.Uint32(buf[index+protocol.ToV0Offset : index+protocol.ToV0Offset+protocol.ToV0Size]),
+				Id:            binary.BigEndian.Uint32(buf[index+protocol.IdV0Offset : index+protocol.IdV0Offset+protocol.IdV0Size]),
+				Operation:     binary.BigEndian.Uint32(buf[index+protocol.OperationV0Offset : index+protocol.OperationV0Offset+protocol.OperationV0Size]),
+				ContentLength: binary.BigEndian.Uint64(buf[index+protocol.ContentLengthV0Offset : index+protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size]),
 			}
-			index += protocol.HeaderLengthV0
+			index += protocol.MessageV0Size
 			if decodedMessage.ContentLength > 0 {
 				readContent := make([]byte, decodedMessage.ContentLength)
 				if n-index < int(decodedMessage.ContentLength) {
@@ -233,18 +233,18 @@ func (c *Conn) readLoop() {
 			}
 			if n == index {
 				index = 0
-				n, err = c.readAtLeast(buf[:cap(buf)], protocol.HeaderLengthV0)
+				n, err = c.readAtLeast(buf[:cap(buf)], protocol.MessageV0Size)
 				if err != nil {
 					if !os.IsTimeout(err) {
 						_ = c.close(err)
 					}
 					return
 				}
-			} else if n-index < protocol.HeaderLengthV0 {
+			} else if n-index < protocol.MessageV0Size {
 				copy(buf, buf[index:n])
 				n -= index
 				index = n
-				n, err = c.readAtLeast(buf[n:cap(buf)], protocol.HeaderLengthV0-index)
+				n, err = c.readAtLeast(buf[n:cap(buf)], protocol.MessageV0Size-index)
 				if err != nil {
 					if !os.IsTimeout(err) {
 						_ = c.close(err)

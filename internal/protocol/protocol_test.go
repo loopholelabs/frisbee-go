@@ -9,7 +9,6 @@ import (
 
 func TestValidVersion(t *testing.T) {
 	assert.Equal(t, true, validVersion(Version0))
-	assert.NotEqual(t, true, validVersion(uint16(0x00)))
 }
 
 func TestMessageV0EncodeDecode(t *testing.T) {
@@ -21,14 +20,14 @@ func TestMessageV0EncodeDecode(t *testing.T) {
 		ContentLength: uint64(0),
 	}
 
-	correct := [HeaderLengthV0]byte{}
+	correct := [MessageV0Size]byte{}
 
-	binary.BigEndian.PutUint16(correct[6:8], Version0)
-	binary.BigEndian.PutUint32(correct[8:12], uint32(16))
-	binary.BigEndian.PutUint32(correct[12:16], uint32(32))
-	binary.BigEndian.PutUint32(correct[16:20], uint32(64))
-	binary.BigEndian.PutUint32(correct[20:24], MessagePacket)
-	binary.BigEndian.PutUint64(correct[24:32], uint64(0))
+	binary.BigEndian.PutUint16(correct[VersionV0Offset:VersionV0Offset+VersionV0Size], Version0)
+	binary.BigEndian.PutUint32(correct[FromV0Offset:FromV0Offset+FromV0Size], uint32(16))
+	binary.BigEndian.PutUint32(correct[ToV0Offset:ToV0Offset+ToV0Size], uint32(32))
+	binary.BigEndian.PutUint32(correct[IdV0Offset:IdV0Offset+IdV0Size], uint32(64))
+	binary.BigEndian.PutUint32(correct[OperationV0Offset:OperationV0Offset+OperationV0Size], MessagePacket)
+	binary.BigEndian.PutUint64(correct[ContentLengthV0Offset:ContentLengthV0Offset+ContentLengthV0Size], uint64(0))
 
 	encoded, err := message.Encode()
 	assert.NoError(t, err)

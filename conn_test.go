@@ -3,6 +3,7 @@ package frisbee
 import (
 	"crypto/rand"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"net"
 	"testing"
 )
@@ -90,14 +91,17 @@ func TestRawConn(t *testing.T) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, err := net.Listen("tcp", ":3000")
+	require.NoError(t, err)
 
 	go func() {
-		reader, _ = l.Accept()
+		reader, err = l.Accept()
+		require.NoError(t, err)
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, err = net.Dial("tcp", ":3000")
+	require.NoError(t, err)
 	<-start
 
 	readerConn := New(reader, nil)
