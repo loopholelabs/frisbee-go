@@ -112,7 +112,6 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 	for {
 		incomingMessage, incomingContent, err := frisbeeConn.Read()
-		s.logger().Printf("READ MESSAGE")
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.onClosed(frisbeeConn, err)
