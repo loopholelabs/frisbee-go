@@ -42,7 +42,7 @@ func TestClientRaw(t *testing.T) {
 
 	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
 	_, err = c.Raw()
-	assert.Error(t, err)
+	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.Connect()
 	require.NoError(t, err)

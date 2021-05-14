@@ -2,8 +2,18 @@ package protocol
 
 import (
 	"encoding/binary"
-	"github.com/pkg/errors"
+	"github.com/loophole-labs/frisbee/internal/errors"
 	"unsafe"
+)
+
+const (
+	ENCODE errors.ErrorContext = "error while encoding message"
+	DECODE errors.ErrorContext = "error while decoding message"
+)
+
+var (
+	InvalidMessageVersion = errors.New("invalid message version")
+	InvalidBufferLength   = errors.New("invalid buffer length")
 )
 
 const (
@@ -51,7 +61,7 @@ func (handler *V0Handler) Decode(buf []byte) (message MessageV0, err error) {
 func (fm *MessageV0) Encode() (result [HeaderLengthV0]byte, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
-			err = errors.Wrap(recoveredErr.(error), "error encoding V0 message")
+			err = errors.WithContext(recoveredErr.(error), ENCODE)
 		}
 	}()
 
@@ -69,12 +79,12 @@ func (fm *MessageV0) Encode() (result [HeaderLengthV0]byte, err error) {
 func (fm *MessageV0) Decode(buf [HeaderLengthV0]byte) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
-			err = errors.Wrap(recoveredErr.(error), "error decoding V0 message")
+			err = errors.WithContext(recoveredErr.(error), DECODE)
 		}
 	}()
 
 	if !validVersion(buf[1]) {
-		return errors.New("invalid message version")
+		return InvalidMessageVersion
 	}
 	fm.Id = binary.BigEndian.Uint32(buf[2:6])
 	fm.Operation = binary.BigEndian.Uint16(buf[6:8])
@@ -99,7 +109,7 @@ func EncodeV0(id uint32, operation uint16, routing uint32, contentLength uint32)
 // DecodeV0 without a Handler
 func DecodeV0(buf []byte) (message MessageV0, err error) {
 	if len(buf) < HeaderLengthV0 {
-		return MessageV0{}, errors.New("invalid buffer length")
+		return MessageV0{}, InvalidBufferLength
 	}
 
 	err = message.Decode(*(*[HeaderLengthV0]byte)(unsafe.Pointer(&buf[0])))

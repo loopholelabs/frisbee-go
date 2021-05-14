@@ -32,10 +32,13 @@ func main() {
 	signal.Notify(exit, os.Interrupt)
 
 	s := frisbee.NewServer(":8192", router)
-	_ = s.Start()
+	err := s.Start()
+	if err != nil {
+		panic(err)
+	}
 
 	<-exit
-	err := s.Shutdown()
+	err = s.Shutdown()
 	if err != nil {
 		panic(err)
 	}

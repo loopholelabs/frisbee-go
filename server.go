@@ -1,6 +1,7 @@
 package frisbee
 
 import (
+	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"net"
 )
@@ -79,7 +80,7 @@ func (s *Server) Start() error {
 				if s.shutdown {
 					return
 				}
-				s.logger().Fatal().Msgf("unable to accept connections: %+v", err)
+				s.logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
 				return
 			}
 			go s.handleConn(newConn)
@@ -112,7 +113,6 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 	for {
 		incomingMessage, incomingContent, err := frisbeeConn.Read()
-		s.logger().Printf("READ MESSAGE")
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.onClosed(frisbeeConn, err)
