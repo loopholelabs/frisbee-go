@@ -42,9 +42,10 @@ func main() {
 		start := time.Now()
 		for q := 0; q < testSize; q++ {
 			err := c.Write(&frisbee.Message{
+				To:            uint32(i),
+				From:          uint32(i),
 				Id:            uint32(q),
 				Operation:     protocol.MessagePing,
-				Routing:       uint32(i),
 				ContentLength: messageSize,
 			}, &data)
 			if err != nil {

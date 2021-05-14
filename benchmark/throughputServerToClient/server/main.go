@@ -49,9 +49,10 @@ func main() {
 		start := time.Now()
 		for q := 1; q < testSize+1; q++ {
 			err := benchmarkConnection.Write(&frisbee.Message{
+				To:            uint32(i),
+				From:          uint32(i),
 				Id:            uint32(q),
 				Operation:     protocol.MessagePing,
-				Routing:       uint32(i),
 				ContentLength: messageSize,
 			}, &data)
 			if err != nil {

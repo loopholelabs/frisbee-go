@@ -7,15 +7,16 @@ import (
 	"os/signal"
 )
 
-const PING = uint16(1)
-const PONG = uint16(2)
+const PING = uint32(1)
+const PONG = uint32(2)
 
 func handlePing(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
 		log.Printf("Server Received Message: %s", incomingContent)
 		outgoingMessage = &frisbee.Message{
+			From:          incomingMessage.From,
+			To:            incomingMessage.To,
 			Id:            incomingMessage.Id,
-			Routing:       incomingMessage.Routing,
 			Operation:     PONG,
 			ContentLength: incomingMessage.ContentLength,
 		}

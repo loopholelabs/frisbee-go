@@ -8,8 +8,8 @@ import (
 	"os/signal"
 )
 
-const PUB = uint16(1)
-const SUB = uint16(2)
+const PUB = uint32(1)
+const SUB = uint32(2)
 
 var subscribers = make(map[uint32][]*frisbee.Conn)
 
@@ -24,13 +24,14 @@ func handleSub(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent
 
 func handlePub(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
-		log.Printf("Server Received PUB on hashed topic %d with content %s", incomingMessage.Routing, string(incomingContent))
-		if connections := subscribers[incomingMessage.Routing]; connections != nil {
+		log.Printf("Server Received PUB on hashed topic %d with content %s", incomingMessage.From, string(incomingContent))
+		if connections := subscribers[incomingMessage.From]; connections != nil {
 			for _, c := range connections {
 				_ = c.Write(&frisbee.Message{
+					From:          incomingMessage.From,
+					To:            incomingMessage.To,
 					Id:            0,
 					Operation:     PUB,
-					Routing:       incomingMessage.Routing,
 					ContentLength: incomingMessage.ContentLength,
 				}, &incomingContent)
 			}

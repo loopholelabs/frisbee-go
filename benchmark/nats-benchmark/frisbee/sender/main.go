@@ -8,8 +8,8 @@ import (
 	"log"
 )
 
-const PUB = uint16(1)
-const SUB = uint16(2)
+const PUB = uint32(1)
+const SUB = uint32(2)
 const testSize = 100000
 const messageSize = 2048
 const runs = 100
@@ -23,7 +23,7 @@ var receiveTopic = []byte("RECEIVING")
 var receiveTopicHash = crc32.ChecksumIEEE(receiveTopic)
 
 func handlePub(incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-	if incomingMessage.Routing == receiveTopicHash {
+	if incomingMessage.To == receiveTopicHash {
 		complete <- struct{}{}
 	}
 	return
@@ -46,10 +46,11 @@ func main() {
 	END := []byte("END")
 
 	err = c.Write(&frisbee.Message{
+		From:          0,
+		To:            0,
 		Id:            0,
 		Operation:     SUB,
-		Routing:       0,
-		ContentLength: uint32(len(receiveTopic)),
+		ContentLength: uint64(len(receiveTopic)),
 	}, &receiveTopic)
 	if err != nil {
 		panic(err)
@@ -60,20 +61,22 @@ func main() {
 	for bench.Next() {
 		for q := 0; q < testSize; q++ {
 			err := c.Write(&frisbee.Message{
+				From:          topicHash,
+				To:            topicHash,
 				Id:            uint32(i),
 				Operation:     PUB,
-				Routing:       topicHash,
-				ContentLength: uint32(len(data)),
+				ContentLength: uint64(len(data)),
 			}, &data)
 			if err != nil {
 				panic(err)
 			}
 		}
 		err := c.Write(&frisbee.Message{
+			From:          topicHash,
+			To:            topicHash,
 			Id:            uint32(i),
 			Operation:     PUB,
-			Routing:       topicHash,
-			ContentLength: uint32(len(END)),
+			ContentLength: uint64(len(END)),
 		}, &END)
 		if err != nil {
 			panic(err)

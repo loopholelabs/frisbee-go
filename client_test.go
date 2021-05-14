@@ -52,18 +52,20 @@ func TestClientRaw(t *testing.T) {
 
 	for q := 0; q < testSize; q++ {
 		err := c.Write(&Message{
+			To:            16,
+			From:          32,
 			Id:            uint32(q),
 			Operation:     protocol.MessagePing,
-			Routing:       0,
 			ContentLength: messageSize,
 		}, &data)
 		assert.NoError(t, err)
 	}
 
 	err = c.Write(&Message{
+		To:            16,
+		From:          32,
 		Id:            0,
 		Operation:     protocol.MessagePacket,
-		Routing:       0,
 		ContentLength: 0,
 	}, nil)
 	assert.NoError(t, err)
@@ -133,9 +135,10 @@ func BenchmarkClientThroughput(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
 				err := c.Write(&Message{
+					To:            uint32(i),
+					From:          uint32(i),
 					Id:            uint32(q),
 					Operation:     protocol.MessagePing,
-					Routing:       uint32(i),
 					ContentLength: messageSize,
 				}, &data)
 				if err != nil {
@@ -167,9 +170,10 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	serverRouter[protocol.MessagePing] = func(_ *Conn, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &Message{
+				To:            16,
+				From:          32,
 				Id:            testSize,
 				Operation:     protocol.MessagePong,
-				Routing:       0,
 				ContentLength: 0,
 			}
 		}
@@ -204,9 +208,10 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
 				err := c.Write(&Message{
+					To:            uint32(i),
+					From:          uint32(i),
 					Id:            uint32(q),
 					Operation:     protocol.MessagePing,
-					Routing:       uint32(i),
 					ContentLength: messageSize,
 				}, &data)
 				if err != nil {

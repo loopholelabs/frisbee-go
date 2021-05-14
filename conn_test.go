@@ -3,6 +3,7 @@ package frisbee
 import (
 	"crypto/rand"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"net"
 	"testing"
 )
@@ -16,9 +17,10 @@ func TestNewConn(t *testing.T) {
 	writerConn := New(writer, nil)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: 0,
 	}
 	err := writerConn.Write(message, nil)
@@ -55,9 +57,10 @@ func TestLargeWrite(t *testing.T) {
 	randomData := make([][]byte, testSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -88,14 +91,17 @@ func TestRawConn(t *testing.T) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, err := net.Listen("tcp", ":3000")
+	require.NoError(t, err)
 
 	go func() {
-		reader, _ = l.Accept()
+		reader, err = l.Accept()
+		require.NoError(t, err)
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, err = net.Dial("tcp", ":3000")
+	require.NoError(t, err)
 	<-start
 
 	readerConn := New(reader, nil)
@@ -105,9 +111,10 @@ func TestRawConn(t *testing.T) {
 	_, _ = rand.Read(randomData)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -163,9 +170,10 @@ func BenchmarkThroughputPipe32(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -204,9 +212,10 @@ func BenchmarkThroughputPipe512(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -256,9 +265,10 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -309,9 +319,10 @@ func BenchmarkThroughputNetwork512(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -362,9 +373,10 @@ func BenchmarkThroughputNetwork1024(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -415,9 +427,10 @@ func BenchmarkThroughputNetwork2048(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -468,9 +481,10 @@ func BenchmarkThroughputNetwork4096(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 
@@ -521,9 +535,10 @@ func BenchmarkThroughputNetwork1mb(b *testing.B) {
 	randomData := make([]byte, messageSize)
 
 	message := &Message{
-		Id:            16,
+		To:            16,
+		From:          32,
+		Id:            64,
 		Operation:     32,
-		Routing:       64,
 		ContentLength: messageSize,
 	}
 

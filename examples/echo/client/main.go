@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-const PING = uint16(1)
-const PONG = uint16(2)
+const PING = uint32(1)
+const PONG = uint32(2)
 
 func handlePong(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
@@ -36,10 +36,11 @@ func main() {
 		for {
 			message := []byte(fmt.Sprintf("ECHO MESSAGE: %d", i))
 			err := c.Write(&frisbee.Message{
+				To:            0,
+				From:          0,
 				Id:            uint32(i),
 				Operation:     PING,
-				Routing:       0,
-				ContentLength: uint32(len(message)),
+				ContentLength: uint64(len(message)),
 			}, &message)
 			if err != nil {
 				panic(err)

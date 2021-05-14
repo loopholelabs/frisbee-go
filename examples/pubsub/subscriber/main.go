@@ -8,15 +8,15 @@ import (
 	"os/signal"
 )
 
-const PUB = uint16(1)
-const SUB = uint16(2)
+const PUB = uint32(1)
+const SUB = uint32(2)
 
 var topic = []byte("TOPIC 1")
 var topicHash = crc32.ChecksumIEEE(topic)
 
 // Handle the PUB message type
 func handlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-	if incomingMessage.Routing == topicHash {
+	if incomingMessage.From == topicHash {
 		log.Printf("Client Received Message on Topic %s: %s", string(topic), string(incomingContent))
 	}
 	return
@@ -38,10 +38,11 @@ func main() {
 
 	// First subscribe to the topic
 	err = c.Write(&frisbee.Message{
+		From:          0,
+		To:            0,
 		Id:            uint32(i),
 		Operation:     SUB,
-		Routing:       0,
-		ContentLength: uint32(len(topic)),
+		ContentLength: uint64(len(topic)),
 	}, &topic)
 	if err != nil {
 		panic(err)
