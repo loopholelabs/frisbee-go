@@ -21,9 +21,10 @@ func main() {
 	router[protocol.MessagePing] = func(incomingMessage frisbee.Message, _ []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &frisbee.Message{
+				To:            0,
+				From:          0,
 				Id:            testSize,
 				Operation:     protocol.MessagePong,
-				Routing:       0,
 				ContentLength: 0,
 			}
 		}

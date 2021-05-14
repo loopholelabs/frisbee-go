@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const PUB = uint16(1)
+const PUB = uint32(1)
 
 var topic = []byte("TOPIC 1")
 var topicHash = crc32.ChecksumIEEE(topic)
@@ -30,10 +30,11 @@ func main() {
 		for {
 			message := []byte(fmt.Sprintf("PUBLISHED MESSAGE: %d", i))
 			err := c.Write(&frisbee.Message{
+				From:          topicHash,
+				To:            topicHash,
 				Id:            uint32(i),
 				Operation:     PUB,
-				Routing:       topicHash,
-				ContentLength: uint32(len(message)),
+				ContentLength: uint64(len(message)),
 			}, &message)
 			if err != nil {
 				panic(err)
