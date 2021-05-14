@@ -10,7 +10,7 @@ import (
 type ClientRouterFunc func(incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
 
 // ClientRouter defines map of message handlers
-type ClientRouter map[uint16]ClientRouterFunc
+type ClientRouter map[uint32]ClientRouterFunc
 
 // Client accepts and handles inbound messages
 type Client struct {
@@ -88,7 +88,7 @@ func (c *Client) reactor() {
 				outgoingMessage, outgoingContent, action = routerFunc(*incomingMessage, *incomingContent)
 			}
 
-			if outgoingMessage != nil && outgoingMessage.ContentLength == uint32(len(outgoingContent)) {
+			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
 				err := c.Conn.Write(outgoingMessage, &outgoingContent)
 				if err != nil {
 					c.logger().Error().Msgf("Closing connection %s due to error %s", c.addr, err)

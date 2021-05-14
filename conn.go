@@ -105,23 +105,6 @@ func (c *Conn) flushLoop() {
 			}
 		}
 		c.Unlock()
-
-		//c.flush.L.Lock()
-		//for c.writer.Buffered() == 0 {
-		//	if c.closed {
-		//		break
-		//	}
-		//	c.flush.Wait()
-		//}
-		//if c.closed {
-		//	c.flush.L.Unlock()
-		//	break
-		//}
-		//err := c.writer.Flush()
-		//if err != nil {
-		//	_ = c.close(err)
-		//}
-		//c.flush.L.Unlock()
 	}
 }
 
@@ -135,11 +118,14 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	}
 
 	var encodedMessage [protocol.HeaderLengthV0]byte
-	encodedMessage[1] = protocol.Version0
-	binary.BigEndian.PutUint32(encodedMessage[2:6], message.Id)
-	binary.BigEndian.PutUint16(encodedMessage[6:8], message.Operation)
-	binary.BigEndian.PutUint32(encodedMessage[8:12], message.Routing)
-	binary.BigEndian.PutUint32(encodedMessage[12:16], message.ContentLength)
+
+	binary.BigEndian.PutUint16(encodedMessage[6:8], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[8:12], message.From)
+	binary.BigEndian.PutUint32(encodedMessage[12:16], message.To)
+	binary.BigEndian.PutUint32(encodedMessage[16:20], message.Id)
+	binary.BigEndian.PutUint32(encodedMessage[20:24], message.Operation)
+	binary.BigEndian.PutUint64(encodedMessage[24:32], message.ContentLength)
+
 	c.Lock()
 	_, err := c.writer.Write(encodedMessage[:])
 	if err != nil {
@@ -153,7 +139,6 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	}
 	c.Unlock()
 
-	//c.flush.Signal()
 	if len(c.flush) == 0 {
 		select {
 		case c.flush <- struct{}{}:
@@ -196,16 +181,17 @@ func (c *Conn) readLoop() {
 
 		index = 0
 		for index < n {
-			if buf[index+1] != protocol.Version0 {
+			if binary.BigEndian.Uint16(buf[index+6:index+8]) != protocol.Version0 {
 				c.Logger().Error().Msgf("invalid buf contents, discarding")
 				break
 			}
 
 			decodedMessage := protocol.MessageV0{
-				Id:            binary.BigEndian.Uint32(buf[index+2 : index+6]),
-				Operation:     binary.BigEndian.Uint16(buf[index+6 : index+8]),
-				Routing:       binary.BigEndian.Uint32(buf[index+8 : index+12]),
-				ContentLength: binary.BigEndian.Uint32(buf[index+12 : index+16]),
+				From:          binary.BigEndian.Uint32(buf[index+8 : index+12]),
+				To:            binary.BigEndian.Uint32(buf[index+12 : index+16]),
+				Id:            binary.BigEndian.Uint32(buf[index+16 : index+20]),
+				Operation:     binary.BigEndian.Uint32(buf[index+20 : index+24]),
+				ContentLength: binary.BigEndian.Uint64(buf[index+24 : index+32]),
 			}
 			index += protocol.HeaderLengthV0
 			if decodedMessage.ContentLength > 0 {
