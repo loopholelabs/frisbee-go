@@ -7,8 +7,8 @@ import (
 	"os/signal"
 )
 
-const PUB = uint16(1)
-const SUB = uint16(2)
+const PUB = uint32(1)
+const SUB = uint32(2)
 
 var subscribers = make(map[uint32][]*frisbee.Conn)
 
@@ -21,12 +21,13 @@ func handleSub(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent
 }
 
 func handlePub(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-	if connections := subscribers[incomingMessage.Routing]; connections != nil {
+	if connections := subscribers[incomingMessage.To]; connections != nil {
 		for _, c := range connections {
 			_ = c.Write(&frisbee.Message{
+				To:            incomingMessage.To,
+				From:          incomingMessage.From,
 				Id:            0,
 				Operation:     PUB,
-				Routing:       incomingMessage.Routing,
 				ContentLength: incomingMessage.ContentLength,
 			}, &incomingContent)
 		}

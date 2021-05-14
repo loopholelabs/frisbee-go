@@ -7,7 +7,7 @@ import (
 )
 
 type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
-type ServerRouter map[uint16]ServerRouterFunc
+type ServerRouter map[uint32]ServerRouterFunc
 
 type Server struct {
 	listener   *net.TCPListener
@@ -129,7 +129,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, *incomingMessage, *incomingContent)
 			}
 
-			if outgoingMessage != nil && outgoingMessage.ContentLength == uint32(len(outgoingContent)) {
+			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
 				s.preWrite()
 				err := frisbeeConn.Write(outgoingMessage, &outgoingContent)
 				if err != nil {
