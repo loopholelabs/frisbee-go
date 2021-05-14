@@ -2,7 +2,6 @@ package ringbuffer
 
 import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/loophole-labs/frisbee/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -63,9 +62,9 @@ func TestRingBuffer(t *testing.T) {
 		rb.Close()
 		assert.True(t, rb.IsClosed())
 		err := rb.Push(testPacket())
-		assert.ErrorIs(t, errors.RingerBufferClosed, err)
+		assert.ErrorIs(t, RingerBufferClosed, err)
 		_, err = rb.Pop()
-		assert.ErrorIs(t, errors.RingerBufferClosed, err)
+		assert.ErrorIs(t, RingerBufferClosed, err)
 	})
 	t.Run("pop empty", func(t *testing.T) {
 		done := make(chan struct{}, 1)

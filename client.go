@@ -1,7 +1,7 @@
 package frisbee
 
 import (
-	"github.com/loophole-labs/frisbee/pkg/errors"
+	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"net"
 )
@@ -57,7 +57,7 @@ func (c *Client) Write(message *Message, content *[]byte) error {
 
 func (c *Client) Raw() (net.Conn, error) {
 	if c.Conn == nil {
-		return nil, errors.ConnectionNotInitialized
+		return nil, ConnectionNotInitialized
 	}
 	c.closed = true
 	return c.Conn.Raw(), nil
@@ -67,7 +67,7 @@ func (c *Client) reactor() {
 	for {
 		incomingMessage, incomingContent, err := c.Conn.Read()
 		if err != nil {
-			c.logger().Error().Msgf(errors.NewCloseError(err).Error())
+			c.logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
 			_ = c.Close()
 			return
 		}
@@ -86,7 +86,7 @@ func (c *Client) reactor() {
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint32(len(outgoingContent)) {
 				err := c.Conn.Write(outgoingMessage, &outgoingContent)
 				if err != nil {
-					c.logger().Error().Msgf(errors.NewCloseError(err).Error())
+					c.logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
 					_ = c.Close()
 					return
 				}

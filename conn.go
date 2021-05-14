@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"encoding/binary"
 	"github.com/gobwas/pool/pbufio"
+	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/loophole-labs/frisbee/internal/ringbuffer"
-	"github.com/loophole-labs/frisbee/pkg/errors"
 	"github.com/rs/zerolog"
 	"io"
 	"net"
@@ -35,7 +35,7 @@ type Conn struct {
 func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		return nil, errors.NewDialError(err)
+		return nil, errors.WithContext(err, DIAL)
 	}
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
@@ -110,11 +110,11 @@ func (c *Conn) flushLoop() {
 
 func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
-		return errors.InvalidContentLength
+		return InvalidContentLength
 	}
 
 	if c.closed {
-		return errors.ConnectionClosed
+		return ConnectionClosed
 	}
 
 	var encodedMessage [protocol.HeaderLengthV0]byte
@@ -126,12 +126,12 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	c.Lock()
 	_, err := c.writer.Write(encodedMessage[:])
 	if err != nil {
-		c.logger.Error().Msgf(errors.NewWriteError(err).Error())
+		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 	}
 	if content != nil {
 		_, err = c.writer.Write(*content)
 		if err != nil {
-			c.logger.Error().Msgf(errors.NewWriteError(err).Error())
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 		}
 	}
 	c.Unlock()
@@ -148,7 +148,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 
 func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
 	if len(buf) < min {
-		return 0, errors.InvalidBufferLength
+		return 0, InvalidBufferLength
 	}
 	for n < min && err == nil {
 		var nn int
@@ -157,8 +157,6 @@ func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
 	}
 	if n >= min {
 		err = nil
-	} else if n > 0 && err == io.EOF {
-		err = errors.UnexpectedEOF
 	}
 	return
 }
@@ -179,7 +177,7 @@ func (c *Conn) readLoop() {
 		index = 0
 		for index < n {
 			if buf[index+1] != protocol.Version0 {
-				c.Logger().Error().Msgf(errors.InvalidBufferContents.Error())
+				c.Logger().Error().Msgf(InvalidBufferContents.Error())
 				break
 			}
 
@@ -216,7 +214,7 @@ func (c *Conn) readLoop() {
 					Content: &readContent,
 				})
 				if err != nil {
-					c.Logger().Debug().Msgf(errors.NewPushError(err).Error())
+					c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
 				}
 			} else {
 				err = c.messages.Push(&protocol.PacketV0{
@@ -224,7 +222,7 @@ func (c *Conn) readLoop() {
 					Content: nil,
 				})
 				if err != nil {
-					c.Logger().Debug().Msgf(errors.NewPushError(err).Error())
+					c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
 				}
 			}
 			if n == index {
@@ -256,12 +254,12 @@ func (c *Conn) readLoop() {
 
 func (c *Conn) Read() (*Message, *[]byte, error) {
 	if c.closed {
-		return nil, nil, errors.ConnectionClosed
+		return nil, nil, ConnectionClosed
 	}
 
 	readPacket, err := c.messages.Pop()
 	if err != nil {
-		return nil, nil, errors.NewPopError(err)
+		return nil, nil, errors.WithContext(err, POP)
 	}
 
 	return (*Message)(readPacket.Message), readPacket.Content, nil
@@ -282,11 +280,11 @@ func (c *Conn) close(connError error) (err error) {
 	}()
 	conn := c.Raw()
 	if connError != nil && connError != io.EOF {
-		c.logger.Error().Msgf(errors.NewCloseError(connError).Error())
+		c.logger.Error().Msgf(errors.WithContext(connError, CLOSE).Error())
 		c.Error = connError
 		closeError := conn.Close()
 		if closeError != nil && closeError != io.EOF {
-			c.logger.Error().Msgf(errors.NewCloseError(closeError).Error())
+			c.logger.Error().Msgf(errors.WithContext(closeError, CLOSE).Error())
 		}
 		return c.Error
 	}

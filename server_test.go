@@ -3,7 +3,6 @@ package frisbee
 import (
 	"crypto/rand"
 	"github.com/loophole-labs/frisbee/internal/protocol"
-	"github.com/loophole-labs/frisbee/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -45,7 +44,7 @@ func TestServerRaw(t *testing.T) {
 
 	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
 	_, err = c.Raw()
-	assert.Equal(t, errors.ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.Connect()
 	require.NoError(t, err)

@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"encoding/binary"
-	"github.com/loophole-labs/frisbee/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -71,7 +70,7 @@ func TestEncodeDecodeHandlerV0(t *testing.T) {
 
 	invalidMessage, err := handlerV0.Decode(emptyEncodedBytes[8:])
 	assert.NotEqual(t, nil, err)
-	assert.Equal(t, errors.InvalidBufferLength, err)
+	assert.ErrorIs(t, InvalidBufferLength, err)
 	assert.Equal(t, uint32(0), invalidMessage.ContentLength)
 	assert.Equal(t, uint32(0), invalidMessage.Id)
 	assert.Equal(t, uint32(0), invalidMessage.Routing)
@@ -102,7 +101,7 @@ func TestEncodeDecodeV0(t *testing.T) {
 
 	invalidMessage, err := DecodeV0(emptyEncodedBytes[1:])
 	assert.NotEqual(t, nil, err)
-	assert.Equal(t, errors.InvalidBufferLength, err)
+	assert.ErrorIs(t, InvalidBufferLength, err)
 	assert.Equal(t, uint32(0), invalidMessage.ContentLength)
 	assert.Equal(t, uint32(0), invalidMessage.Id)
 	assert.Equal(t, uint32(0), invalidMessage.Routing)
