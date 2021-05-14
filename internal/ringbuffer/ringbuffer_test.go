@@ -71,9 +71,9 @@ func TestRingBuffer(t *testing.T) {
 		rb.Close()
 		assert.True(t, rb.IsClosed())
 		err := rb.Push(testPacket())
-		assert.EqualError(t, err, "ring buffer is closed")
+		assert.ErrorIs(t, RingerBufferClosed, err)
 		_, err = rb.Pop()
-		assert.EqualError(t, err, "ring buffer is closed")
+		assert.ErrorIs(t, RingerBufferClosed, err)
 	})
 	t.Run("pop empty", func(t *testing.T) {
 		done := make(chan struct{}, 1)

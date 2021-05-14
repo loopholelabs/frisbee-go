@@ -1,7 +1,7 @@
 package frisbee
 
 import (
-	"github.com/pkg/errors"
+	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"net"
 )
@@ -62,7 +62,7 @@ func (c *Client) Write(message *Message, content *[]byte) error {
 
 func (c *Client) Raw() (net.Conn, error) {
 	if c.Conn == nil {
-		return nil, errors.New("connection not initialized")
+		return nil, ConnectionNotInitialized
 	}
 	c.closed = true
 	return c.Conn.Raw(), nil
@@ -72,7 +72,7 @@ func (c *Client) reactor() {
 	for {
 		incomingMessage, incomingContent, err := c.Conn.Read()
 		if err != nil {
-			c.logger().Error().Msgf("Closing connection %s due to error %s", c.addr, err)
+			c.logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
 			_ = c.Close()
 			return
 		}
@@ -91,7 +91,7 @@ func (c *Client) reactor() {
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
 				err := c.Conn.Write(outgoingMessage, &outgoingContent)
 				if err != nil {
-					c.logger().Error().Msgf("Closing connection %s due to error %s", c.addr, err)
+					c.logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
 					_ = c.Close()
 					return
 				}
@@ -99,11 +99,11 @@ func (c *Client) reactor() {
 
 			switch action {
 			case Close:
-				c.logger().Error().Msgf("Closing connection %s because of CLOSE action", c.addr)
+				c.logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
 				_ = c.Close()
 				return
 			case Shutdown:
-				c.logger().Error().Msgf("Closing connection %s because of CLOSE action", c.addr)
+				c.logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
 				_ = c.Close()
 				return
 			default:
