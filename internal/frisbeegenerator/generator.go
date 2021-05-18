@@ -110,7 +110,7 @@ func (g *generator) genMethodConsts() {
 		kvs[index] = fmt.Sprintf("\"%s\":%d", methodString, index+1)
 	}
 
-	g.genFile.P(fmt.Sprintf("var messageTypes = map[string]uint16{ %s }", strings.Join(kvs, ",")))
+	g.genFile.P(fmt.Sprintf("var messageTypes = map[string]uint32{ %s }", strings.Join(kvs, ",")))
 }
 
 func (g *generator) genClientRouterFuncs() {
