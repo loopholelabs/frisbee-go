@@ -2,8 +2,9 @@ package frisbeegenerator
 
 import (
 	"fmt"
+	"github.com/loophole-labs/frisbee/internal/utils"
+	//"github.com/loophole-labs/frisbee"
 	"google.golang.org/protobuf/compiler/protogen"
-	"protoc-gen-go-frisbeegen/internal/utils"
 	"strings"
 )
 
@@ -85,5 +86,11 @@ func (g *generator) genMethodConsts() {
 		kvs[index] = fmt.Sprintf("\"%s\":%d", methodString, index+1)
 	}
 
-	g.genFile.P(fmt.Sprintf("var MessageTypes = map[string]uint16{%s}", strings.Join(kvs, ",")))
+	g.genFile.P(fmt.Sprintf("var MessageTypes = map[string]uint16{ %s }", strings.Join(kvs, ",")))
 }
+
+//
+//func (g *generator) genClientRouter() frisbee.ClientRouter {
+//	g.genFile.P("")
+//	return
+//}

@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/loophole-labs/frisbee/internal/frisbeegenerator"
 	"google.golang.org/protobuf/compiler/protogen"
-	"protoc-gen-go-frisbeegen/internal/frisbeegenerator"
 )
 
 func main() {
