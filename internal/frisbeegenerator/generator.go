@@ -37,6 +37,8 @@ func (g *generator) GenerateFrisbeeFiles() {
 	g.genMethodConsts()
 	g.genClientRouterFuncs()
 	g.genServerRouterFuncs()
+	g.genNewClientContructors()
+	g.genNewServerContructors()
 }
 
 func (g *generator) genDoNotEdit() {
@@ -108,7 +110,7 @@ func (g *generator) genMethodConsts() {
 		kvs[index] = fmt.Sprintf("\"%s\":%d", methodString, index+1)
 	}
 
-	g.genFile.P(fmt.Sprintf("var MessageTypes = map[string]uint16{ %s }", strings.Join(kvs, ",")))
+	g.genFile.P(fmt.Sprintf("var messageTypes = map[string]uint16{ %s }", strings.Join(kvs, ",")))
 }
 
 func (g *generator) genClientRouterFuncs() {
@@ -123,7 +125,7 @@ func (g *generator) genClientRouterFunc(service *protogen.Service) {
 	g.genFile.P("func init", serviceName, "ClientRouter( h ", serviceName, "ClientHandler )frisbee.ClientRouter {")
 	g.genFile.P("router := make(frisbee.ClientRouter)")
 	for _, method := range service.Methods {
-		g.genFile.P("router[MessageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
+		g.genFile.P("router[messageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
 	}
 	g.genFile.P("return router")
 	g.genFile.P("}")
@@ -141,8 +143,34 @@ func (g *generator) genServerRouterFunc(service *protogen.Service) {
 	g.genFile.P("func init", serviceName, "ServerRouter( h ", serviceName, "ServerHandler )frisbee.ServerRouter {")
 	g.genFile.P("router := make(frisbee.ServerRouter)")
 	for _, method := range service.Methods {
-		g.genFile.P("router[MessageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
+		g.genFile.P("router[messageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
 	}
 	g.genFile.P("return router")
+	g.genFile.P("}")
+}
+
+func (g *generator) genNewClientContructors() {
+	for _, service := range g.file.Services {
+		g.genNewClientContructor(service)
+	}
+}
+
+func (g *generator) genNewClientContructor(service *protogen.Service) {
+	serviceName := utils.CamelCase(service.GoName)
+	g.genFile.P("func New", utils.CamelCase(service.GoName), "Client(addr string, h ", serviceName, "ClientHandler, opts ...frisbee.Option) *frisbee.Client {")
+	g.genFile.P("return frisbee.NewClient(addr, init", serviceName, "ClientRouter(h), opts...)")
+	g.genFile.P("}")
+}
+
+func (g *generator) genNewServerContructors() {
+	for _, service := range g.file.Services {
+		g.genNewServerContructor(service)
+	}
+}
+
+func (g *generator) genNewServerContructor(service *protogen.Service) {
+	serviceName := utils.CamelCase(service.GoName)
+	g.genFile.P("func New", utils.CamelCase(service.GoName), "Server(addr string, h ", serviceName, "ServerHandler, opts ...frisbee.Option) *frisbee.Server {")
+	g.genFile.P("return frisbee.NewServer(addr, init", serviceName, "ServerRouter(h), opts...)")
 	g.genFile.P("}")
 }
