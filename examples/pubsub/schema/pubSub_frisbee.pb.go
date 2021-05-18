@@ -15,7 +15,7 @@ type PubSubServerHandler interface {
 	HandleSub(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action)
 }
 
-var messageTypes = map[string]uint16{"Pub": 1, "Sub": 2}
+var messageTypes = map[string]uint32{"Pub": 1, "Sub": 2}
 
 func initPubSubClientRouter(h PubSubClientHandler) frisbee.ClientRouter {
 	router := make(frisbee.ClientRouter)
