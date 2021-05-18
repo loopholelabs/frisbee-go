@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package pubsub;
+
+option go_package = "examples/pubsub";
+
+message empty {}
+
+service PubSub {
+  rpc Pub(empty) returns (empty);
+  rpc Sub(empty) returns (empty);
+}

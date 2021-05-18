@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/loophole-labs/frisbee"
+	pubsub "github.com/loophole-labs/frisbee/examples/pubsub/schema"
 	"hash/crc32"
 	"os"
 	"os/signal"
@@ -15,11 +16,9 @@ var topic = []byte("TOPIC 1")
 var topicHash = crc32.ChecksumIEEE(topic)
 
 func main() {
-	router := make(frisbee.ClientRouter)
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
-
-	c := frisbee.NewClient("127.0.0.1:8192", router)
+	c := pubsub.NewPubSubClient("127.0.0.1:8192", &PubSubberClientHandler{})
 	err := c.Connect()
 	if err != nil {
 		panic(err)
@@ -49,4 +48,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+type PubSubberClientHandler struct{}
+
+func (PubSubberClientHandler) HandlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	panic("implement me")
+}
+
+func (PubSubberClientHandler) HandleSub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	panic("implement me")
 }
