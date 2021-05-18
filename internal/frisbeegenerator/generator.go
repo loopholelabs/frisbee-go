@@ -30,11 +30,13 @@ func New(gen *protogen.Plugin, file *protogen.File) *generator {
 }
 
 func (g *generator) GenerateFrisbeeFiles() {
-
 	g.genDoNotEdit()
 	g.genNeededImports()
-	g.genServices()
+	g.genClientInterfaces()
+	g.genServerInterfaces()
 	g.genMethodConsts()
+	g.genClientRouterFuncs()
+	g.genServerRouterFuncs()
 }
 
 func (g *generator) genDoNotEdit() {
@@ -50,24 +52,44 @@ func (g *generator) genNeededImports() {
 	g.genFile.P(")")
 }
 
-func (g *generator) genServices() {
+func (g *generator) genClientInterfaces() {
 	for _, service := range g.file.Services {
-		g.genService(service)
+		g.genClientInterface(service)
 	}
 }
 
-func (g *generator) genService(service *protogen.Service) {
+func (g *generator) genClientInterface(service *protogen.Service) {
 	serviceName := utils.CamelCase(service.GoName)
-	g.genFile.P("type ", serviceName, "Router interface {")
+	g.genFile.P("type ", serviceName, "ClientHandler interface {")
 	for _, method := range service.Methods {
-		g.genFile.P(getFuncSignature(method))
+		g.genFile.P(getClientFuncSignature(method))
 	}
 	g.genFile.P("}")
 }
 
-func getFuncSignature(method *protogen.Method) string {
+func (g *generator) genServerInterfaces() {
+	for _, service := range g.file.Services {
+		g.genServerInterface(service)
+	}
+}
+
+func (g *generator) genServerInterface(service *protogen.Service) {
+	serviceName := utils.CamelCase(service.GoName)
+	g.genFile.P("type ", serviceName, "ServerHandler interface {")
+	for _, method := range service.Methods {
+		g.genFile.P(getServerFuncSignature(method))
+	}
+	g.genFile.P("}")
+}
+
+func getClientFuncSignature(method *protogen.Method) string {
 	methName := utils.CamelCase(method.GoName)
 	return fmt.Sprintf("Handle%s(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action)", methName)
+}
+
+func getServerFuncSignature(method *protogen.Method) string {
+	methName := utils.CamelCase(method.GoName)
+	return fmt.Sprintf("Handle%s(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action)", methName)
 }
 
 func (g *generator) registerMethodName(method string) {
@@ -89,8 +111,38 @@ func (g *generator) genMethodConsts() {
 	g.genFile.P(fmt.Sprintf("var MessageTypes = map[string]uint16{ %s }", strings.Join(kvs, ",")))
 }
 
-//
-//func (g *generator) genClientRouter() frisbee.ClientRouter {
-//	g.genFile.P("")
-//	return
-//}
+func (g *generator) genClientRouterFuncs() {
+	for _, service := range g.file.Services {
+		g.genClientRouterFunc(service)
+	}
+}
+
+func (g *generator) genClientRouterFunc(service *protogen.Service) {
+	serviceName := utils.CamelCase(service.GoName)
+
+	g.genFile.P("func init", serviceName, "ClientRouter( h ", serviceName, "ClientHandler )frisbee.ClientRouter {")
+	g.genFile.P("router := make(frisbee.ClientRouter)")
+	for _, method := range service.Methods {
+		g.genFile.P("router[MessageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
+	}
+	g.genFile.P("return router")
+	g.genFile.P("}")
+}
+
+func (g *generator) genServerRouterFuncs() {
+	for _, service := range g.file.Services {
+		g.genServerRouterFunc(service)
+	}
+}
+
+func (g *generator) genServerRouterFunc(service *protogen.Service) {
+	serviceName := utils.CamelCase(service.GoName)
+
+	g.genFile.P("func init", serviceName, "ServerRouter( h ", serviceName, "ServerHandler )frisbee.ServerRouter {")
+	g.genFile.P("router := make(frisbee.ServerRouter)")
+	for _, method := range service.Methods {
+		g.genFile.P("router[MessageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
+	}
+	g.genFile.P("return router")
+	g.genFile.P("}")
+}
