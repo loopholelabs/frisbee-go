@@ -1,9 +1,8 @@
-package frisbeegenerator
+package generator
 
 import (
 	"fmt"
 	"github.com/loophole-labs/frisbee/internal/utils"
-	//"github.com/loophole-labs/frisbee"
 	"google.golang.org/protobuf/compiler/protogen"
 	"strings"
 )
@@ -106,7 +105,8 @@ func (g *generator) registerMethodName(method string) {
 func (g *generator) genMethodConsts() {
 	for _, service := range g.file.Services {
 		for _, method := range service.Methods {
-			g.registerMethodName(utils.CamelCase(method.GoName))
+			methName := utils.CamelCase(method.GoName)
+			g.registerMethodName(methName)
 		}
 	}
 	kvs := make([]string, len(g.methodNames))
@@ -129,7 +129,8 @@ func (g *generator) genClientRouterFunc(service *protogen.Service) {
 	g.p("func init", serviceName, "ClientRouter( h ", serviceName, "ClientHandler )frisbee.ClientRouter {")
 	g.p("router := make(frisbee.ClientRouter)")
 	for _, method := range service.Methods {
-		g.p("router[messageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
+		methName := utils.CamelCase(method.GoName)
+		g.p("router[messageTypes[\"", methName, "\"]] = h.Handle", methName)
 	}
 	g.p("return router")
 	g.p("}")
@@ -147,7 +148,8 @@ func (g *generator) genServerRouterFunc(service *protogen.Service) {
 	g.p("func init", serviceName, "ServerRouter( h ", serviceName, "ServerHandler )frisbee.ServerRouter {")
 	g.p("router := make(frisbee.ServerRouter)")
 	for _, method := range service.Methods {
-		g.p("router[messageTypes[\"", utils.CamelCase(method.GoName), "\"]] = h.Handle", utils.CamelCase(method.GoName))
+		methName := utils.CamelCase(method.GoName)
+		g.p("router[messageTypes[\"", methName, "\"]] = h.Handle", methName)
 	}
 	g.p("return router")
 	g.p("}")
@@ -161,7 +163,7 @@ func (g *generator) genNewClientContructors() {
 
 func (g *generator) genNewClientContructor(service *protogen.Service) {
 	serviceName := utils.CamelCase(service.GoName)
-	g.p("func New", utils.CamelCase(service.GoName), "Client(addr string, h ", serviceName, "ClientHandler, opts ...frisbee.Option) *frisbee.Client {")
+	g.p("func New", serviceName, "Client(addr string, h ", serviceName, "ClientHandler, opts ...frisbee.Option) *frisbee.Client {")
 	g.p("return frisbee.NewClient(addr, init", serviceName, "ClientRouter(h), opts...)")
 	g.p("}")
 }
@@ -174,7 +176,7 @@ func (g *generator) genNewServerContructors() {
 
 func (g *generator) genNewServerContructor(service *protogen.Service) {
 	serviceName := utils.CamelCase(service.GoName)
-	g.p("func New", utils.CamelCase(service.GoName), "Server(addr string, h ", serviceName, "ServerHandler, opts ...frisbee.Option) *frisbee.Server {")
+	g.p("func New", serviceName, "Server(addr string, h ", serviceName, "ServerHandler, opts ...frisbee.Option) *frisbee.Server {")
 	g.p("return frisbee.NewServer(addr, init", serviceName, "ServerRouter(h), opts...)")
 	g.p("}")
 }

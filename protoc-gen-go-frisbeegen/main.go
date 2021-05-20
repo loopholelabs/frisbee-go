@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/loophole-labs/frisbee/internal/frisbeegenerator"
+	"github.com/loophole-labs/frisbee/internal/generator"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
@@ -11,7 +11,7 @@ func main() {
 			if !f.Generate {
 				continue
 			}
-			fbg := frisbeegenerator.New(gen, f)
+			fbg := generator.New(gen, f)
 			fbg.GenerateFrisbeeFiles()
 		}
 		return nil
