@@ -23,10 +23,22 @@ type Client struct {
 
 // NewClient returns an initialized client
 func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
+
+	options := loadOptions(opts...)
+
+	newRouter := router
+
+	if options.Heartbeat {
+		newRouter[0] = HandleHeartbeat
+		for message, handler := range router {
+			newRouter[message+1] = handler
+		}
+	}
+
 	return &Client{
 		addr:    addr,
-		router:  router,
-		Options: loadOptions(opts...),
+		router:  newRouter,
+		Options: options,
 		closed:  false,
 	}
 }
@@ -47,10 +59,6 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-func (c *Client) logger() *zerolog.Logger {
-	return c.Options.Logger
-}
-
 func (c *Client) Close() error {
 	c.closed = true
 	return c.Conn.Close()
@@ -66,6 +74,10 @@ func (c *Client) Raw() (net.Conn, error) {
 	}
 	c.closed = true
 	return c.Conn.Raw(), nil
+}
+
+func (c *Client) logger() *zerolog.Logger {
+	return c.Options.Logger
 }
 
 func (c *Client) reactor() {

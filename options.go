@@ -13,6 +13,7 @@ var DefaultLogger = zerolog.New(os.Stdout)
 type Options struct {
 	KeepAlive time.Duration
 	Logger    *zerolog.Logger
+	Heartbeat bool
 }
 
 func loadOptions(options ...Option) *Options {
@@ -28,6 +29,8 @@ func loadOptions(options ...Option) *Options {
 	if opts.KeepAlive == 0 {
 		opts.KeepAlive = time.Minute * 3
 	}
+
+	opts.Heartbeat = !opts.Heartbeat
 
 	return opts
 }
@@ -47,5 +50,11 @@ func WithKeepAlive(keepAlive time.Duration) Option {
 func WithLogger(logger *zerolog.Logger) Option {
 	return func(opts *Options) {
 		opts.Logger = logger
+	}
+}
+
+func WithHeartbeat(heartbeat bool) Option {
+	return func(opts *Options) {
+		opts.Heartbeat = !heartbeat
 	}
 }
