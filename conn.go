@@ -150,32 +150,46 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	return nil
 }
 
-func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
-	if len(buf) < min {
-		return 0, InvalidBufferLength
-	}
-	for n < min && err == nil {
-		var nn int
-		nn, err = c.conn.Read(buf[n:])
-		n += nn
-	}
-	if n >= min {
-		err = nil
-	}
-	return
-}
+//func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
+//	if len(buf) < min {
+//		return 0, InvalidBufferLength
+//	}
+//	for n < min && err == nil {
+//		var nn int
+//		nn, err = c.conn.Read(buf[n:])
+//		n += nn
+//	}
+//	if n >= min {
+//		err = nil
+//	}
+//	return
+//}
 
 func (c *Conn) readLoop() {
 	defer c.wg.Done()
 	buf := make([]byte, 1<<19)
 	var index int
 	for {
-		n, err := c.readAtLeast(buf[:cap(buf)], protocol.MessageV0Size)
-		if err != nil {
-			if !os.IsTimeout(err) {
-				_ = c.close(err)
-			}
+		buf = buf[:cap(buf)]
+		if len(buf) < protocol.MessageV0Size {
+			_ = c.close(InvalidBufferLength)
 			break
+		}
+		var n int
+		var err error
+		for n < protocol.MessageV0Size {
+			var nn int
+			nn, err = c.conn.Read(buf[n:])
+			n += nn
+			if err != nil {
+				if n < protocol.MessageV0Size {
+					if !os.IsTimeout(err) {
+						_ = c.close(err)
+					}
+					return
+				}
+				break
+			}
 		}
 
 		index = 0
@@ -201,15 +215,30 @@ func (c *Conn) readLoop() {
 						buf = buf[:cap(buf)]
 					}
 					cp := copy(readContent, buf[index:n])
-					n, err = c.readAtLeast(buf[:cap(buf)], int(decodedMessage.ContentLength)-cp)
-					if err != nil {
-						if !os.IsTimeout(err) {
-							_ = c.close(err)
-						}
+					buf = buf[:cap(buf)]
+					min := int(decodedMessage.ContentLength) - cp
+					if len(buf) < min {
+						_ = c.close(InvalidBufferLength)
 						return
 					}
-					copy(readContent[cp:], buf[:int(decodedMessage.ContentLength)-cp])
-					index = int(decodedMessage.ContentLength) - cp
+					n = 0
+					for n < min {
+						var nn int
+						nn, err = c.conn.Read(buf[n:])
+						n += nn
+						if err != nil {
+							if n < min {
+								if !os.IsTimeout(err) {
+									_ = c.close(err)
+								}
+								return
+							}
+							err = nil
+							break
+						}
+					}
+					copy(readContent[cp:], buf[:min])
+					index = min
 				} else {
 					copy(readContent, buf[index:index+int(decodedMessage.ContentLength)])
 					index += int(decodedMessage.ContentLength)
@@ -232,23 +261,51 @@ func (c *Conn) readLoop() {
 			}
 			if n == index {
 				index = 0
-				n, err = c.readAtLeast(buf[:cap(buf)], protocol.MessageV0Size)
-				if err != nil {
-					if !os.IsTimeout(err) {
-						_ = c.close(err)
+				buf = buf[:cap(buf)]
+				if len(buf) < protocol.MessageV0Size {
+					_ = c.close(InvalidBufferLength)
+					break
+				}
+				n = 0
+				for n < protocol.MessageV0Size {
+					var nn int
+					nn, err = c.conn.Read(buf[n:])
+					n += nn
+					if err != nil {
+						if n < protocol.MessageV0Size {
+							if !os.IsTimeout(err) {
+								_ = c.close(err)
+							}
+							return
+						}
+						break
 					}
-					return
 				}
 			} else if n-index < protocol.MessageV0Size {
 				copy(buf, buf[index:n])
 				n -= index
 				index = n
-				n, err = c.readAtLeast(buf[n:cap(buf)], protocol.MessageV0Size-index)
-				if err != nil {
-					if !os.IsTimeout(err) {
-						_ = c.close(err)
+
+				buf = buf[:cap(buf)]
+				min := protocol.MessageV0Size - index
+				if len(buf) < min {
+					_ = c.close(InvalidBufferLength)
+					break
+				}
+				n = 0
+				for n < min {
+					var nn int
+					nn, err = c.conn.Read(buf[index+n:])
+					n += nn
+					if err != nil {
+						if n < min {
+							if !os.IsTimeout(err) {
+								_ = c.close(err)
+							}
+							return
+						}
+						break
 					}
-					return
 				}
 				n += index
 				index = 0
