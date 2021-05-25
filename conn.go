@@ -233,7 +233,6 @@ func (c *Conn) readLoop() {
 								}
 								return
 							}
-							err = nil
 							break
 						}
 					}
