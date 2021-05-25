@@ -9,6 +9,7 @@ import (
 	"github.com/loophole-labs/frisbee/internal/ringbuffer"
 	"github.com/rs/zerolog"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -17,7 +18,7 @@ import (
 
 var (
 	writePool    = pbufio.NewWriterPool(1024, 1<<32)
-	silentLogger = zerolog.New(os.Stdout)
+	silentLogger = zerolog.New(ioutil.Discard)
 )
 
 type Conn struct {

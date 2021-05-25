@@ -14,7 +14,7 @@ type Server struct {
 	addr       string
 	router     ServerRouter
 	shutdown   bool
-	Options    *Options
+	options    *Options
 	OnOpened   func(server *Server, c *Conn) Action
 	OnClosed   func(server *Server, c *Conn, err error) Action
 	OnShutdown func(server *Server)
@@ -25,7 +25,7 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	return &Server{
 		addr:    addr,
 		router:  router,
-		Options: loadOptions(opts...),
+		options: loadOptions(opts...),
 	}
 }
 
@@ -80,7 +80,7 @@ func (s *Server) Start() error {
 				if s.shutdown {
 					return
 				}
-				s.logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
+				s.Logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
 				return
 			}
 			go s.handleConn(newConn)
@@ -92,8 +92,8 @@ func (s *Server) Start() error {
 
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
-	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.Options.KeepAlive)
-	frisbeeConn := New(newConn, nil)
+	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
+	frisbeeConn := New(newConn, s.Logger())
 
 	openedAction := s.onOpened(frisbeeConn)
 
@@ -156,8 +156,8 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 }
 
-func (s *Server) logger() *zerolog.Logger {
-	return s.Options.Logger
+func (s *Server) Logger() *zerolog.Logger {
+	return s.options.Logger
 }
 
 func (s *Server) Shutdown() error {
