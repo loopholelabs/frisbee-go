@@ -14,12 +14,12 @@ type ClientRouter map[uint32]ClientRouterFunc
 
 // Client accepts and handles inbound messages
 type Client struct {
-	addr    string
-	conn    *Conn
-	router  ClientRouter
-	options *Options
+	addr          string
+	conn          *Conn
+	router        ClientRouter
+	options       *Options
 	messageOffset uint32
-	closed  bool
+	closed        bool
 }
 
 // NewClient returns an initialized client
@@ -39,11 +39,11 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	}
 
 	return &Client{
-		addr:    addr,
-		router:  newRouter,
-		options: options,
+		addr:          addr,
+		router:        newRouter,
+		options:       options,
 		messageOffset: messageOffset,
-		closed:  false,
+		closed:        false,
 	}
 }
 
