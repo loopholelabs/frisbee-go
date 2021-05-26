@@ -18,7 +18,7 @@ var topicHash = crc32.ChecksumIEEE(topic)
 func main() {
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
-	c := pubsub.NewPubSubClient("127.0.0.1:8192", &PubSubberClientHandler{})
+	c := pubsub.NewClient("127.0.0.1:8192", &ClientHandler{})
 	err := c.Connect()
 	if err != nil {
 		panic(err)
@@ -50,12 +50,12 @@ func main() {
 	}
 }
 
-type PubSubberClientHandler struct{}
+type ClientHandler struct{}
 
-func (PubSubberClientHandler) HandlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func (ClientHandler) HandlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	panic("implement me")
 }
 
-func (PubSubberClientHandler) HandleSub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func (ClientHandler) HandleSub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	panic("implement me")
 }

@@ -14,9 +14,9 @@ const SUB = uint32(2)
 
 var subscribers = make(map[uint32][]*frisbee.Conn)
 
-type PubSubberServerHandler struct{}
+type ServerHandler struct{}
 
-func (PubSubberServerHandler) HandleSub(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func (ServerHandler) HandleSub(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
 		log.Printf("Server Received SUB on topic %s from %s", string(incomingContent), c.RemoteAddr())
 		checksum := crc32.ChecksumIEEE(incomingContent)
@@ -25,7 +25,7 @@ func (PubSubberServerHandler) HandleSub(c *frisbee.Conn, incomingMessage frisbee
 	return
 }
 
-func (PubSubberServerHandler) HandlePub(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func (ServerHandler) HandlePub(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.ContentLength > 0 {
 		log.Printf("Server Received PUB on hashed topic %d with content %s", incomingMessage.From, string(incomingContent))
 		if connections := subscribers[incomingMessage.From]; connections != nil {
@@ -47,7 +47,7 @@ func (PubSubberServerHandler) HandlePub(_ *frisbee.Conn, incomingMessage frisbee
 func main() {
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
-	s := pubsub.NewPubSubServer(":8192", &PubSubberServerHandler{})
+	s := pubsub.NewServer(":8192", &ServerHandler{})
 	_ = s.Start()
 
 	<-exit
