@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/loophole-labs/frisbee"
+	pubsub "github.com/loophole-labs/frisbee/examples/pubsub/schema"
 	"github.com/rs/zerolog/log"
 	"hash/crc32"
 	"os"
@@ -14,21 +15,24 @@ const SUB = uint32(2)
 var topic = []byte("TOPIC 1")
 var topicHash = crc32.ChecksumIEEE(topic)
 
+type ClientHandler struct{}
+
 // Handle the PUB message type
-func handlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+func (ClientHandler) HandlePub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 	if incomingMessage.From == topicHash {
 		log.Printf("Client Received Message on Topic %s: %s", string(topic), string(incomingContent))
 	}
 	return
 }
 
+func (ClientHandler) HandleSub(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	panic("panic")
+}
 func main() {
-	router := make(frisbee.ClientRouter)
-	router[PUB] = handlePub
 	exit := make(chan os.Signal)
 	signal.Notify(exit, os.Interrupt)
 
-	c := frisbee.NewClient("127.0.0.1:8192", router)
+	c := pubsub.NewClient("127.0.0.1:8192", &ClientHandler{})
 	err := c.Connect()
 	if err != nil {
 		panic(err)
