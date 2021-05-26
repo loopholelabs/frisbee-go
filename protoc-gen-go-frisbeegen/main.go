@@ -12,7 +12,7 @@ func main() {
 				continue
 			}
 			fbg := generator.New(gen, f)
-			fbg.GenerateFrisbeeFiles()
+			fbg.GenerateFiles()
 		}
 		return nil
 	})
