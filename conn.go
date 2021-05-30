@@ -10,7 +10,6 @@ import (
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -24,8 +23,8 @@ const (
 )
 
 var (
-	writePool    = pbufio.NewWriterPool(1024, 1<<32)
-	silentLogger = zerolog.New(ioutil.Discard)
+	writePool     = pbufio.NewWriterPool(1024, 1<<32)
+	defaultLogger = zerolog.New(os.Stdout)
 )
 
 type Conn struct {
@@ -37,7 +36,7 @@ type Conn struct {
 	incomingMessages *ringbuffer.RingBuffer
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
-	Error            *atomic.Error
+	error            *atomic.Error
 }
 
 func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger) (*Conn, error) {
@@ -59,11 +58,11 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 		incomingMessages: ringbuffer.NewRingBuffer(1 << 19),
 		flusher:          make(chan struct{}, 1024),
 		logger:           l,
-		Error:            atomic.NewError(nil),
+		error:            atomic.NewError(ConnectionClosed),
 	}
 
 	if l == nil {
-		conn.logger = &silentLogger
+		conn.logger = &defaultLogger
 	}
 
 	conn.wg.Add(2)
@@ -73,7 +72,127 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 	return
 }
 
+func (c *Conn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+func (c *Conn) Write(message *Message, content *[]byte) error {
+	if content != nil && int(message.ContentLength) != len(*content) {
+		return InvalidContentLength
+	}
+
+	var encodedMessage [protocol.MessageV0Size]byte
+
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
+
+	if c.state.Load() != CONNECTED {
+		return c.Error()
+	}
+
+	c.Lock()
+	_, err := c.writer.Write(encodedMessage[:])
+	if err != nil {
+		c.Unlock()
+		if c.state.Load() != CONNECTED {
+			err = c.Error()
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return errors.WithContext(err, WRITE)
+		}
+		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+		return c.closeWithError(err)
+	}
+	if content != nil {
+		_, err = c.writer.Write(*content)
+		if err != nil {
+			c.Unlock()
+			if c.state.Load() != CONNECTED {
+				err = c.Error()
+				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return errors.WithContext(err, WRITE)
+			}
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return c.closeWithError(err)
+		}
+	}
+
+	if len(c.flusher) == 0 {
+		select {
+		case c.flusher <- struct{}{}:
+		default:
+		}
+	}
+
+	c.Unlock()
+
+	return nil
+}
+
+func (c *Conn) Flush() error {
+	c.Lock()
+	if c.writer.Buffered() > 0 {
+		err := c.writer.Flush()
+		if err != nil {
+			c.Unlock()
+			_ = c.closeWithError(err)
+			return err
+		}
+	}
+	c.Unlock()
+	return nil
+}
+
+func (c *Conn) Read() (*Message, *[]byte, error) {
+	if c.state.Load() != CONNECTED {
+		return nil, nil, c.Error()
+	}
+
+	readPacket, err := c.incomingMessages.Pop()
+	if err != nil {
+		if c.state.Load() != CONNECTED {
+			err = c.Error()
+			c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
+			return nil, nil, errors.WithContext(err, POP)
+		}
+		c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
+		return nil, nil, errors.WithContext(c.closeWithError(err), POP)
+	}
+
+	return (*Message)(readPacket.Message), readPacket.Content, nil
+}
+
+func (c *Conn) Logger() *zerolog.Logger {
+	return c.logger
+}
+
+func (c *Conn) Error() error {
+	return c.error.Load()
+}
+
+func (c *Conn) Raw() net.Conn {
+	_ = c.close()
+	return c.conn
+}
+
+func (c *Conn) Close() error {
+	err := c.close()
+	if errors.Is(err, ConnectionClosed) {
+		return nil
+	}
+	_ = c.conn.Close()
+	return err
+}
+
 func (c *Conn) killGoroutines() {
+	c.incomingMessages.Close()
 	close(c.flusher)
 	_ = c.conn.SetReadDeadline(time.Now())
 	c.wg.Wait()
@@ -82,21 +201,18 @@ func (c *Conn) killGoroutines() {
 
 func (c *Conn) pause() error {
 	if c.state.CAS(CONNECTED, PAUSED) {
+		c.error.Store(ConnectionPaused)
 		c.killGoroutines()
-		c.Lock()
-		if c.writer.Buffered() > 0 {
-			_ = c.writer.Flush()
-		}
-		c.Unlock()
-		c.Error.Store(ConnectionPaused)
 		return nil
+	} else if c.state.Load() == PAUSED {
+		return ConnectionPaused
 	}
 	return ConnectionNotInitialized
 }
 
 func (c *Conn) close() error {
 	if c.state.CAS(CONNECTED, CLOSED) {
-		c.incomingMessages.Close()
+		c.error.Store(ConnectionClosed)
 		c.killGoroutines()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
@@ -104,14 +220,12 @@ func (c *Conn) close() error {
 		}
 		writePool.Put(c.writer)
 		c.Unlock()
-		c.Error.Store(ConnectionClosed)
 		return nil
 	} else if c.state.CAS(PAUSED, CLOSED) {
-		c.incomingMessages.Close()
+		c.error.Store(ConnectionClosed)
 		c.Lock()
 		writePool.Put(c.writer)
 		c.Unlock()
-		c.Error.Store(ConnectionClosed)
 		return nil
 	}
 	return ConnectionClosed
@@ -119,37 +233,29 @@ func (c *Conn) close() error {
 
 func (c *Conn) closeWithError(err error) error {
 	if os.IsTimeout(err) {
+		c.Logger().Debug().Msgf("connection timed out")
 		return err
-	}
-
-	if errors.Is(err, io.EOF) {
+	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
 		pauseError := c.pause()
 		if errors.Is(pauseError, ConnectionNotInitialized) {
+			c.Logger().Debug().Msgf("attempted to close connection with error, but connection not initialized (inner error: %+v)", err)
 			return ConnectionNotInitialized
+		} else {
+			c.Logger().Debug().Msgf("attempted to close connection with error, but error was EOF so pausing connection instead (inner error: %+v)", err)
+			return ConnectionPaused
 		}
 	} else {
 		closeError := c.close()
 		if errors.Is(closeError, ConnectionClosed) {
+			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
 			return ConnectionClosed
+		} else {
+			c.Logger().Debug().Msgf("closing connection with error: %+v", err)
 		}
 	}
-
-	c.Error.Store(err)
+	c.error.Store(err)
 	_ = c.conn.Close()
 	return err
-}
-
-func (c *Conn) Raw() net.Conn {
-	_ = c.close()
-	return c.conn
-}
-
-func (c *Conn) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
-}
-
-func (c *Conn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
 }
 
 func (c *Conn) flushLoop() {
@@ -172,52 +278,6 @@ func (c *Conn) flushLoop() {
 	}
 }
 
-func (c *Conn) Write(message *Message, content *[]byte) error {
-	if content != nil && int(message.ContentLength) != len(*content) {
-		return InvalidContentLength
-	}
-
-	var encodedMessage [protocol.MessageV0Size]byte
-
-	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation)
-	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
-
-	if c.state.Load() != CONNECTED {
-		return ConnectionClosed
-	}
-
-	c.Lock()
-	_, err := c.writer.Write(encodedMessage[:])
-	if err != nil {
-		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-		c.Unlock()
-		return c.closeWithError(err)
-	}
-	if content != nil {
-		_, err = c.writer.Write(*content)
-		if err != nil {
-			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-			c.Unlock()
-			return c.closeWithError(err)
-		}
-	}
-
-	if len(c.flusher) == 0 {
-		select {
-		case c.flusher <- struct{}{}:
-		default:
-		}
-	}
-
-	c.Unlock()
-
-	return nil
-}
-
 func (c *Conn) readLoop() {
 	buf := make([]byte, 1<<19)
 	var index int
@@ -237,9 +297,7 @@ func (c *Conn) readLoop() {
 			if err != nil {
 				if n < protocol.MessageV0Size {
 					c.wg.Done()
-					if !os.IsTimeout(err) {
-						_ = c.closeWithError(err)
-					}
+					_ = c.closeWithError(err)
 					return
 				}
 				break
@@ -284,9 +342,8 @@ func (c *Conn) readLoop() {
 						if err != nil {
 							if n < min {
 								c.wg.Done()
-								if !os.IsTimeout(err) {
-									_ = c.closeWithError(err)
-								}
+								_ = c.closeWithError(err)
+
 								return
 							}
 							break
@@ -336,9 +393,7 @@ func (c *Conn) readLoop() {
 					if err != nil {
 						if n < protocol.MessageV0Size {
 							c.wg.Done()
-							if !os.IsTimeout(err) {
-								_ = c.closeWithError(err)
-							}
+							_ = c.closeWithError(err)
 							return
 						}
 						break
@@ -364,9 +419,7 @@ func (c *Conn) readLoop() {
 					if err != nil {
 						if n < min {
 							c.wg.Done()
-							if !os.IsTimeout(err) {
-								_ = c.closeWithError(err)
-							}
+							_ = c.closeWithError(err)
 							return
 						}
 						break
@@ -377,29 +430,4 @@ func (c *Conn) readLoop() {
 			}
 		}
 	}
-}
-
-func (c *Conn) Read() (*Message, *[]byte, error) {
-	if c.state.Load() != CONNECTED {
-		return nil, nil, ConnectionClosed
-	}
-
-	readPacket, err := c.incomingMessages.Pop()
-	if err != nil {
-		return nil, nil, errors.WithContext(c.closeWithError(err), POP)
-	}
-
-	return (*Message)(readPacket.Message), readPacket.Content, nil
-}
-
-func (c *Conn) Logger() *zerolog.Logger {
-	return c.logger
-}
-
-func (c *Conn) Close() error {
-	err := c.close()
-	if errors.Is(err, ConnectionClosed) {
-		return nil
-	}
-	return err
 }
