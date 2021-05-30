@@ -30,7 +30,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	messageOffset := uint32(0)
 	newRouter := ClientRouter{}
 
-	if options.Heartbeat {
+	if options.Heartbeat != 0 {
 		newRouter[messageOffset] = handleHeartbeat
 		messageOffset++
 	}
