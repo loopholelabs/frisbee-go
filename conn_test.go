@@ -2,8 +2,10 @@ package frisbee
 
 import (
 	"crypto/rand"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"net"
 	"testing"
 )
@@ -11,10 +13,12 @@ import (
 func TestNewConn(t *testing.T) {
 	const messageSize = 512
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	message := &Message{
 		To:            16,
@@ -43,16 +47,23 @@ func TestNewConn(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, *message, *readMessage)
 	assert.Equal(t, data, *content)
+
+	err = readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
 }
 
 func TestLargeWrite(t *testing.T) {
 	const testSize = 100000
 	const messageSize = 512
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([][]byte, testSize)
 
@@ -88,6 +99,8 @@ func TestRawConn(t *testing.T) {
 	const testSize = 100000
 	const messageSize = 32
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
@@ -95,6 +108,7 @@ func TestRawConn(t *testing.T) {
 	require.NoError(t, err)
 
 	go func() {
+		var err error
 		reader, err = l.Accept()
 		require.NoError(t, err)
 		start <- struct{}{}
@@ -104,8 +118,8 @@ func TestRawConn(t *testing.T) {
 	require.NoError(t, err)
 	<-start
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 	_, _ = rand.Read(randomData)
@@ -158,14 +172,95 @@ func TestRawConn(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestReadClose(t *testing.T) {
+	reader, writer := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
+
+	message := &Message{
+		To:            16,
+		From:          32,
+		Id:            64,
+		Operation:     32,
+		ContentLength: 0,
+	}
+	err := writerConn.Write(message, nil)
+	assert.NoError(t, err)
+
+	readMessage, content, err := readerConn.Read()
+	assert.NoError(t, err)
+	assert.NotNil(t, readMessage)
+	assert.Equal(t, *message, *readMessage)
+	assert.Nil(t, content)
+
+	err = readerConn.conn.Close()
+	assert.NoError(t, err)
+
+	err = writerConn.Write(message, nil)
+	assert.NoError(t, err)
+	err = writerConn.Flush()
+	assert.Error(t, err)
+	assert.ErrorIs(t, writerConn.Error(), ConnectionPaused)
+
+	err = readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
+}
+
+func TestWriteClose(t *testing.T) {
+	reader, writer := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
+
+	message := &Message{
+		To:            16,
+		From:          32,
+		Id:            64,
+		Operation:     32,
+		ContentLength: 0,
+	}
+	err := writerConn.Write(message, nil)
+	assert.NoError(t, err)
+
+	readMessage, content, err := readerConn.Read()
+	assert.NoError(t, err)
+	assert.NotNil(t, readMessage)
+	assert.Equal(t, *message, *readMessage)
+	assert.Nil(t, content)
+
+	err = writerConn.Write(message, nil)
+	assert.NoError(t, err)
+
+	err = writerConn.conn.Close()
+	assert.NoError(t, err)
+
+	_, _, err = readerConn.Read()
+	assert.ErrorIs(t, err, ConnectionPaused)
+	assert.ErrorIs(t, readerConn.Error(), ConnectionPaused)
+
+	err = readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
+}
+
 func BenchmarkThroughputPipe32(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 32
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -204,10 +299,12 @@ func BenchmarkThroughputPipe512(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 512
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -246,6 +343,8 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 32
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
@@ -259,8 +358,8 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -300,6 +399,8 @@ func BenchmarkThroughputNetwork512(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 512
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
@@ -313,8 +414,8 @@ func BenchmarkThroughputNetwork512(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -354,6 +455,8 @@ func BenchmarkThroughputNetwork1024(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 1024
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
@@ -367,8 +470,8 @@ func BenchmarkThroughputNetwork1024(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -408,6 +511,8 @@ func BenchmarkThroughputNetwork2048(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 2048
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
@@ -421,8 +526,8 @@ func BenchmarkThroughputNetwork2048(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -462,6 +567,8 @@ func BenchmarkThroughputNetwork4096(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 4096
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
@@ -475,8 +582,8 @@ func BenchmarkThroughputNetwork4096(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -516,6 +623,8 @@ func BenchmarkThroughputNetwork1mb(b *testing.B) {
 	const testSize = 10
 	const messageSize = 1 << 20
 
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
@@ -529,8 +638,8 @@ func BenchmarkThroughputNetwork1mb(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, nil)
-	writerConn := New(writer, nil)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 

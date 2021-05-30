@@ -36,7 +36,7 @@ func main() {
 
 	s := frisbee.NewServer(fmt.Sprintf(":%d", port), router, frisbee.WithLogger(&emptyLogger))
 	s.OnOpened = func(server *frisbee.Server, c *frisbee.Conn) frisbee.Action {
-		server.Options.Logger.Debug().Msgf("Client connected: %s", c.RemoteAddr())
+		server.Logger().Debug().Msgf("Client connected: %s", c.RemoteAddr())
 		return frisbee.None
 	}
 
