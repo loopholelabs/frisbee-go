@@ -4,3 +4,11 @@ func handleHeartbeat(_ Message, _ []byte) (outgoingMessage *Message, outgoingCon
 	outgoingMessage = &Message{}
 	return
 }
+
+func sendPing() {
+
+}
+
+func heartbeat() {
+
+}

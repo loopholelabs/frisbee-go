@@ -3,6 +3,7 @@ package frisbee
 import (
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 	"net"
 )
 
@@ -19,7 +20,7 @@ type Client struct {
 	router        ClientRouter
 	options       *Options
 	messageOffset uint32
-	closed        bool
+	closed        *atomic.Bool
 }
 
 // NewClient returns an initialized client
@@ -43,7 +44,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 		router:        newRouter,
 		options:       options,
 		messageOffset: messageOffset,
-		closed:        false,
+		closed:        atomic.NewBool(false),
 	}
 }
 
@@ -64,7 +65,7 @@ func (c *Client) Connect() error {
 }
 
 func (c *Client) Close() error {
-	c.closed = true
+	c.closed.Store(true)
 	return c.conn.Close()
 }
 
@@ -76,7 +77,7 @@ func (c *Client) Raw() (net.Conn, error) {
 	if c.conn == nil {
 		return nil, ConnectionNotInitialized
 	}
-	c.closed = true
+	c.closed.Store(true)
 	return c.conn.Raw(), nil
 }
 
@@ -105,7 +106,7 @@ func (c *Client) reactor() {
 			}
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
-				err := c.conn.Write(outgoingMessage, &outgoingContent)
+				err = c.conn.Write(outgoingMessage, &outgoingContent)
 				if err != nil {
 					c.Logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
 					_ = c.Close()

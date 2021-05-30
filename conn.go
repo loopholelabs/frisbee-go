@@ -8,6 +8,7 @@ import (
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/loophole-labs/frisbee/internal/ringbuffer"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 	"io"
 	"io/ioutil"
 	"net"
@@ -27,9 +28,9 @@ type Conn struct {
 	writer   *bufio.Writer
 	flush    chan struct{}
 	messages *ringbuffer.RingBuffer
-	closed   bool
+	closed   *atomic.Bool
 	logger   *zerolog.Logger
-	Error    error
+	Error    *atomic.Error
 	wg       sync.WaitGroup
 }
 
@@ -49,8 +50,9 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 		conn:     c,
 		writer:   writePool.Get(c, 1<<19),
 		messages: ringbuffer.NewRingBuffer(1 << 19),
-		closed:   false,
+		closed:   atomic.NewBool(false),
 		flush:    make(chan struct{}, 1024),
+		Error:    atomic.NewError(nil),
 		logger:   l,
 	}
 
@@ -66,12 +68,12 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 }
 
 func (c *Conn) Raw() net.Conn {
-	if c.closed {
+	if c.closed.Load() {
 		return c.conn
 	}
 	c.Lock()
 	c.messages.Close()
-	c.closed = true
+	c.closed.Store(true)
 	close(c.flush)
 	if c.writer.Buffered() > 0 {
 		_ = c.writer.Flush()
@@ -114,7 +116,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		return InvalidContentLength
 	}
 
-	if c.closed {
+	if c.closed.Load() {
 		return ConnectionClosed
 	}
 
@@ -149,21 +151,6 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 
 	return nil
 }
-
-//func (c *Conn) readAtLeast(buf []byte, min int) (n int, err error) {
-//	if len(buf) < min {
-//		return 0, InvalidBufferLength
-//	}
-//	for n < min && err == nil {
-//		var nn int
-//		nn, err = c.conn.Read(buf[n:])
-//		n += nn
-//	}
-//	if n >= min {
-//		err = nil
-//	}
-//	return
-//}
 
 func (c *Conn) readLoop() {
 	defer c.wg.Done()
@@ -314,7 +301,7 @@ func (c *Conn) readLoop() {
 }
 
 func (c *Conn) Read() (*Message, *[]byte, error) {
-	if c.closed {
+	if c.closed.Load() {
 		return nil, nil, ConnectionClosed
 	}
 
@@ -331,8 +318,8 @@ func (c *Conn) Logger() *zerolog.Logger {
 }
 
 func (c *Conn) close(connError error) (err error) {
-	if c.closed {
-		return c.Error
+	if c.closed.Load() {
+		return c.Error.Load()
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -342,15 +329,17 @@ func (c *Conn) close(connError error) (err error) {
 	conn := c.Raw()
 	if connError != nil && connError != io.EOF {
 		c.logger.Error().Msgf(errors.WithContext(connError, CLOSE).Error())
-		c.Error = connError
+		c.Lock()
+		c.Error.Store(connError)
+		c.Unlock()
 		closeError := conn.Close()
 		if closeError != nil && closeError != io.EOF {
 			c.logger.Error().Msgf(errors.WithContext(closeError, CLOSE).Error())
 		}
-		return c.Error
+		return c.Error.Load()
 	}
-	c.Error = conn.Close()
-	return c.Error
+	c.Error.Store(conn.Close())
+	return c.Error.Load()
 }
 
 func (c *Conn) Close() error {

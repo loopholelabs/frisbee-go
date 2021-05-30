@@ -95,6 +95,7 @@ func TestRawConn(t *testing.T) {
 	require.NoError(t, err)
 
 	go func() {
+		var err error
 		reader, err = l.Accept()
 		require.NoError(t, err)
 		start <- struct{}{}
