@@ -5,10 +5,10 @@ func handleHeartbeat(_ Message, _ []byte) (outgoingMessage *Message, outgoingCon
 	return
 }
 
-func sendPing() {
-
-}
-
-func heartbeat() {
-
-}
+//func sendPing() {
+//
+//}
+//
+//func heartbeat() {
+//
+//}
