@@ -5,6 +5,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
+	"time"
 )
 
 // ClientRouterFunc defines a message handler type
@@ -30,8 +31,8 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	messageOffset := uint32(0)
 	newRouter := ClientRouter{}
 
-	if options.Heartbeat != 0 {
-		newRouter[messageOffset] = handleHeartbeat
+	if options.Heartbeat != time.Duration(-1) {
+		newRouter[messageOffset] = handleHeartbeatClient
 		messageOffset++
 	}
 
@@ -58,8 +59,15 @@ func (c *Client) Connect() error {
 	c.Logger().Info().Msgf("Connected to %s", c.addr)
 
 	go c.reactor()
-
 	c.Logger().Debug().Msgf("Reactor started for %s", c.addr)
+
+	messageOffset := c.messageOffset
+	if c.options.Heartbeat != time.Duration(-1) {
+		messageOffset--
+		heartbeatMessageType = messageOffset
+		go c.heartbeat()
+		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
+	}
 
 	return nil
 }
@@ -71,6 +79,10 @@ func (c *Client) Close() error {
 
 func (c *Client) Write(message *Message, content *[]byte) error {
 	return c.conn.Write(message, content)
+}
+
+func (c *Client) writeQueue() int {
+	return c.conn.WriteQueue()
 }
 
 func (c *Client) Raw() (net.Conn, error) {

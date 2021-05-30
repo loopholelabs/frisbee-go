@@ -150,6 +150,13 @@ func (c *Conn) Flush() error {
 	return nil
 }
 
+func (c *Conn) WriteQueue() int {
+	c.Lock()
+	i := c.writer.Buffered()
+	c.Unlock()
+	return i
+}
+
 func (c *Conn) Read() (*Message, *[]byte, error) {
 	if c.state.Load() != CONNECTED {
 		return nil, nil, c.Error()

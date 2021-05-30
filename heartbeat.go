@@ -1,57 +1,45 @@
 package frisbee
 
-func handleHeartbeat(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
-	outgoingMessage = &Message{}
+import "time"
+
+var heartbeatReceived = make(chan struct{}, 1)
+var heartbeatMessageType = uint32(0)
+
+func handleHeartbeatClient(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	heartbeatReceived <- struct{}{}
+	outgoingMessage = &Message{
+		Operation: heartbeatMessageType,
+	}
 	return
 }
 
-//func (c *Client) heartbeat() (time.Duration, error) {
-//for {
-//	select {
-//	case <-time.After(s.config.KeepAliveInterval):
-//		_, err := s.Ping()
-//		if err != nil {
-//			if err != ErrSessionShutdown {
-//				s.logger.Printf("[ERR] yamux: keepalive failed: %v", err)
-//				s.exitErr(ErrKeepAliveTimeout)
-//			}
-//			return
-//		}
-//	case <-s.shutdownCh:
-//		return
-//	}
-//}
-//
-//ch := make(chan struct{})
-//
-//// Get a new ping id, mark as pending
-//s.pingLock.Lock()
-//id := s.pingID
-//s.pingID++
-//s.pings[id] = ch
-//s.pingLock.Unlock()
-//
-//// Send the ping request
-//hdr := header(make([]byte, headerSize))
-//hdr.encode(typePing, flagSYN, 0, id)
-//if err := s.waitForSend(hdr, nil); err != nil {
-//	return 0, err
-//}
-//
-//// Wait for a response
-//start := time.Now()
-//select {
-//case <-ch:
-//case <-time.After(s.config.ConnectionWriteTimeout):
-//	s.pingLock.Lock()
-//	delete(s.pings, id) // Ignore it if a response comes later.
-//	s.pingLock.Unlock()
-//	return 0, ErrTimeout
-//case <-s.shutdownCh:
-//	return 0, ErrSessionShutdown
-//}
-//
-//// Compute the RTT
-//return time.Now().Sub(start), nil
+func handleHeartbeatServer(c *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	c.Logger().Printf("GOT THE HEARTBEAT AT THE SERVER!")
+	heartbeatReceived <- struct{}{}
+	outgoingMessage = &Message{
+		Operation: heartbeatMessageType,
+	}
+	return
+}
 
-//}
+func (c *Client) heartbeat() {
+	for {
+		<-time.After(c.options.Heartbeat)
+		if c.writeQueue() == 0 {
+			c.Logger().Debug().Msgf("Sending heartbeat")
+			err := c.Write(&Message{
+				Operation: heartbeatMessageType,
+			}, nil)
+			if err != nil {
+				c.Logger().Error().Err(err).Msg("")
+				return
+			}
+			start := time.Now()
+			c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
+			<-heartbeatReceived
+			c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Now().Sub(start))
+		} else {
+			c.Logger().Debug().Msgf("Skipping heartbeat because writeQueue > 0")
+		}
+	}
+}

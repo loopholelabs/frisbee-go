@@ -30,6 +30,19 @@ func TestWithOptions(t *testing.T) {
 	assert.Equal(t, &DefaultLogger, options.Logger)
 }
 
+func TestDisableOptions(t *testing.T) {
+	option := WithOptions(Options{
+		KeepAlive: -1,
+		Heartbeat: -1,
+	})
+
+	options := loadOptions(option)
+
+	assert.Equal(t, time.Duration(-1), options.KeepAlive)
+	assert.Equal(t, time.Duration(-1), options.Heartbeat)
+	assert.Equal(t, &DefaultLogger, options.Logger)
+}
+
 func TestIndividualOptions(t *testing.T) {
 	keepAliveOption := WithKeepAlive(time.Minute * 6)
 	heartbeatOption := WithHeartbeat(time.Second * 60)
