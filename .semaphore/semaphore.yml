@@ -53,9 +53,6 @@ blocks:
         - name: Test
           commands:
             - go test ./...
-        - name: Test (Race Conditions)
-            commands:
-              - go test ./... -race
       prologue:
         commands:
           - sem-version go 1.16
@@ -75,9 +72,6 @@ blocks:
         - name: Benchmark
           commands:
             - go test -bench=. ./...
-        - name: Benchmark (Race Conditions)
-            commands:
-              - go test -bench=. ./... -race
       prologue:
         commands:
           - sem-version go 1.16
