@@ -4,28 +4,45 @@ import (
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"net"
+	"time"
 )
 
 type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
 type ServerRouter map[uint32]ServerRouterFunc
 
 type Server struct {
-	listener   *net.TCPListener
-	addr       string
-	router     ServerRouter
-	shutdown   bool
-	Options    *Options
-	OnOpened   func(server *Server, c *Conn) Action
-	OnClosed   func(server *Server, c *Conn, err error) Action
-	OnShutdown func(server *Server)
-	PreWrite   func(server *Server)
+	listener      *net.TCPListener
+	addr          string
+	router        ServerRouter
+	shutdown      bool
+	options       *Options
+	messageOffset uint32
+	OnOpened      func(server *Server, c *Conn) Action
+	OnClosed      func(server *Server, c *Conn, err error) Action
+	OnShutdown    func(server *Server)
+	PreWrite      func(server *Server)
 }
 
 func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
+
+	options := loadOptions(opts...)
+	messageOffset := uint32(0)
+	newRouter := ServerRouter{}
+
+	if options.Heartbeat != time.Duration(-1) {
+		newRouter[messageOffset] = handleHeartbeatServer
+		messageOffset++
+	}
+
+	for message, handler := range router {
+		newRouter[message+messageOffset] = handler
+	}
+
 	return &Server{
-		addr:    addr,
-		router:  router,
-		Options: loadOptions(opts...),
+		addr:          addr,
+		router:        newRouter,
+		options:       options,
+		messageOffset: messageOffset,
 	}
 }
 
@@ -80,7 +97,7 @@ func (s *Server) Start() error {
 				if s.shutdown {
 					return
 				}
-				s.logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
+				s.Logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
 				return
 			}
 			go s.handleConn(newConn)
@@ -92,8 +109,8 @@ func (s *Server) Start() error {
 
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
-	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.Options.KeepAlive)
-	frisbeeConn := New(newConn, nil)
+	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
+	frisbeeConn := New(newConn, s.Logger())
 
 	openedAction := s.onOpened(frisbeeConn)
 
@@ -118,7 +135,12 @@ func (s *Server) handleConn(newConn net.Conn) {
 			s.onClosed(frisbeeConn, err)
 			return
 		}
-		routerFunc := s.router[incomingMessage.Operation]
+
+		if incomingMessage.Operation == heartbeatMessageType {
+			s.Logger().Printf("THE HEART MESSAGE IS RECEIVED")
+		}
+
+		routerFunc := s.router[incomingMessage.Operation+s.messageOffset]
 		if routerFunc != nil {
 			var outgoingMessage *Message
 			var outgoingContent []byte
@@ -156,8 +178,8 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 }
 
-func (s *Server) logger() *zerolog.Logger {
-	return s.Options.Logger
+func (s *Server) Logger() *zerolog.Logger {
+	return s.options.Logger
 }
 
 func (s *Server) Shutdown() error {

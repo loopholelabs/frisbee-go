@@ -3,7 +3,9 @@ package frisbee
 import (
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 	"net"
+	"time"
 )
 
 // ClientRouterFunc defines a message handler type
@@ -14,70 +16,97 @@ type ClientRouter map[uint32]ClientRouterFunc
 
 // Client accepts and handles inbound messages
 type Client struct {
-	addr    string
-	Conn    *Conn
-	router  ClientRouter
-	Options *Options
-	closed  bool
+	addr          string
+	conn          *Conn
+	router        ClientRouter
+	options       *Options
+	messageOffset uint32
+	closed        *atomic.Bool
 }
 
 // NewClient returns an initialized client
 func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
+
+	options := loadOptions(opts...)
+	messageOffset := uint32(0)
+	newRouter := ClientRouter{}
+
+	if options.Heartbeat != time.Duration(-1) {
+		newRouter[messageOffset] = handleHeartbeatClient
+		messageOffset++
+	}
+
+	for message, handler := range router {
+		newRouter[message+messageOffset] = handler
+	}
+
 	return &Client{
-		addr:    addr,
-		router:  router,
-		Options: loadOptions(opts...),
-		closed:  false,
+		addr:          addr,
+		router:        newRouter,
+		options:       options,
+		messageOffset: messageOffset,
+		closed:        atomic.NewBool(false),
 	}
 }
 
 func (c *Client) Connect() error {
-	c.logger().Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.Options.KeepAlive, c.logger())
+	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
+	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger())
 	if err != nil {
 		return err
 	}
-	c.Conn = frisbeeConn
-	c.logger().Info().Msgf("Connected to %s", c.addr)
+	c.conn = frisbeeConn
+	c.Logger().Info().Msgf("Connected to %s", c.addr)
 
 	go c.reactor()
+	c.Logger().Debug().Msgf("Reactor started for %s", c.addr)
 
-	c.logger().Debug().Msgf("Reactor started for %s", c.addr)
+	messageOffset := c.messageOffset
+	if c.options.Heartbeat != time.Duration(-1) {
+		messageOffset--
+		heartbeatMessageType = messageOffset
+		go c.heartbeat()
+		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
+	}
 
 	return nil
 }
 
-func (c *Client) logger() *zerolog.Logger {
-	return c.Options.Logger
-}
-
 func (c *Client) Close() error {
-	c.closed = true
-	return c.Conn.Close()
+	c.closed.Store(true)
+	return c.conn.Close()
 }
 
 func (c *Client) Write(message *Message, content *[]byte) error {
-	return c.Conn.Write(message, content)
+	return c.conn.Write(message, content)
+}
+
+func (c *Client) writeQueue() int {
+	return c.conn.WriteQueue()
 }
 
 func (c *Client) Raw() (net.Conn, error) {
-	if c.Conn == nil {
+	if c.conn == nil {
 		return nil, ConnectionNotInitialized
 	}
-	c.closed = true
-	return c.Conn.Raw(), nil
+	c.closed.Store(true)
+	return c.conn.Raw(), nil
+}
+
+func (c *Client) Logger() *zerolog.Logger {
+	return c.options.Logger
 }
 
 func (c *Client) reactor() {
 	for {
-		incomingMessage, incomingContent, err := c.Conn.Read()
+		incomingMessage, incomingContent, err := c.conn.Read()
 		if err != nil {
-			c.logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
+			c.Logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
 			_ = c.Close()
 			return
 		}
 
-		routerFunc := c.router[incomingMessage.Operation]
+		routerFunc := c.router[incomingMessage.Operation+c.messageOffset]
 		if routerFunc != nil {
 			var outgoingMessage *Message
 			var outgoingContent []byte
@@ -89,9 +118,9 @@ func (c *Client) reactor() {
 			}
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
-				err := c.Conn.Write(outgoingMessage, &outgoingContent)
+				err = c.conn.Write(outgoingMessage, &outgoingContent)
 				if err != nil {
-					c.logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
+					c.Logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
 					_ = c.Close()
 					return
 				}
@@ -99,11 +128,11 @@ func (c *Client) reactor() {
 
 			switch action {
 			case Close:
-				c.logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
+				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
 				_ = c.Close()
 				return
 			case Shutdown:
-				c.logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
+				c.Logger().Debug().Msgf("Closing connection %s because of SHUTDOWN action", c.addr)
 				_ = c.Close()
 				return
 			default:

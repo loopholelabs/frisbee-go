@@ -121,6 +121,10 @@ func (rb *RingBuffer) Close() {
 	atomic.CompareAndSwapUint64(&rb.closed, 0, 1)
 }
 
+func (rb *RingBuffer) Open() {
+	atomic.CompareAndSwapUint64(&rb.closed, 1, 0)
+}
+
 func (rb *RingBuffer) IsClosed() bool {
 	return atomic.LoadUint64(&rb.closed) == 1
 }
