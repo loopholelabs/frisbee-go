@@ -35,7 +35,7 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	messageOffset := uint32(0)
 	newRouter := ServerRouter{}
 
-	if options.Heartbeat != time.Duration(-1) {
+	if options.Heartbeat > time.Duration(0) {
 		newRouter[messageOffset] = func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			outgoingMessage = &Message{
 				From:          incomingMessage.From,

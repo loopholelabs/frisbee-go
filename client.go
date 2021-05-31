@@ -35,7 +35,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 
 	heartbeatChannel := make(chan struct{}, 1)
 
-	if options.Heartbeat != time.Duration(-1) {
+	if options.Heartbeat > time.Duration(0) {
 		newRouter[messageOffset] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			heartbeatChannel <- struct{}{}
 			return
@@ -46,8 +46,6 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	for message, handler := range router {
 		newRouter[message+messageOffset] = handler
 	}
-
-	options.Logger.Printf("Message offset: %d", messageOffset)
 
 	return &Client{
 		addr:             addr,
@@ -73,7 +71,7 @@ func (c *Client) Connect() error {
 	go c.reactor()
 	c.Logger().Debug().Msgf("Reactor started for %s", c.addr)
 
-	if c.options.Heartbeat != time.Duration(-1) {
+	if c.options.Heartbeat > time.Duration(0) {
 		go c.heartbeat()
 		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
 	}
