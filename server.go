@@ -4,28 +4,61 @@ import (
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"net"
+	"time"
 )
 
+// ServerRouterFunc defines a message handler for a specific frisbee message
 type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+
+// ServerRouter maps frisbee message types to specific handler functions (of type ServerRouterFunc)
 type ServerRouter map[uint32]ServerRouterFunc
 
+// Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
-	listener   *net.TCPListener
-	addr       string
-	router     ServerRouter
-	shutdown   bool
-	Options    *Options
-	OnOpened   func(server *Server, c *Conn) Action
-	OnClosed   func(server *Server, c *Conn, err error) Action
-	OnShutdown func(server *Server)
-	PreWrite   func(server *Server)
+	listener      *net.TCPListener
+	addr          string
+	router        ServerRouter
+	shutdown      bool
+	options       *Options
+	messageOffset uint32
+	OnOpened      func(server *Server, c *Conn) Action
+	OnClosed      func(server *Server, c *Conn, err error) Action
+	OnShutdown    func(server *Server)
+	PreWrite      func(server *Server)
 }
 
+// NewServer returns an uninitialized frisbee Server with the registered ServerRouter.
+// The Start method must then be called to start the server and listen for connections
 func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
+
+	options := loadOptions(opts...)
+	messageOffset := uint32(0)
+	newRouter := ServerRouter{}
+
+	if options.Heartbeat != time.Duration(-1) {
+		newRouter[messageOffset] = func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+			outgoingMessage = &Message{
+				From:          incomingMessage.From,
+				To:            incomingMessage.To,
+				Id:            incomingMessage.Id,
+				Operation:     HEARTBEAT - c.Offset(),
+				ContentLength: incomingMessage.ContentLength,
+			}
+			return
+		}
+
+		messageOffset++
+	}
+
+	for message, handler := range router {
+		newRouter[message+messageOffset] = handler
+	}
+
 	return &Server{
-		addr:    addr,
-		router:  router,
-		Options: loadOptions(opts...),
+		addr:          addr,
+		router:        newRouter,
+		options:       options,
+		messageOffset: messageOffset,
 	}
 }
 
@@ -49,13 +82,13 @@ func (s *Server) Start() error {
 
 	if s.OnClosed == nil {
 		s.OnClosed = func(_ *Server, _ *Conn, err error) Action {
-			return None
+			return NONE
 		}
 	}
 
 	if s.OnOpened == nil {
 		s.OnOpened = func(_ *Server, _ *Conn) Action {
-			return None
+			return NONE
 		}
 	}
 
@@ -80,7 +113,7 @@ func (s *Server) Start() error {
 				if s.shutdown {
 					return
 				}
-				s.logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
+				s.Logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
 				return
 			}
 			go s.handleConn(newConn)
@@ -92,17 +125,17 @@ func (s *Server) Start() error {
 
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
-	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.Options.KeepAlive)
-	frisbeeConn := New(newConn, nil)
+	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
+	frisbeeConn := New(newConn, s.Logger(), s.messageOffset)
 
 	openedAction := s.onOpened(frisbeeConn)
 
 	switch openedAction {
-	case Close:
+	case CLOSE:
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		return
-	case Shutdown:
+	case SHUTDOWN:
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		_ = s.Shutdown()
@@ -118,6 +151,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 			s.onClosed(frisbeeConn, err)
 			return
 		}
+
 		routerFunc := s.router[incomingMessage.Operation]
 		if routerFunc != nil {
 			var outgoingMessage *Message
@@ -140,11 +174,11 @@ func (s *Server) handleConn(newConn net.Conn) {
 			}
 
 			switch action {
-			case Close:
+			case CLOSE:
 				_ = frisbeeConn.Close()
 				s.onClosed(frisbeeConn, nil)
 				return
-			case Shutdown:
+			case SHUTDOWN:
 				_ = frisbeeConn.Close()
 				s.OnClosed(s, frisbeeConn, nil)
 				_ = s.Shutdown()
@@ -156,8 +190,8 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 }
 
-func (s *Server) logger() *zerolog.Logger {
-	return s.Options.Logger
+func (s *Server) Logger() *zerolog.Logger {
+	return s.options.Logger
 }
 
 func (s *Server) Shutdown() error {
