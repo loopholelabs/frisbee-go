@@ -16,9 +16,16 @@ import (
 	"time"
 )
 
+// These are states that frisbee connections can be in:
 const (
+	// CONNECTED is used to specify that the connection is functioning normally
 	CONNECTED = int32(iota)
+
+	// CLOSED is used to specify that the connection has been closed (possibly due to an error)
 	CLOSED
+
+	// PAUSED is used in the event of a read or write error and puts the connection into a paused state,
+	// this is then used by the reconnection logic to resume the connection
 	PAUSED
 )
 
@@ -27,6 +34,9 @@ var (
 	defaultLogger = zerolog.New(os.Stdout)
 )
 
+// Conn is the underlying frisbee connection which has extremely efficient read and write logic and
+// can handle the specific frisbee requirements. This is not meant to be used on its own, and instead is
+// meant to be used by frisbee client and server implementations
 type Conn struct {
 	sync.Mutex
 	conn             net.Conn
@@ -40,6 +50,7 @@ type Conn struct {
 	offset           uint32
 }
 
+// Connect creates a new TCP connection (using net.Dial) and warps it in a frisbee connection
 func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger, offset uint32) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
 	if err != nil {
@@ -51,6 +62,7 @@ func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Lo
 	return New(conn, l, offset), nil
 }
 
+// New takes an existing net.Conn object and wraps it in a frisbee connection
 func New(c net.Conn, l *zerolog.Logger, offset uint32) (conn *Conn) {
 	conn = &Conn{
 		conn:             c,
@@ -74,18 +86,24 @@ func New(c net.Conn, l *zerolog.Logger, offset uint32) (conn *Conn) {
 	return
 }
 
+// LocalAddr returns the local address of the underlying net.Conn
 func (c *Conn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
+// RemoteAddr returns the remote address of the underlying net.Conn
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+// Offset returns the message type offset (used for internal message types)
 func (c *Conn) Offset() uint32 {
 	return c.offset
 }
 
+// Write takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
+//
+// If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
 func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
 		return InvalidContentLength
@@ -142,6 +160,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	return nil
 }
 
+// Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
 func (c *Conn) Flush() error {
 	c.Lock()
 	if c.writer.Buffered() > 0 {
@@ -156,6 +175,7 @@ func (c *Conn) Flush() error {
 	return nil
 }
 
+// WriteBufferSize returns the size of the underlying message buffer (used for internal message handling and for heartbeat logic)
 func (c *Conn) WriteBufferSize() int {
 	c.Lock()
 	if c.state.Load() != CONNECTED {
@@ -167,6 +187,8 @@ func (c *Conn) WriteBufferSize() int {
 	return i
 }
 
+// Read is a blocking function that will wait until a frisbee message is available and then return it (and its content).
+// In the event that the connection is closed, Read will return an error.
 func (c *Conn) Read() (*Message, *[]byte, error) {
 	if c.state.Load() != CONNECTED {
 		return nil, nil, c.Error()
@@ -186,19 +208,23 @@ func (c *Conn) Read() (*Message, *[]byte, error) {
 	return (*Message)(readPacket.Message), readPacket.Content, nil
 }
 
+// Logger returns the underlying logger of the frisbee connection
 func (c *Conn) Logger() *zerolog.Logger {
 	return c.logger
 }
 
+// Error returns the error that caused the frisbee.Conn to close or go into a paused state
 func (c *Conn) Error() error {
 	return c.error.Load()
 }
 
+// Raw shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)
 func (c *Conn) Raw() net.Conn {
 	_ = c.close()
 	return c.conn
 }
 
+// Close closes the frisbee connection gracefully
 func (c *Conn) Close() error {
 	err := c.close()
 	if errors.Is(err, ConnectionClosed) {

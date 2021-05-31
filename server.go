@@ -7,9 +7,13 @@ import (
 	"time"
 )
 
+// ServerRouterFunc defines a message handler for a specific frisbee message
 type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+
+// ServerRouter maps frisbee message types to specific handler functions (of type ServerRouterFunc)
 type ServerRouter map[uint32]ServerRouterFunc
 
+// Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
 	listener      *net.TCPListener
 	addr          string
@@ -23,6 +27,8 @@ type Server struct {
 	PreWrite      func(server *Server)
 }
 
+// NewServer returns an uninitialized frisbee Server with the registered ServerRouter.
+// The Start method must then be called to start the server and listen for connections
 func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 
 	options := loadOptions(opts...)
@@ -76,13 +82,13 @@ func (s *Server) Start() error {
 
 	if s.OnClosed == nil {
 		s.OnClosed = func(_ *Server, _ *Conn, err error) Action {
-			return None
+			return NONE
 		}
 	}
 
 	if s.OnOpened == nil {
 		s.OnOpened = func(_ *Server, _ *Conn) Action {
-			return None
+			return NONE
 		}
 	}
 
@@ -125,11 +131,11 @@ func (s *Server) handleConn(newConn net.Conn) {
 	openedAction := s.onOpened(frisbeeConn)
 
 	switch openedAction {
-	case Close:
+	case CLOSE:
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		return
-	case Shutdown:
+	case SHUTDOWN:
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, nil)
 		_ = s.Shutdown()
@@ -168,11 +174,11 @@ func (s *Server) handleConn(newConn net.Conn) {
 			}
 
 			switch action {
-			case Close:
+			case CLOSE:
 				_ = frisbeeConn.Close()
 				s.onClosed(frisbeeConn, nil)
 				return
-			case Shutdown:
+			case SHUTDOWN:
 				_ = frisbeeConn.Close()
 				s.OnClosed(s, frisbeeConn, nil)
 				_ = s.Shutdown()

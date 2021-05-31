@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// ClientRouterFunc defines a message handler type
+// ClientRouterFunc defines a message handler for a specific frisbee message
 type ClientRouterFunc func(incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
 
-// ClientRouter defines map of message handlers
+// ClientRouter maps frisbee message types to specific handler functions (of type ClientRouterFunc)
 type ClientRouter map[uint32]ClientRouterFunc
 
-// Client accepts and handles inbound messages
+// Client connects to a frisbee Server and can send and receive frisbee messages
 type Client struct {
 	addr             string
 	conn             *Conn
@@ -25,7 +25,8 @@ type Client struct {
 	heartbeatChannel chan struct{}
 }
 
-// NewClient returns an initialized client
+// NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
+// The Connect method must then be called to dial the server and initialize the connection
 func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 
 	options := loadOptions(opts...)
@@ -58,6 +59,8 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	}
 }
 
+// Connect actually connects to the given frisbee server, and starts the reactor goroutines
+// to receive and handle incoming messages.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
 	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.messageOffset)
@@ -78,15 +81,19 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
 	c.closed.Store(true)
 	return c.conn.Close()
 }
 
+// Write sends a frisbee Message from the client to the server
 func (c *Client) Write(message *Message, content *[]byte) error {
 	return c.conn.Write(message, content)
 }
 
+// Raw converts the frisbee client into a normal net.Conn object, and returns it.
+// This is especially useful in proxying and streaming scenarios.
 func (c *Client) Raw() (net.Conn, error) {
 	if c.conn == nil {
 		return nil, ConnectionNotInitialized
@@ -95,6 +102,7 @@ func (c *Client) Raw() (net.Conn, error) {
 	return c.conn.Raw(), nil
 }
 
+// Logger returns the client's logger (useful for ClientRouter functions)
 func (c *Client) Logger() *zerolog.Logger {
 	return c.options.Logger
 }
@@ -129,11 +137,11 @@ func (c *Client) reactor() {
 			}
 
 			switch action {
-			case Close:
+			case CLOSE:
 				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
 				_ = c.Close()
 				return
-			case Shutdown:
+			case SHUTDOWN:
 				c.Logger().Debug().Msgf("Closing connection %s because of SHUTDOWN action", c.addr)
 				_ = c.Close()
 				return
