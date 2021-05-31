@@ -21,10 +21,18 @@ type Server struct {
 	shutdown      bool
 	options       *Options
 	messageOffset uint32
-	OnOpened      func(server *Server, c *Conn) Action
-	OnClosed      func(server *Server, c *Conn, err error) Action
-	OnShutdown    func(server *Server)
-	PreWrite      func(server *Server)
+
+	// OnOpened is a function run by the server whenever a connection is opened
+	OnOpened func(server *Server, c *Conn) Action
+
+	// OnClosed is a function run by the server whenever a connection is closed
+	OnClosed func(server *Server, c *Conn, err error) Action
+
+	// OnShutdown is run by the server before it shuts down
+	OnShutdown func(server *Server)
+
+	// PreWrite is run by the server before a write is done (useful for metrics)
+	PreWrite func(server *Server)
 }
 
 // NewServer returns an uninitialized frisbee Server with the registered ServerRouter.
@@ -78,6 +86,9 @@ func (s *Server) preWrite() {
 	s.PreWrite(s)
 }
 
+// Start will start the frisbee server and its reactor goroutines
+// to receive and handle incoming connections. If the OnClosed, OnOpened, OnShutdown, or PreWrite functions
+// have not been defined, it will use default null functions for these.
 func (s *Server) Start() error {
 
 	if s.OnClosed == nil {
@@ -190,10 +201,12 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 }
 
+// Logger returns the server's logger (useful for ServerRouter functions)
 func (s *Server) Logger() *zerolog.Logger {
 	return s.options.Logger
 }
 
+// Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
 	s.shutdown = true
 	return s.listener.Close()
