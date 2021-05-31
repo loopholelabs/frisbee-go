@@ -132,11 +132,12 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 
+	c.Lock()
 	if c.state.Load() != CONNECTED {
+		c.Unlock()
 		return c.Error()
 	}
 
-	c.Lock()
 	_, err := c.writer.Write(encodedMessage[:])
 	if err != nil {
 		c.Unlock()
