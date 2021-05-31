@@ -205,8 +205,10 @@ func (c *Conn) Close() error {
 }
 
 func (c *Conn) killGoroutines() {
+	c.Lock()
 	c.incomingMessages.Close()
 	close(c.flusher)
+	c.Unlock()
 	_ = c.conn.SetReadDeadline(time.Now())
 	c.wg.Wait()
 	_ = c.conn.SetReadDeadline(time.Time{})
