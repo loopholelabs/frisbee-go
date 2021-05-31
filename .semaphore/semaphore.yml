@@ -31,7 +31,7 @@ blocks:
       jobs:
         - name: Snyk
           commands:
-            - './snyk-linux test'
+            - ./snyk-linux test
       prologue:
         commands:
           - sem-version go 1.16
@@ -42,7 +42,7 @@ blocks:
           - cache restore
           - go get ./...
           - 'wget https://github.com/snyk/snyk/releases/download/v1.509.0/snyk-linux'
-          - 'chmod u+x ./snyk-linux'
+          - chmod u+x ./snyk-linux
       epilogue:
         always:
           commands:
@@ -53,6 +53,9 @@ blocks:
         - name: Test
           commands:
             - go test ./...
+        - name: Test (Race Conditions)
+          commands:
+            - go test ./... -race
       prologue:
         commands:
           - sem-version go 1.16
@@ -72,6 +75,9 @@ blocks:
         - name: Benchmark
           commands:
             - go test -bench=. ./...
+        - name: Benchmark (Race Conditons)
+          commands:
+            - go test -bench=. ./... -race
       prologue:
         commands:
           - sem-version go 1.16

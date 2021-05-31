@@ -1,3 +1,19 @@
+/*
+	Copyright 2021 Loophole Labs
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+		   http://www.apache.org/licenses/LICENSE-2.0
+
+	Unless required by applicable law or agreed to in writing, software
+	distributed under the License is distributed on an "AS IS" BASIS,
+	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	See the License for the specific language governing permissions and
+	limitations under the License.
+*/
+
 package ringbuffer
 
 import (
@@ -86,5 +102,22 @@ func TestRingBuffer(t *testing.T) {
 		_ = rb.Push(testPacket())
 		<-done
 		assert.Equal(t, uint64(0), rb.Length())
+	})
+	t.Run("buffer closed then reopened", func(t *testing.T) {
+		rb := NewRingBuffer(1)
+		assert.False(t, rb.IsClosed())
+		rb.Close()
+		assert.True(t, rb.IsClosed())
+		err := rb.Push(testPacket())
+		assert.ErrorIs(t, RingerBufferClosed, err)
+		_, err = rb.Pop()
+		assert.ErrorIs(t, RingerBufferClosed, err)
+		rb.Open()
+		assert.False(t, rb.IsClosed())
+		err = rb.Push(testPacket())
+		assert.NoError(t, err)
+		actual, err := rb.Pop()
+		assert.NoError(t, err)
+		assert.Equal(t, testPacket(), actual)
 	})
 }
