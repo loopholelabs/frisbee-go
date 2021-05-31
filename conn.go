@@ -133,7 +133,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 
 	c.Lock()
-	if c.state.Load() != CONNECTED 	{
+	if c.state.Load() != CONNECTED {
 		c.Unlock()
 		return c.Error()
 	}
