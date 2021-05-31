@@ -31,7 +31,7 @@ func loadOptions(options ...Option) *Options {
 	}
 
 	if opts.Heartbeat == 0 {
-		opts.Heartbeat = time.Millisecond * 100
+		opts.Heartbeat = time.Second * 5
 	}
 
 	return opts

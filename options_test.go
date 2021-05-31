@@ -12,7 +12,7 @@ func TestWithoutOptions(t *testing.T) {
 	options := loadOptions()
 
 	assert.Equal(t, time.Minute*3, options.KeepAlive)
-	assert.Equal(t, time.Second*30, options.Heartbeat)
+	assert.Equal(t, time.Second*5, options.Heartbeat)
 	assert.Equal(t, &DefaultLogger, options.Logger)
 }
 

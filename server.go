@@ -30,7 +30,17 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	newRouter := ServerRouter{}
 
 	if options.Heartbeat != time.Duration(-1) {
-		newRouter[messageOffset] = handleHeartbeatServer
+		newRouter[messageOffset] = func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+			outgoingMessage = &Message{
+				From:          incomingMessage.From,
+				To:            incomingMessage.To,
+				Id:            incomingMessage.Id,
+				Operation:     HEARTBEAT - c.Offset(),
+				ContentLength: incomingMessage.ContentLength,
+			}
+			return
+		}
+
 		messageOffset++
 	}
 
@@ -110,7 +120,7 @@ func (s *Server) Start() error {
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
 	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
-	frisbeeConn := New(newConn, s.Logger())
+	frisbeeConn := New(newConn, s.Logger(), s.messageOffset)
 
 	openedAction := s.onOpened(frisbeeConn)
 
@@ -136,11 +146,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 			return
 		}
 
-		if incomingMessage.Operation == heartbeatMessageType {
-			s.Logger().Printf("THE HEART MESSAGE IS RECEIVED")
-		}
-
-		routerFunc := s.router[incomingMessage.Operation+s.messageOffset]
+		routerFunc := s.router[incomingMessage.Operation]
 		if routerFunc != nil {
 			var outgoingMessage *Message
 			var outgoingContent []byte

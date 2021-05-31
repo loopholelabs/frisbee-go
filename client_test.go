@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
-	"os"
 	"testing"
 	"time"
 )
@@ -189,7 +188,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(os.Stdout)
+	emptyLogger := zerolog.New(ioutil.Discard)
 	s := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
 	err := s.Start()
 	if err != nil {

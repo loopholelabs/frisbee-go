@@ -16,12 +16,13 @@ type ClientRouter map[uint32]ClientRouterFunc
 
 // Client accepts and handles inbound messages
 type Client struct {
-	addr          string
-	conn          *Conn
-	router        ClientRouter
-	options       *Options
-	messageOffset uint32
-	closed        *atomic.Bool
+	addr             string
+	conn             *Conn
+	router           ClientRouter
+	options          *Options
+	messageOffset    uint32
+	closed           *atomic.Bool
+	heartbeatChannel chan struct{}
 }
 
 // NewClient returns an initialized client
@@ -31,8 +32,13 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	messageOffset := uint32(0)
 	newRouter := ClientRouter{}
 
+	heartbeatChannel := make(chan struct{}, 1)
+
 	if options.Heartbeat != time.Duration(-1) {
-		newRouter[messageOffset] = handleHeartbeatClient
+		newRouter[messageOffset] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+			heartbeatChannel <- struct{}{}
+			return
+		}
 		messageOffset++
 	}
 
@@ -40,18 +46,21 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 		newRouter[message+messageOffset] = handler
 	}
 
+	options.Logger.Printf("Message offset: %d", messageOffset)
+
 	return &Client{
-		addr:          addr,
-		router:        newRouter,
-		options:       options,
-		messageOffset: messageOffset,
-		closed:        atomic.NewBool(false),
+		addr:             addr,
+		router:           newRouter,
+		options:          options,
+		messageOffset:    messageOffset,
+		closed:           atomic.NewBool(false),
+		heartbeatChannel: heartbeatChannel,
 	}
 }
 
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger())
+	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.messageOffset)
 	if err != nil {
 		return err
 	}
@@ -61,10 +70,7 @@ func (c *Client) Connect() error {
 	go c.reactor()
 	c.Logger().Debug().Msgf("Reactor started for %s", c.addr)
 
-	messageOffset := c.messageOffset
 	if c.options.Heartbeat != time.Duration(-1) {
-		messageOffset--
-		heartbeatMessageType = messageOffset
 		go c.heartbeat()
 		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
 	}
@@ -79,10 +85,6 @@ func (c *Client) Close() error {
 
 func (c *Client) Write(message *Message, content *[]byte) error {
 	return c.conn.Write(message, content)
-}
-
-func (c *Client) writeQueue() int {
-	return c.conn.WriteQueue()
 }
 
 func (c *Client) Raw() (net.Conn, error) {
@@ -101,12 +103,12 @@ func (c *Client) reactor() {
 	for {
 		incomingMessage, incomingContent, err := c.conn.Read()
 		if err != nil {
-			c.Logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
+			c.Logger().Error().Msgf(errors.WithContext(err, READCONN).Error())
 			_ = c.Close()
 			return
 		}
 
-		routerFunc := c.router[incomingMessage.Operation+c.messageOffset]
+		routerFunc := c.router[incomingMessage.Operation]
 		if routerFunc != nil {
 			var outgoingMessage *Message
 			var outgoingContent []byte
@@ -120,7 +122,7 @@ func (c *Client) reactor() {
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
 				err = c.conn.Write(outgoingMessage, &outgoingContent)
 				if err != nil {
-					c.Logger().Error().Msgf(errors.WithContext(err, CLOSE).Error())
+					c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())
 					_ = c.Close()
 					return
 				}
@@ -137,6 +139,28 @@ func (c *Client) reactor() {
 				return
 			default:
 			}
+		}
+	}
+}
+
+func (c *Client) heartbeat() {
+	for {
+		<-time.After(c.options.Heartbeat)
+		if c.conn.WriteBufferSize() == 0 {
+			err := c.Write(&Message{
+				Operation: HEARTBEAT - c.messageOffset,
+			}, nil)
+			if err != nil {
+				c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())
+				_ = c.Close()
+				return
+			}
+			start := time.Now()
+			c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
+			<-c.heartbeatChannel
+			c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
+		} else {
+			c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
 		}
 	}
 }

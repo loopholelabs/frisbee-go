@@ -37,9 +37,10 @@ type Conn struct {
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
 	error            *atomic.Error
+	offset           uint32
 }
 
-func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger) (*Conn, error) {
+func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger, offset uint32) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, errors.WithContext(err, DIAL)
@@ -47,10 +48,10 @@ func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Lo
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 
-	return New(conn, l), nil
+	return New(conn, l, offset), nil
 }
 
-func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
+func New(c net.Conn, l *zerolog.Logger, offset uint32) (conn *Conn) {
 	conn = &Conn{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
@@ -59,6 +60,7 @@ func New(c net.Conn, l *zerolog.Logger) (conn *Conn) {
 		flusher:          make(chan struct{}, 1024),
 		logger:           l,
 		error:            atomic.NewError(ConnectionClosed),
+		offset:           offset,
 	}
 
 	if l == nil {
@@ -80,6 +82,10 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
+func (c *Conn) Offset() uint32 {
+	return c.offset
+}
+
 func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
 		return InvalidContentLength
@@ -91,7 +97,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	binary.BigEndian.PutUint32(encodedMessage[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 
 	if c.state.Load() != CONNECTED {
@@ -150,7 +156,7 @@ func (c *Conn) Flush() error {
 	return nil
 }
 
-func (c *Conn) WriteQueue() int {
+func (c *Conn) WriteBufferSize() int {
 	c.Lock()
 	i := c.writer.Buffered()
 	c.Unlock()
@@ -240,7 +246,6 @@ func (c *Conn) close() error {
 
 func (c *Conn) closeWithError(err error) error {
 	if os.IsTimeout(err) {
-		c.Logger().Debug().Msgf("connection timed out")
 		return err
 	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
 		pauseError := c.pause()

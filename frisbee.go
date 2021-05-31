@@ -6,12 +6,13 @@ import (
 )
 
 const (
-	DIAL   errors.ErrorContext = "error while dialing connection"
-	CLOSE  errors.ErrorContext = "error while closing connection"
-	WRITE  errors.ErrorContext = "error while writing to buffer"
-	PUSH   errors.ErrorContext = "error while pushing packet to message queue"
-	POP    errors.ErrorContext = "error while popping packet from message queue"
-	ACCEPT errors.ErrorContext = "error while accepting connections"
+	DIAL      errors.ErrorContext = "error while dialing connection"
+	WRITECONN errors.ErrorContext = "error while writing to frisbee connection"
+	READCONN  errors.ErrorContext = "error while reading from frisbee connection"
+	WRITE     errors.ErrorContext = "error while writing to buffer"
+	PUSH      errors.ErrorContext = "error while pushing packet to message queue"
+	POP       errors.ErrorContext = "error while popping packet from message queue"
+	ACCEPT    errors.ErrorContext = "error while accepting connections"
 )
 
 var (
@@ -30,4 +31,8 @@ const (
 	None = Action(iota)
 	Close
 	Shutdown
+)
+
+const (
+	HEARTBEAT = uint32(iota)
 )
