@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestNewConn(t *testing.T) {
@@ -241,6 +242,7 @@ func TestWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
+	time.Sleep(time.Second)
 	_, _, err = readerConn.Read()
 	assert.ErrorIs(t, err, ConnectionPaused)
 	assert.ErrorIs(t, readerConn.Error(), ConnectionPaused)
