@@ -87,4 +87,21 @@ func TestRingBuffer(t *testing.T) {
 		<-done
 		assert.Equal(t, uint64(0), rb.Length())
 	})
+	t.Run("buffer closed then reopened", func(t *testing.T) {
+		rb := NewRingBuffer(1)
+		assert.False(t, rb.IsClosed())
+		rb.Close()
+		assert.True(t, rb.IsClosed())
+		err := rb.Push(testPacket())
+		assert.ErrorIs(t, RingerBufferClosed, err)
+		_, err = rb.Pop()
+		assert.ErrorIs(t, RingerBufferClosed, err)
+		rb.Open()
+		assert.False(t, rb.IsClosed())
+		err = rb.Push(testPacket())
+		assert.NoError(t, err)
+		actual, err := rb.Pop()
+		assert.NoError(t, err)
+		assert.Equal(t, testPacket(), actual)
+	})
 }
