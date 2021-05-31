@@ -6,10 +6,10 @@ Fixes # (issue)
 
 ## Type of change
 
-Please update the title of this PR to reflect the type of change.
+**Please update the title of this PR to reflect the type of change.** (Delete the ones that aren't required).
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Bug fix (non-breaking change which fixes an issue) [title: 'fix:']
+- [ ] New feature (non-breaking change which adds functionality) [title: 'feat:']
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] This change requires a documentation update
 
@@ -27,7 +27,8 @@ Frisbee tries to adhere to strict performance requirements, so please make sure 
 
 ### Benchmarking Results:
 
-### Benchmarking Hardware:
+```shell
+```
 
 ## Linting
 
