@@ -1,5 +1,3 @@
-# [fix | feat]: 
-
 ## Description
 
 Please include a summary of the change and which issue has been fixed. Please also include relevant motivation and context. List any dependencies that are required for this change.
