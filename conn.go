@@ -3,7 +3,6 @@ package frisbee
 import (
 	"bufio"
 	"encoding/binary"
-	"github.com/gobwas/pool/pbufio"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/loophole-labs/frisbee/internal/protocol"
 	"github.com/loophole-labs/frisbee/internal/ringbuffer"
@@ -30,7 +29,6 @@ const (
 )
 
 var (
-	writePool     = pbufio.NewWriterPool(1024, 1<<32)
 	defaultLogger = zerolog.New(os.Stdout)
 )
 
@@ -67,7 +65,7 @@ func New(c net.Conn, l *zerolog.Logger, offset uint32) (conn *Conn) {
 	conn = &Conn{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
-		writer:           writePool.Get(c, 1<<19),
+		writer:           bufio.NewWriterSize(c, 1<<19),
 		incomingMessages: ringbuffer.NewRingBuffer(1 << 19),
 		flusher:          make(chan struct{}, 1024),
 		logger:           l,
@@ -263,14 +261,10 @@ func (c *Conn) close() error {
 		if c.writer.Buffered() > 0 {
 			_ = c.writer.Flush()
 		}
-		writePool.Put(c.writer)
 		c.Unlock()
 		return nil
 	} else if c.state.CAS(PAUSED, CLOSED) {
 		c.error.Store(ConnectionClosed)
-		c.Lock()
-		writePool.Put(c.writer)
-		c.Unlock()
 		return nil
 	}
 	return ConnectionClosed
