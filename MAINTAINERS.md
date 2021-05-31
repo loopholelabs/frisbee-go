@@ -1,1 +1,2 @@
 * Shivansh Vij <shivanshvij@loopholelabs.io> @shivanshvij
+* Jonathan Sun <jonathansun@loopholelabs.io> @jspsun
