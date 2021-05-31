@@ -158,6 +158,10 @@ func (c *Conn) Flush() error {
 
 func (c *Conn) WriteBufferSize() int {
 	c.Lock()
+	if c.state.Load() != CONNECTED {
+		c.Unlock()
+		return 0
+	}
 	i := c.writer.Buffered()
 	c.Unlock()
 	return i
