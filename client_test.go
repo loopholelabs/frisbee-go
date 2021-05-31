@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestClientRaw(t *testing.T) {
@@ -222,6 +223,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		}
 	})
 	b.StopTimer()
+	time.Sleep(time.Second * 5)
 	err = c.Close()
 	if err != nil {
 		panic(err)
