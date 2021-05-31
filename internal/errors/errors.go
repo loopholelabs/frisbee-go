@@ -11,3 +11,7 @@ func WithContext(err error, context ErrorContext) error {
 func New(reason string) error {
 	return errors.New(reason)
 }
+
+func Is(err error, target error) bool {
+	return errors.Is(err, target)
+}
