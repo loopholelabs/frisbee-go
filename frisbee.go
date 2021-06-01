@@ -53,6 +53,7 @@ var (
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferContents    = errors.New("invalid buffer contents")
 	InvalidBufferLength      = errors.New("invalid buffer length")
+	ShortWrite               = errors.New("short write to buffer")
 )
 
 // Action is an ENUM used to modify the state of the client or server from a router function
