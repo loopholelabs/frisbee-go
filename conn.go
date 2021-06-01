@@ -131,36 +131,77 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		return c.Error()
 	}
 
-	if c.writeBufferSize+protocol.MessageV0Size+message.ContentLength > 1<<19 {
-		err := c.flush()
-		if err != nil {
-			c.Unlock()
-			if c.state.Load() != CONNECTED {
-				err = c.Error()
+	var temp [protocol.MessageV0Size]byte
+
+	if protocol.MessageV0Size > 1<<19 - c.writeBufferSize {
+		binary.BigEndian.PutUint16(temp[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+		binary.BigEndian.PutUint32(temp[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
+		binary.BigEndian.PutUint32(temp[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
+		binary.BigEndian.PutUint32(temp[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
+		binary.BigEndian.PutUint32(temp[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
+		binary.BigEndian.PutUint64(temp[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
+		n := copy(c.writeBuffer[c.writeBufferSize:], temp[:])
+		if n < protocol.MessageV0Size {
+			err := c.flush()
+			if err != nil {
+				c.Unlock()
+				if c.state.Load() != CONNECTED {
+					err = c.Error()
+					c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+					return errors.WithContext(err, WRITE)
+				}
 				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-				return errors.WithContext(err, WRITE)
+				return c.closeWithError(err)
 			}
-			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-			return c.closeWithError(err)
+			copy(c.writeBuffer[c.writeBufferSize:], temp[n:])
+		}
+	} else {
+		c.writeBuffer[c.writeBufferSize] = 0
+		c.writeBuffer[c.writeBufferSize+1] = 0
+		c.writeBuffer[c.writeBufferSize+2] = 0
+		c.writeBuffer[c.writeBufferSize+3] = 0
+		c.writeBuffer[c.writeBufferSize+4] = 0
+		c.writeBuffer[c.writeBufferSize+5] = 0
+		binary.BigEndian.PutUint16(c.writeBuffer[c.writeBufferSize+protocol.VersionV0Offset:c.writeBufferSize+protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+		binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.FromV0Offset:c.writeBufferSize+protocol.FromV0Offset+protocol.FromV0Size], message.From)
+		binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.ToV0Offset:c.writeBufferSize+protocol.ToV0Offset+protocol.ToV0Size], message.To)
+		binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.IdV0Offset:c.writeBufferSize+protocol.IdV0Offset+protocol.IdV0Size], message.Id)
+		binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.OperationV0Offset:c.writeBufferSize+protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
+		binary.BigEndian.PutUint64(c.writeBuffer[c.writeBufferSize+protocol.ContentLengthV0Offset:c.writeBufferSize+protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
+		c.writeBufferSize += protocol.MessageV0Size
+	}
+	if content != nil {
+		if message.ContentLength > 1 << 19 - c.writeBufferSize {
+			if c.writeBufferSize > 0 {
+				err := c.flush()
+				if err != nil {
+					c.Unlock()
+					if c.state.Load() != CONNECTED {
+						err = c.Error()
+						c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+						return errors.WithContext(err, WRITE)
+					}
+					c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+					return c.closeWithError(err)
+				}
+			}
+			_, err := c.conn.Write(*content)
+			if err != nil {
+				c.Unlock()
+				if c.state.Load() != CONNECTED {
+					err = c.Error()
+					c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+					return errors.WithContext(err, WRITE)
+				}
+				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return c.closeWithError(err)
+			}
+		} else {
+			copy(c.writeBuffer[c.writeBufferSize:], *content)
+			c.writeBufferSize += message.ContentLength
 		}
 	}
-	c.writeBuffer[c.writeBufferSize] = 0
-	c.writeBuffer[c.writeBufferSize+1] = 0
-	c.writeBuffer[c.writeBufferSize+2] = 0
-	c.writeBuffer[c.writeBufferSize+3] = 0
-	c.writeBuffer[c.writeBufferSize+4] = 0
-	c.writeBuffer[c.writeBufferSize+5] = 0
-	binary.BigEndian.PutUint16(c.writeBuffer[c.writeBufferSize+protocol.VersionV0Offset:c.writeBufferSize+protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.FromV0Offset:c.writeBufferSize+protocol.FromV0Offset+protocol.FromV0Size], message.From)
-	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.ToV0Offset:c.writeBufferSize+protocol.ToV0Offset+protocol.ToV0Size], message.To)
-	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.IdV0Offset:c.writeBufferSize+protocol.IdV0Offset+protocol.IdV0Size], message.Id)
-	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.OperationV0Offset:c.writeBufferSize+protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
-	binary.BigEndian.PutUint64(c.writeBuffer[c.writeBufferSize+protocol.ContentLengthV0Offset:c.writeBufferSize+protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
-	c.writeBufferSize += protocol.MessageV0Size
-	if content != nil {
-		copy(c.writeBuffer[c.writeBufferSize:], *content)
-		c.writeBufferSize += message.ContentLength
-	}
+
 	if len(c.flusher) == 0 {
 		select {
 		case c.flusher <- struct{}{}:
