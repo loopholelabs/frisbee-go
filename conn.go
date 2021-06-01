@@ -133,7 +133,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 
 	var temp [protocol.MessageV0Size]byte
 
-	if protocol.MessageV0Size > 1<<19 - c.writeBufferSize {
+	if protocol.MessageV0Size > 1<<19-c.writeBufferSize {
 		binary.BigEndian.PutUint16(temp[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
 		binary.BigEndian.PutUint32(temp[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
 		binary.BigEndian.PutUint32(temp[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
@@ -171,7 +171,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		c.writeBufferSize += protocol.MessageV0Size
 	}
 	if content != nil {
-		if message.ContentLength > 1 << 19 - c.writeBufferSize {
+		if message.ContentLength > 1<<19-c.writeBufferSize {
 			var n uint64
 			for n < message.ContentLength {
 				nn := uint64(copy(c.writeBuffer[c.writeBufferSize:], (*content)[n:]))
