@@ -17,7 +17,6 @@
 package frisbee
 
 import (
-	"bufio"
 	"encoding/binary"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/loophole-labs/frisbee/internal/protocol"
@@ -55,7 +54,8 @@ type Conn struct {
 	sync.Mutex
 	conn             net.Conn
 	state            *atomic.Int32
-	writer           *bufio.Writer
+	writeBuffer      []byte
+	writeBufferSize  uint64
 	flusher          chan struct{}
 	incomingMessages *ringbuffer.RingBuffer
 	logger           *zerolog.Logger
@@ -81,7 +81,7 @@ func New(c net.Conn, l *zerolog.Logger, offset uint32) (conn *Conn) {
 	conn = &Conn{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
-		writer:           bufio.NewWriterSize(c, 1<<19),
+		writeBuffer:      make([]byte, 1<<19),
 		incomingMessages: ringbuffer.NewRingBuffer(1 << 19),
 		flusher:          make(chan struct{}, 1024),
 		logger:           l,
@@ -94,7 +94,7 @@ func New(c net.Conn, l *zerolog.Logger, offset uint32) (conn *Conn) {
 	}
 
 	conn.wg.Add(2)
-	go conn.flushLoop()
+	go conn.writeLoop()
 	go conn.readLoop()
 
 	return
@@ -121,16 +121,9 @@ func (c *Conn) Offset() uint32 {
 func (c *Conn) Write(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
 		return InvalidContentLength
+	} else if message.ContentLength > 0 && content == nil {
+		return InvalidContentLength
 	}
-
-	var encodedMessage [protocol.MessageV0Size]byte
-
-	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
-	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 
 	c.Lock()
 	if c.state.Load() != CONNECTED {
@@ -138,19 +131,8 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		return c.Error()
 	}
 
-	_, err := c.writer.Write(encodedMessage[:])
-	if err != nil {
-		c.Unlock()
-		if c.state.Load() != CONNECTED {
-			err = c.Error()
-			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-			return errors.WithContext(err, WRITE)
-		}
-		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-		return c.closeWithError(err)
-	}
-	if content != nil {
-		_, err = c.writer.Write(*content)
+	if c.writeBufferSize+protocol.MessageV0Size+message.ContentLength > 1<<19 {
+		err := c.flush()
 		if err != nil {
 			c.Unlock()
 			if c.state.Load() != CONNECTED {
@@ -162,32 +144,38 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 			return c.closeWithError(err)
 		}
 	}
-
+	c.writeBuffer[c.writeBufferSize] = 0
+	c.writeBuffer[c.writeBufferSize+1] = 0
+	c.writeBuffer[c.writeBufferSize+2] = 0
+	c.writeBuffer[c.writeBufferSize+3] = 0
+	c.writeBuffer[c.writeBufferSize+4] = 0
+	c.writeBuffer[c.writeBufferSize+5] = 0
+	binary.BigEndian.PutUint16(c.writeBuffer[c.writeBufferSize+protocol.VersionV0Offset:c.writeBufferSize+protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.FromV0Offset:c.writeBufferSize+protocol.FromV0Offset+protocol.FromV0Size], message.From)
+	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.ToV0Offset:c.writeBufferSize+protocol.ToV0Offset+protocol.ToV0Size], message.To)
+	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.IdV0Offset:c.writeBufferSize+protocol.IdV0Offset+protocol.IdV0Size], message.Id)
+	binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.OperationV0Offset:c.writeBufferSize+protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
+	binary.BigEndian.PutUint64(c.writeBuffer[c.writeBufferSize+protocol.ContentLengthV0Offset:c.writeBufferSize+protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
+	c.writeBufferSize += protocol.MessageV0Size
+	if content != nil {
+		copy(c.writeBuffer[c.writeBufferSize:], *content)
+		c.writeBufferSize += message.ContentLength
+	}
 	if len(c.flusher) == 0 {
 		select {
 		case c.flusher <- struct{}{}:
 		default:
 		}
 	}
-
 	c.Unlock()
-
 	return nil
 }
 
 // Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
 func (c *Conn) Flush() error {
 	c.Lock()
-	if c.writer.Buffered() > 0 {
-		err := c.writer.Flush()
-		if err != nil {
-			c.Unlock()
-			_ = c.closeWithError(err)
-			return err
-		}
-	}
-	c.Unlock()
-	return nil
+	defer c.Unlock()
+	return c.flush()
 }
 
 // WriteBufferSize returns the size of the underlying message buffer (used for internal message handling and for heartbeat logic)
@@ -197,9 +185,9 @@ func (c *Conn) WriteBufferSize() int {
 		c.Unlock()
 		return 0
 	}
-	i := c.writer.Buffered()
+	i := c.writeBufferSize
 	c.Unlock()
-	return i
+	return int(i)
 }
 
 // Read is a blocking function that will wait until a frisbee message is available and then return it (and its content).
@@ -249,6 +237,24 @@ func (c *Conn) Close() error {
 	return err
 }
 
+func (c *Conn) flush() error {
+	if c.writeBufferSize > 0 {
+		n, err := c.conn.Write(c.writeBuffer[:c.writeBufferSize])
+		if err != nil {
+			c.Unlock()
+			_ = c.closeWithError(err)
+			return c.Error()
+		}
+		if n != int(c.writeBufferSize) {
+			c.Unlock()
+			_ = c.closeWithError(ShortWrite)
+			return c.Error()
+		}
+		c.writeBufferSize = 0
+	}
+	return nil
+}
+
 func (c *Conn) killGoroutines() {
 	c.Lock()
 	c.incomingMessages.Close()
@@ -274,11 +280,7 @@ func (c *Conn) close() error {
 	if c.state.CAS(CONNECTED, CLOSED) {
 		c.error.Store(ConnectionClosed)
 		c.killGoroutines()
-		c.Lock()
-		if c.writer.Buffered() > 0 {
-			_ = c.writer.Flush()
-		}
-		c.Unlock()
+		_ = c.Flush()
 		return nil
 	} else if c.state.CAS(PAUSED, CLOSED) {
 		c.error.Store(ConnectionClosed)
@@ -313,21 +315,28 @@ func (c *Conn) closeWithError(err error) error {
 	return err
 }
 
-func (c *Conn) flushLoop() {
+func (c *Conn) writeLoop() {
 	for {
 		if _, ok := <-c.flusher; !ok {
 			c.wg.Done()
 			return
 		}
 		c.Lock()
-		if c.writer.Buffered() > 0 {
-			err := c.writer.Flush()
+		if c.writeBufferSize > 0 {
+			n, err := c.conn.Write(c.writeBuffer[:c.writeBufferSize])
 			if err != nil {
-				c.Unlock()
 				c.wg.Done()
+				c.Unlock()
 				_ = c.closeWithError(err)
 				return
 			}
+			if n != int(c.writeBufferSize) {
+				c.wg.Done()
+				c.Unlock()
+				_ = c.closeWithError(ShortWrite)
+				return
+			}
+			c.writeBufferSize = 0
 		}
 		c.Unlock()
 	}
