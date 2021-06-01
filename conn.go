@@ -275,12 +275,10 @@ func (c *Conn) flush() error {
 	if c.writeBufferSize > 0 {
 		n, err := c.conn.Write(c.writeBuffer[:c.writeBufferSize])
 		if err != nil {
-			c.Unlock()
 			_ = c.closeWithError(err)
 			return c.Error()
 		}
 		if n != int(c.writeBufferSize) {
-			c.Unlock()
 			_ = c.closeWithError(ShortWrite)
 			return c.Error()
 		}
@@ -356,21 +354,18 @@ func (c *Conn) writeLoop() {
 			return
 		}
 		c.Lock()
-		if c.writeBufferSize > 0 {
-			n, err := c.conn.Write(c.writeBuffer[:c.writeBufferSize])
-			if err != nil {
+		err := c.flush()
+		if err != nil {
+			if c.state.Load() != CONNECTED {
 				c.wg.Done()
 				c.Unlock()
-				_ = c.closeWithError(err)
 				return
 			}
-			if n != int(c.writeBufferSize) {
-				c.wg.Done()
-				c.Unlock()
-				_ = c.closeWithError(ShortWrite)
-				return
-			}
-			c.writeBufferSize = 0
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			_ = c.closeWithError(err)
+			c.wg.Done()
+			c.Unlock()
+			return
 		}
 		c.Unlock()
 	}
