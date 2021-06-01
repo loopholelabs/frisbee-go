@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var dex = 0
+var index = 0
 
 const (
 	fileExtension             = "_frisbee.pb.go"
@@ -112,8 +112,8 @@ func getServerFuncSignature(method *protogen.Method) string {
 }
 
 func (g *generator) registerMethodName(method string) {
-	g.methodNames[method] = dex
-	dex += 1
+	g.methodNames[method] = index
+	index += 1
 }
 
 func (g *generator) generateMethodConsts() {
