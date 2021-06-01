@@ -141,7 +141,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
 		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 		if c.writeBufferSize > 0 {
-			if message.ContentLength > 0 {
+			if content != nil {
 				n, err := c.conn.Write(append(c.writeBuffer[:c.writeBufferSize], append(encodedMessage[:], *content...)...))
 				if err != nil {
 					c.Unlock()
@@ -188,7 +188,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 			}
 			c.writeBufferSize = 0
 		} else {
-			if message.ContentLength > 0 {
+			if content != nil {
 				n, err := c.conn.Write(append(encodedMessage[:], *content...))
 				if err != nil {
 					c.Unlock()
@@ -248,7 +248,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 		binary.BigEndian.PutUint32(c.writeBuffer[c.writeBufferSize+protocol.OperationV0Offset:c.writeBufferSize+protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
 		binary.BigEndian.PutUint64(c.writeBuffer[c.writeBufferSize+protocol.ContentLengthV0Offset:c.writeBufferSize+protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 		c.writeBufferSize += protocol.MessageV0Size
-		if message.ContentLength > 0 {
+		if content != nil {
 			copy(c.writeBuffer[c.writeBufferSize:], *content)
 			c.writeBufferSize += message.ContentLength
 		}
