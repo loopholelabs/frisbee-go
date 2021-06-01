@@ -172,7 +172,11 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	}
 	if content != nil {
 		if message.ContentLength > 1 << 19 - c.writeBufferSize {
-			if c.writeBufferSize > 0 {
+			var n uint64
+			for n < message.ContentLength {
+				nn := uint64(copy(c.writeBuffer[c.writeBufferSize:], (*content)[n:]))
+				n += nn
+				c.writeBufferSize += nn
 				err := c.flush()
 				if err != nil {
 					c.Unlock()
@@ -184,17 +188,6 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 					c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 					return c.closeWithError(err)
 				}
-			}
-			_, err := c.conn.Write(*content)
-			if err != nil {
-				c.Unlock()
-				if c.state.Load() != CONNECTED {
-					err = c.Error()
-					c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-					return errors.WithContext(err, WRITE)
-				}
-				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-				return c.closeWithError(err)
 			}
 		} else {
 			copy(c.writeBuffer[c.writeBufferSize:], *content)
