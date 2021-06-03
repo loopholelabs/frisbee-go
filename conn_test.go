@@ -34,8 +34,8 @@ func TestNewConn(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	message := &Message{
 		To:            16,
@@ -79,8 +79,8 @@ func TestLargeWrite(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([][]byte, testSize)
 
@@ -135,8 +135,8 @@ func TestRawConn(t *testing.T) {
 	require.NoError(t, err)
 	<-start
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 	_, _ = rand.Read(randomData)
@@ -194,8 +194,8 @@ func TestReadClose(t *testing.T) {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	message := &Message{
 		To:            16,
@@ -233,8 +233,8 @@ func TestWriteClose(t *testing.T) {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	message := &Message{
 		To:            16,
@@ -277,8 +277,8 @@ func BenchmarkThroughputPipe32(b *testing.B) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -321,8 +321,8 @@ func BenchmarkThroughputPipe512(b *testing.B) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -376,8 +376,8 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -432,8 +432,8 @@ func BenchmarkThroughputNetwork512(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -488,8 +488,8 @@ func BenchmarkThroughputNetwork1024(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -544,8 +544,8 @@ func BenchmarkThroughputNetwork2048(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -600,8 +600,8 @@ func BenchmarkThroughputNetwork4096(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
@@ -656,8 +656,8 @@ func BenchmarkThroughputNetwork1mb(b *testing.B) {
 	writer, _ = net.Dial("tcp", ":3000")
 	<-start
 
-	readerConn := New(reader, &emptyLogger, 0)
-	writerConn := New(writer, &emptyLogger, 0)
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
 
 	randomData := make([]byte, messageSize)
 
