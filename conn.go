@@ -61,11 +61,10 @@ type Conn struct {
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
 	error            *atomic.Error
-	offset           uint32
 }
 
 // Connect creates a new TCP connection (using net.Dial) and warps it in a frisbee connection
-func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Logger, offset uint32) (*Conn, error) {
+func Connect(network string, addr string, keepAlive time.Duration, logger *zerolog.Logger) (*Conn, error) {
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, errors.WithContext(err, DIAL)
@@ -73,23 +72,22 @@ func Connect(network string, addr string, keepAlive time.Duration, l *zerolog.Lo
 	_ = conn.(*net.TCPConn).SetKeepAlive(true)
 	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 
-	return New(conn, l, offset), nil
+	return New(conn, logger), nil
 }
 
 // New takes an existing net.Conn object and wraps it in a frisbee connection
-func New(c net.Conn, l *zerolog.Logger, offset uint32) (conn *Conn) {
+func New(c net.Conn, logger *zerolog.Logger) (conn *Conn) {
 	conn = &Conn{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
 		writer:           bufio.NewWriterSize(c, 1<<19),
 		incomingMessages: ringbuffer.NewRingBuffer(1 << 19),
 		flusher:          make(chan struct{}, 1024),
-		logger:           l,
+		logger:           logger,
 		error:            atomic.NewError(ConnectionClosed),
-		offset:           offset,
 	}
 
-	if l == nil {
+	if logger == nil {
 		conn.logger = &defaultLogger
 	}
 
@@ -110,11 +108,6 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-// Offset returns the message type offset (used for internal message types)
-func (c *Conn) Offset() uint32 {
-	return c.offset
-}
-
 // Write takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
@@ -129,7 +122,7 @@ func (c *Conn) Write(message *Message, content *[]byte) error {
 	binary.BigEndian.PutUint32(encodedMessage[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation+c.offset)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation)
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
 
 	c.Lock()
