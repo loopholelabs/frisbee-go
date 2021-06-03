@@ -31,12 +31,11 @@ type ServerRouter map[uint32]ServerRouterFunc
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
-	listener      *net.TCPListener
-	addr          string
-	router        ServerRouter
-	shutdown      bool
-	options       *Options
-	messageOffset uint32
+	listener *net.TCPListener
+	addr     string
+	router   ServerRouter
+	shutdown bool
+	options  *Options
 
 	// OnOpened is a function run by the server whenever a connection is opened
 	OnOpened func(server *Server, c *Conn) Action
@@ -56,33 +55,18 @@ type Server struct {
 func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 
 	options := loadOptions(opts...)
-	messageOffset := uint32(0)
-	newRouter := ServerRouter{}
 
 	if options.Heartbeat > time.Duration(0) {
-		newRouter[messageOffset] = func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
-			outgoingMessage = &Message{
-				From:          incomingMessage.From,
-				To:            incomingMessage.To,
-				Id:            incomingMessage.Id,
-				Operation:     HEARTBEAT - c.Offset(),
-				ContentLength: incomingMessage.ContentLength,
-			}
+		router[HEARTBEAT] = func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+			outgoingMessage = &incomingMessage
 			return
 		}
-
-		messageOffset++
-	}
-
-	for message, handler := range router {
-		newRouter[message+messageOffset] = handler
 	}
 
 	return &Server{
-		addr:          addr,
-		router:        newRouter,
-		options:       options,
-		messageOffset: messageOffset,
+		addr:    addr,
+		router:  router,
+		options: options,
 	}
 }
 
@@ -153,7 +137,7 @@ func (s *Server) Start() error {
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
 	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
-	frisbeeConn := New(newConn, s.Logger(), s.messageOffset)
+	frisbeeConn := New(newConn, s.Logger())
 
 	openedAction := s.onOpened(frisbeeConn)
 
