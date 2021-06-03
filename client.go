@@ -36,7 +36,6 @@ type Client struct {
 	conn             *Conn
 	router           ClientRouter
 	options          *Options
-	messageOffset    uint32
 	closed           *atomic.Bool
 	heartbeatChannel chan struct{}
 }
@@ -44,30 +43,23 @@ type Client struct {
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
 // The Connect method must then be called to dial the server and initialize the connection
 func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
-
 	options := loadOptions(opts...)
-	messageOffset := uint32(0)
-	newRouter := ClientRouter{}
-
-	heartbeatChannel := make(chan struct{}, 1)
-
+	var heartbeatChannel chan struct{}
 	if options.Heartbeat > time.Duration(0) {
-		newRouter[messageOffset] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		if router[HEARTBEAT] != nil {
+			options.Logger.Warn().Msgf("message type %d is reserved, it will be overwritten", HEARTBEAT)
+		}
+		heartbeatChannel = make(chan struct{}, 1)
+		router[HEARTBEAT] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			heartbeatChannel <- struct{}{}
 			return
 		}
-		messageOffset++
-	}
-
-	for message, handler := range router {
-		newRouter[message+messageOffset] = handler
 	}
 
 	return &Client{
 		addr:             addr,
-		router:           newRouter,
+		router:           router,
 		options:          options,
-		messageOffset:    messageOffset,
 		closed:           atomic.NewBool(false),
 		heartbeatChannel: heartbeatChannel,
 	}
@@ -77,7 +69,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 // to receive and handle incoming messages.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.messageOffset)
+	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger())
 	if err != nil {
 		return err
 	}
@@ -123,6 +115,9 @@ func (c *Client) Logger() *zerolog.Logger {
 
 func (c *Client) reactor() {
 	for {
+		if c.closed.Load() {
+			return
+		}
 		incomingMessage, incomingContent, err := c.conn.Read()
 		if err != nil {
 			c.Logger().Error().Msgf(errors.WithContext(err, READCONN).Error())
@@ -168,9 +163,12 @@ func (c *Client) reactor() {
 func (c *Client) heartbeat() {
 	for {
 		<-time.After(c.options.Heartbeat)
+		if c.closed.Load() {
+			return
+		}
 		if c.conn.WriteBufferSize() == 0 {
 			err := c.Write(&Message{
-				Operation: HEARTBEAT - c.messageOffset,
+				Operation: HEARTBEAT,
 			}, nil)
 			if err != nil {
 				c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())

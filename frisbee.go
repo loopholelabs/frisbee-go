@@ -88,8 +88,17 @@ const (
 	SHUTDOWN
 )
 
-// These are internal message types:
+// These are internal reserved message types, and are the reason you cannot use 0-9 in the ClientRouter or the ServerRouter:
 const (
 	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
 	HEARTBEAT = uint32(iota)
+	RESERVED1
+	RESERVED2
+	RESERVED3
+	RESERVED4
+	RESERVED5
+	RESERVED6
+	RESERVED7
+	RESERVED8
+	RESERVED9
 )
