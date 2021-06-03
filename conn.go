@@ -403,7 +403,7 @@ func (c *Conn) readLoop() {
 					copy(readContent, buf[index:index+int(decodedMessage.ContentLength)])
 					index += int(decodedMessage.ContentLength)
 				}
-				err = c.incomingMessages.Push(protocol.PacketV0{
+				err = c.incomingMessages.Push(&protocol.PacketV0{
 					Message: &decodedMessage,
 					Content: &readContent,
 				})
@@ -414,7 +414,7 @@ func (c *Conn) readLoop() {
 					return
 				}
 			} else {
-				err = c.incomingMessages.Push(protocol.PacketV0{
+				err = c.incomingMessages.Push(&protocol.PacketV0{
 					Message: &decodedMessage,
 					Content: nil,
 				})

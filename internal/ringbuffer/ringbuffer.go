@@ -67,7 +67,7 @@ func (rb *RingBuffer) init(size uint64) {
 	rb.mask = size - 1
 }
 
-func (rb *RingBuffer) Push(item protocol.PacketV0) error {
+func (rb *RingBuffer) Push(item *protocol.PacketV0) error {
 	var newNode *node
 	position := atomic.LoadUint64(&rb.head)
 	tail := atomic.LoadUint64(&rb.tail)
@@ -94,7 +94,7 @@ RETRY:
 		}
 		runtime.Gosched()
 	}
-	newNode.data = unsafe.Pointer(&item)
+	newNode.data = unsafe.Pointer(item)
 	atomic.StoreUint64(&newNode.position, position+1)
 	return nil
 }
