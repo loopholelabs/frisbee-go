@@ -123,6 +123,9 @@ func (c *Client) Logger() *zerolog.Logger {
 
 func (c *Client) reactor() {
 	for {
+		if c.closed.Load() {
+			return
+		}
 		incomingMessage, incomingContent, err := c.conn.Read()
 		if err != nil {
 			c.Logger().Error().Msgf(errors.WithContext(err, READCONN).Error())
@@ -168,6 +171,9 @@ func (c *Client) reactor() {
 func (c *Client) heartbeat() {
 	for {
 		<-time.After(c.options.Heartbeat)
+		if c.closed.Load() {
+			return
+		}
 		if c.conn.WriteBufferSize() == 0 {
 			err := c.Write(&Message{
 				Operation: HEARTBEAT - c.messageOffset,
