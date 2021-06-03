@@ -31,12 +31,11 @@ type ServerRouter map[uint32]ServerRouterFunc
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
-	listener      *net.TCPListener
-	addr          string
-	router        ServerRouter
-	shutdown      bool
-	options       *Options
-	messageOffset uint32
+	listener *net.TCPListener
+	addr     string
+	router   ServerRouter
+	shutdown bool
+	options  *Options
 
 	// OnOpened is a function run by the server whenever a connection is opened
 	OnOpened func(server *Server, c *Conn) Action
