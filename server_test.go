@@ -148,7 +148,7 @@ func BenchmarkThroughput(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := frisbeeConn.Write(&Message{
+				err := frisbeeConn.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
 					Id:            uint32(q),
@@ -216,7 +216,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := frisbeeConn.Write(&Message{
+				err := frisbeeConn.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
 					Id:            uint32(q),
@@ -228,7 +228,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 					panic(err)
 				}
 			}
-			message, _, err := frisbeeConn.Read()
+			message, _, err := frisbeeConn.ReadMessage()
 			if err != nil {
 				panic(err)
 			}

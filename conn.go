@@ -18,6 +18,7 @@ package frisbee
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/loophole-labs/frisbee/internal/protocol"
@@ -58,6 +59,8 @@ type Conn struct {
 	writer           *bufio.Writer
 	flusher          chan struct{}
 	incomingMessages *ringbuffer.RingBuffer
+	Buffer           *bytes.Buffer
+	bufferLock       sync.Mutex
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
 	error            *atomic.Error
@@ -77,11 +80,13 @@ func Connect(network string, addr string, keepAlive time.Duration, logger *zerol
 
 // New takes an existing net.Conn object and wraps it in a frisbee connection
 func New(c net.Conn, logger *zerolog.Logger) (conn *Conn) {
+	buffer := make([]byte, 0, 1<<19)
 	conn = &Conn{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
 		writer:           bufio.NewWriterSize(c, 1<<19),
 		incomingMessages: ringbuffer.NewRingBuffer(1 << 19),
+		Buffer:           bytes.NewBuffer(buffer),
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(ConnectionClosed),
@@ -108,10 +113,60 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-// Write takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
+// Write takes a byte slice and sends a BUFFER message
+func (c *Conn) Write(p []byte) (int, error) {
+	var encodedMessage [protocol.MessageV0Size]byte
+
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], BUFFER)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(len(p)))
+
+	c.Lock()
+	if c.state.Load() != CONNECTED {
+		c.Unlock()
+		return 0, c.Error()
+	}
+
+	_, err := c.writer.Write(encodedMessage[:])
+	if err != nil {
+		c.Unlock()
+		if c.state.Load() != CONNECTED {
+			err = c.Error()
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return 0, errors.WithContext(err, WRITE)
+		}
+		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+		return 0, c.closeWithError(err)
+	}
+
+	_, err = c.writer.Write(p)
+	if err != nil {
+		c.Unlock()
+		if c.state.Load() != CONNECTED {
+			err = c.Error()
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return 0, errors.WithContext(err, WRITE)
+		}
+		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+		return 0, c.closeWithError(err)
+	}
+
+	if len(c.flusher) == 0 {
+		select {
+		case c.flusher <- struct{}{}:
+		default:
+		}
+	}
+
+	c.Unlock()
+
+	return len(p), nil
+}
+
+// WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
-func (c *Conn) Write(message *Message, content *[]byte) error {
+func (c *Conn) WriteMessage(message *Message, content *[]byte) error {
 	if content != nil && int(message.ContentLength) != len(*content) {
 		return InvalidContentLength
 	}
@@ -195,9 +250,15 @@ func (c *Conn) WriteBufferSize() int {
 	return i
 }
 
-// Read is a blocking function that will wait until a frisbee message is available and then return it (and its content).
+// Read is a function that will read buffer messages into a byte slice.
 // In the event that the connection is closed, Read will return an error.
-func (c *Conn) Read() (*Message, *[]byte, error) {
+func (c *Conn) Read(p []byte) (int, error) {
+	return c.Buffer.Read(p)
+}
+
+// ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
+// In the event that the connection is closed, ReadMessage will return an error.
+func (c *Conn) ReadMessage() (*Message, *[]byte, error) {
 	if c.state.Load() != CONNECTED {
 		return nil, nil, c.Error()
 	}
@@ -366,52 +427,93 @@ func (c *Conn) readLoop() {
 				Operation:     binary.BigEndian.Uint32(buf[index+protocol.OperationV0Offset : index+protocol.OperationV0Offset+protocol.OperationV0Size]),
 				ContentLength: binary.BigEndian.Uint64(buf[index+protocol.ContentLengthV0Offset : index+protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size]),
 			}
+
 			index += protocol.MessageV0Size
 			if decodedMessage.ContentLength > 0 {
-				readContent := make([]byte, decodedMessage.ContentLength)
-				if n-index < int(decodedMessage.ContentLength) {
-					for cap(buf) < int(decodedMessage.ContentLength) {
-						buf = append(buf[:cap(buf)], 0)
-						buf = buf[:cap(buf)]
+				if decodedMessage.Operation == BUFFER {
+					if n-index < int(decodedMessage.ContentLength) {
+						c.bufferLock.Lock()
+						for c.Buffer.Cap()-c.Buffer.Len() < int(decodedMessage.ContentLength) {
+							c.Buffer.Grow(1 << 19)
+						}
+						cp, err := c.Buffer.Write(buf[index:n])
+						if err != nil {
+							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
+							c.wg.Done()
+							_ = c.closeWithError(err)
+							return
+						}
+						min := int64(int(decodedMessage.ContentLength) - cp)
+						index = n
+						nn, err := io.CopyN(c.Buffer, c.conn, min)
+						if err != nil || nn < min {
+							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
+							c.wg.Done()
+							_ = c.closeWithError(err)
+							return
+						}
+						c.bufferLock.Unlock()
+					} else {
+						c.bufferLock.Lock()
+						for c.Buffer.Cap()-c.Buffer.Len() < int(decodedMessage.ContentLength) {
+							c.Buffer.Grow(1 << 19)
+						}
+						cp, err := c.Buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
+						if err != nil {
+							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
+							c.wg.Done()
+							_ = c.closeWithError(err)
+							return
+						}
+						c.bufferLock.Unlock()
+						index += cp
 					}
-					cp := copy(readContent, buf[index:n])
-					buf = buf[:cap(buf)]
-					min := int(decodedMessage.ContentLength) - cp
-					if len(buf) < min {
+				} else {
+					readContent := make([]byte, decodedMessage.ContentLength)
+					if n-index < int(decodedMessage.ContentLength) {
+						for cap(buf) < int(decodedMessage.ContentLength) {
+							buf = append(buf[:cap(buf)], 0)
+							buf = buf[:cap(buf)]
+						}
+						cp := copy(readContent, buf[index:n])
+						buf = buf[:cap(buf)]
+						min := int(decodedMessage.ContentLength) - cp
+						if len(buf) < min {
+							c.wg.Done()
+							_ = c.closeWithError(InvalidBufferLength)
+							return
+						}
+						n = 0
+						for n < min {
+							var nn int
+							nn, err = c.conn.Read(buf[n:])
+							n += nn
+							if err != nil {
+								if n < min {
+									c.wg.Done()
+									_ = c.closeWithError(err)
+
+									return
+								}
+								break
+							}
+						}
+						copy(readContent[cp:], buf[:min])
+						index = min
+					} else {
+						copy(readContent, buf[index:index+int(decodedMessage.ContentLength)])
+						index += int(decodedMessage.ContentLength)
+					}
+					err = c.incomingMessages.Push(&protocol.PacketV0{
+						Message: &decodedMessage,
+						Content: &readContent,
+					})
+					if err != nil {
+						c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
 						c.wg.Done()
-						_ = c.closeWithError(InvalidBufferLength)
+						_ = c.closeWithError(err)
 						return
 					}
-					n = 0
-					for n < min {
-						var nn int
-						nn, err = c.conn.Read(buf[n:])
-						n += nn
-						if err != nil {
-							if n < min {
-								c.wg.Done()
-								_ = c.closeWithError(err)
-
-								return
-							}
-							break
-						}
-					}
-					copy(readContent[cp:], buf[:min])
-					index = min
-				} else {
-					copy(readContent, buf[index:index+int(decodedMessage.ContentLength)])
-					index += int(decodedMessage.ContentLength)
-				}
-				err = c.incomingMessages.Push(&protocol.PacketV0{
-					Message: &decodedMessage,
-					Content: &readContent,
-				})
-				if err != nil {
-					c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
-					c.wg.Done()
-					_ = c.closeWithError(err)
-					return
 				}
 			} else {
 				err = c.incomingMessages.Push(&protocol.PacketV0{

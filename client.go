@@ -95,7 +95,7 @@ func (c *Client) Close() error {
 
 // Write sends a frisbee Message from the client to the server
 func (c *Client) Write(message *Message, content *[]byte) error {
-	return c.conn.Write(message, content)
+	return c.conn.WriteMessage(message, content)
 }
 
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.
@@ -118,7 +118,7 @@ func (c *Client) reactor() {
 		if c.closed.Load() {
 			return
 		}
-		incomingMessage, incomingContent, err := c.conn.Read()
+		incomingMessage, incomingContent, err := c.conn.ReadMessage()
 		if err != nil {
 			c.Logger().Error().Msgf(errors.WithContext(err, READCONN).Error())
 			_ = c.Close()
@@ -137,7 +137,7 @@ func (c *Client) reactor() {
 			}
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
-				err = c.conn.Write(outgoingMessage, &outgoingContent)
+				err = c.conn.WriteMessage(outgoingMessage, &outgoingContent)
 				if err != nil {
 					c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())
 					_ = c.Close()
