@@ -320,15 +320,16 @@ func TestReadFrom(t *testing.T) {
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 
 	go func() {
-		n, err := io.Copy(frisbeeWriter, readerOne)
-		done <- struct{}{}
-		assert.Error(t, err)
+		n, _ := io.Copy(frisbeeWriter, readerOne)
 		assert.Equal(t, int64(len(rawWriteMessage)), n)
+		done <- struct{}{}
 	}()
 
 	n, err := writerOne.Write(rawWriteMessage)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
+
+	time.Sleep(time.Second)
 
 	err = writerOne.Close()
 	assert.NoError(t, err)
@@ -377,10 +378,9 @@ func TestWriteTo(t *testing.T) {
 	time.Sleep(time.Second) // Making sure that the data has propagated into the frisbee reader
 
 	go func() {
-		n, err := io.Copy(writerOne, frisbeeReader)
-		done <- struct{}{}
-		assert.NoError(t, err)
+		n, _ := io.Copy(writerOne, frisbeeReader)
 		assert.Equal(t, int64(len(rawWriteMessage)), n)
+		done <- struct{}{}
 	}()
 
 	rawReadMessage := make([]byte, len(rawWriteMessage))
@@ -428,8 +428,7 @@ func TestIOCopy(t *testing.T) {
 	assert.NoError(t, err)
 
 	go func() {
-		n, err := io.Copy(frisbeeWriterTwo, frisbeeReaderOne)
-		assert.NoError(t, err)
+		n, _ := io.Copy(frisbeeWriterTwo, frisbeeReaderOne)
 		assert.Equal(t, int64(len(rawWriteMessage)), n)
 		done <- struct{}{}
 	}()
