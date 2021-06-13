@@ -116,7 +116,7 @@
 //			i := 0
 //			for {
 //				message := []byte(fmt.Sprintf("ECHO MESSAGE: %d", i))
-//				err := c.Write(&frisbee.Message{
+//				err := c.WriteMessage(&frisbee.Message{
 //					To:            0,
 //					From:          0,
 //					Id:            uint32(i),

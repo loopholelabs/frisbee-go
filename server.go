@@ -156,7 +156,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 
 	for {
-		incomingMessage, incomingContent, err := frisbeeConn.Read()
+		incomingMessage, incomingContent, err := frisbeeConn.ReadMessage()
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.onClosed(frisbeeConn, err)
@@ -176,7 +176,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
 				s.preWrite()
-				err := frisbeeConn.Write(outgoingMessage, &outgoingContent)
+				err := frisbeeConn.WriteMessage(outgoingMessage, &outgoingContent)
 				if err != nil {
 					_ = frisbeeConn.Close()
 					s.onClosed(frisbeeConn, err)
