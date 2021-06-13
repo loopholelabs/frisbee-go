@@ -362,6 +362,59 @@ func TestWriteTo(t *testing.T) {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
+	frisbeeWriterOne := New(writerOne, &emptyLogger)
+	frisbeeReaderOne := New(readerOne, &emptyLogger)
+
+	frisbeeWriterTwo := New(writerTwo, &emptyLogger)
+	frisbeeReaderTwo := New(readerTwo, &emptyLogger)
+
+	done := make(chan struct{}, 1)
+
+	rawWriteMessage := []byte("TEST CASE MESSAGE")
+
+	n, err := frisbeeWriterTwo.Write(rawWriteMessage)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+
+	err = frisbeeWriterTwo.Flush()
+	assert.NoError(t, err)
+
+	time.Sleep(time.Second) // Making sure that the data has propagated into the frisbee reader
+
+	go func() {
+		n, err := io.Copy(frisbeeWriterOne, frisbeeReaderTwo)
+		done <- struct{}{}
+		assert.NoError(t, err)
+		assert.Equal(t, int64(len(rawWriteMessage)), n)
+	}()
+
+	rawReadMessage := make([]byte, len(rawWriteMessage))
+	n, err = frisbeeReaderOne.Read(rawReadMessage)
+
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+	assert.Equal(t, rawWriteMessage, rawReadMessage)
+
+	err = frisbeeWriterTwo.Close()
+	assert.NoError(t, err)
+
+	err = frisbeeReaderTwo.Close()
+	assert.NoError(t, err)
+
+	<-done
+
+	err = frisbeeReaderOne.Close()
+	assert.NoError(t, err)
+	err = frisbeeWriterOne.Close()
+	assert.NoError(t, err)
+}
+
+func TestIOCopy(t *testing.T) {
+	readerOne, writerOne := net.Pipe()
+	readerTwo, writerTwo := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
 	frisbeeWriter := New(writerTwo, &emptyLogger)
 	frisbeeReader := New(readerTwo, &emptyLogger)
 
@@ -369,40 +422,38 @@ func TestWriteTo(t *testing.T) {
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 
-	n, err := frisbeeWriter.Write(rawWriteMessage)
+	go func() {
+		n, err := io.Copy(frisbeeWriter, readerOne)
+		done <- struct{}{}
+		assert.Error(t, err)
+		assert.Equal(t, int64(len(rawWriteMessage)), n)
+	}()
+
+	n, err := writerOne.Write(rawWriteMessage)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
+
+	err = writerOne.Close()
+	assert.NoError(t, err)
+
+	err = readerOne.Close()
+	assert.NoError(t, err)
+
+	<-done
 
 	err = frisbeeWriter.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second) // Making sure that the data has propagated into the frisbee reader
-
-	go func() {
-		n, err := io.Copy(writerOne, frisbeeReader)
-		done <- struct{}{}
-		assert.NoError(t, err)
-		assert.Equal(t, int64(len(rawWriteMessage)), n)
-	}()
-
 	rawReadMessage := make([]byte, len(rawWriteMessage))
-	n, err = readerOne.Read(rawReadMessage)
+	n, err = frisbeeReader.Read(rawReadMessage)
 
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
 	assert.Equal(t, rawWriteMessage, rawReadMessage)
 
-	err = frisbeeWriter.Close()
-	assert.NoError(t, err)
-
 	err = frisbeeReader.Close()
 	assert.NoError(t, err)
-
-	<-done
-
-	err = readerOne.Close()
-	assert.NoError(t, err)
-	err = writerOne.Close()
+	err = frisbeeWriter.Close()
 	assert.NoError(t, err)
 }
 
