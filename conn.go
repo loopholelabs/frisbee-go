@@ -59,7 +59,7 @@ type Conn struct {
 	writer           *bufio.Writer
 	flusher          chan struct{}
 	incomingMessages *ringbuffer.RingBuffer
-	Buffer           *bytes.Buffer
+	buffer           *bytes.Buffer
 	bufferLock       sync.Mutex
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
@@ -86,7 +86,7 @@ func New(c net.Conn, logger *zerolog.Logger) (conn *Conn) {
 		state:            atomic.NewInt32(CONNECTED),
 		writer:           bufio.NewWriterSize(c, 1<<19),
 		incomingMessages: ringbuffer.NewRingBuffer(1 << 19),
-		Buffer:           bytes.NewBuffer(buffer),
+		buffer:           bytes.NewBuffer(buffer),
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(ConnectionClosed),
@@ -115,6 +115,7 @@ func (c *Conn) RemoteAddr() net.Addr {
 
 // Write takes a byte slice and sends a BUFFER message
 func (c *Conn) Write(p []byte) (int, error) {
+
 	var encodedMessage [protocol.MessageV0Size]byte
 
 	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
@@ -161,6 +162,78 @@ func (c *Conn) Write(p []byte) (int, error) {
 	c.Unlock()
 
 	return len(p), nil
+}
+
+// ReadFrom is a function that will send buffer messages from an io.Reader until EOF or an error occurs
+// In the event that the connection is closed, ReadFrom will return an error.
+func (c *Conn) ReadFrom(r io.Reader) (n int64, err error) {
+	buf := make([]byte, 1<<19)
+
+	var encodedMessage [protocol.MessageV0Size]byte
+
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], BUFFER)
+
+	for err == nil {
+		var nn int
+		if c.state.Load() != CONNECTED {
+			return n, err
+		}
+
+		nn, err = r.Read(buf)
+		if nn == 0 {
+			continue
+		}
+
+		if err != nil {
+			break
+		}
+
+		n += int64(nn)
+
+		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(nn))
+
+		c.Lock()
+
+		_, err := c.writer.Write(encodedMessage[:])
+		if err != nil {
+			c.Unlock()
+			if c.state.Load() != CONNECTED {
+				err = c.Error()
+				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, c.closeWithError(err)
+		}
+
+		_, err = c.writer.Write(buf[:nn])
+		if err != nil {
+			c.Unlock()
+			if c.state.Load() != CONNECTED {
+				err = c.Error()
+				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, c.closeWithError(err)
+		}
+
+		if len(c.flusher) == 0 {
+			select {
+			case c.flusher <- struct{}{}:
+			default:
+			}
+		}
+
+		c.Unlock()
+	}
+
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+
+	return
 }
 
 // WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
@@ -253,7 +326,41 @@ func (c *Conn) WriteBufferSize() int {
 // Read is a function that will read buffer messages into a byte slice.
 // In the event that the connection is closed, Read will return an error.
 func (c *Conn) Read(p []byte) (int, error) {
-	return c.Buffer.Read(p)
+	c.bufferLock.Lock()
+	defer c.bufferLock.Unlock()
+	if c.state.Load() != CONNECTED {
+		return 0, ConnectionClosed
+	}
+	return c.buffer.Read(p)
+}
+
+// WriteTo is a function that will read buffer messages into an io.Writer until EOF or an error occurs
+// In the event that the connection is closed, WriteTo will return an error.
+func (c *Conn) WriteTo(w io.Writer) (n int64, err error) {
+	for err == nil {
+		c.bufferLock.Lock()
+		var nn int
+		if c.state.Load() != CONNECTED {
+			c.bufferLock.Unlock()
+			return n, ConnectionClosed
+		}
+		if c.buffer.Len() == 0 {
+			c.bufferLock.Unlock()
+			return n, nil
+		} else {
+			nn, err = w.Write(c.buffer.Bytes())
+			if nn > 0 {
+				c.buffer.Next(nn)
+				n += int64(nn)
+			}
+		}
+		c.bufferLock.Unlock()
+	}
+
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	return
 }
 
 // ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
@@ -433,10 +540,10 @@ func (c *Conn) readLoop() {
 				if decodedMessage.Operation == BUFFER {
 					if n-index < int(decodedMessage.ContentLength) {
 						c.bufferLock.Lock()
-						for c.Buffer.Cap()-c.Buffer.Len() < int(decodedMessage.ContentLength) {
-							c.Buffer.Grow(1 << 19)
+						for c.buffer.Cap()-c.buffer.Len() < int(decodedMessage.ContentLength) {
+							c.buffer.Grow(1 << 19)
 						}
-						cp, err := c.Buffer.Write(buf[index:n])
+						cp, err := c.buffer.Write(buf[index:n])
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
 							c.wg.Done()
@@ -445,8 +552,8 @@ func (c *Conn) readLoop() {
 						}
 						min := int64(int(decodedMessage.ContentLength) - cp)
 						index = n
-						nn, err := io.CopyN(c.Buffer, c.conn, min)
-						if err != nil || nn < min {
+						_, err = io.CopyN(c.buffer, c.conn, min)
+						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
 							c.wg.Done()
 							_ = c.closeWithError(err)
@@ -455,10 +562,10 @@ func (c *Conn) readLoop() {
 						c.bufferLock.Unlock()
 					} else {
 						c.bufferLock.Lock()
-						for c.Buffer.Cap()-c.Buffer.Len() < int(decodedMessage.ContentLength) {
-							c.Buffer.Grow(1 << 19)
+						for c.buffer.Cap()-c.buffer.Len() < int(decodedMessage.ContentLength) {
+							c.buffer.Grow(1 << 19)
 						}
-						cp, err := c.Buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
+						cp, err := c.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
 							c.wg.Done()
