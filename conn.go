@@ -49,6 +49,8 @@ var (
 	defaultLogger = zerolog.New(os.Stdout)
 )
 
+const DEFAULT_BUFFER_SIZE = 1 << 19
+
 // Conn is the underlying frisbee connection which has extremely efficient read and write logic and
 // can handle the specific frisbee requirements. This is not meant to be used on its own, and instead is
 // meant to be used by frisbee client and server implementations
@@ -80,12 +82,12 @@ func Connect(network string, addr string, keepAlive time.Duration, logger *zerol
 
 // New takes an existing net.Conn object and wraps it in a frisbee connection
 func New(c net.Conn, logger *zerolog.Logger) (conn *Conn) {
-	buffer := make([]byte, 0, 1<<19)
+	buffer := make([]byte, 0, DEFAULT_BUFFER_SIZE)
 	conn = &Conn{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
-		writer:           bufio.NewWriterSize(c, 1<<19),
-		incomingMessages: ringbuffer.NewRingBuffer(1 << 19),
+		writer:           bufio.NewWriterSize(c, DEFAULT_BUFFER_SIZE),
+		incomingMessages: ringbuffer.NewRingBuffer(DEFAULT_BUFFER_SIZE),
 		buffer:           bytes.NewBuffer(buffer),
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
@@ -115,7 +117,6 @@ func (c *Conn) RemoteAddr() net.Addr {
 
 // Write takes a byte slice and sends a BUFFER message
 func (c *Conn) Write(p []byte) (int, error) {
-
 	var encodedMessage [protocol.MessageV0Size]byte
 
 	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
@@ -167,14 +168,14 @@ func (c *Conn) Write(p []byte) (int, error) {
 // ReadFrom is a function that will send buffer messages from an io.Reader until EOF or an error occurs
 // In the event that the connection is closed, ReadFrom will return an error.
 func (c *Conn) ReadFrom(r io.Reader) (n int64, err error) {
-	buf := make([]byte, 1<<19)
+	buf := make([]byte, DEFAULT_BUFFER_SIZE)
 
 	var encodedMessage [protocol.MessageV0Size]byte
 
 	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], BUFFER)
 
-	for err == nil {
+	for {
 		var nn int
 		if c.state.Load() != CONNECTED {
 			return n, err
@@ -495,7 +496,7 @@ func (c *Conn) flushLoop() {
 }
 
 func (c *Conn) readLoop() {
-	buf := make([]byte, 1<<19)
+	buf := make([]byte, DEFAULT_BUFFER_SIZE)
 	var index int
 	for {
 		buf = buf[:cap(buf)]
