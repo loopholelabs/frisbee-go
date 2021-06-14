@@ -211,6 +211,8 @@ func TestReadClose(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
+	time.Sleep(time.Second)
+
 	readMessage, content, err := readerConn.ReadMessage()
 	assert.NoError(t, err)
 	assert.NotNil(t, readMessage)
