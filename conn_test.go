@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io"
 	"io/ioutil"
 	"net"
 	"testing"
@@ -44,10 +45,10 @@ func TestNewConn(t *testing.T) {
 		Operation:     32,
 		ContentLength: 0,
 	}
-	err := writerConn.Write(message, nil)
+	err := writerConn.WriteMessage(message, nil)
 	assert.NoError(t, err)
 
-	readMessage, content, err := readerConn.Read()
+	readMessage, content, err := readerConn.ReadMessage()
 	assert.NoError(t, err)
 	assert.NotNil(t, readMessage)
 	assert.Equal(t, *message, *readMessage)
@@ -57,10 +58,10 @@ func TestNewConn(t *testing.T) {
 	_, _ = rand.Read(data)
 
 	message.ContentLength = messageSize
-	err = writerConn.Write(message, &data)
+	err = writerConn.WriteMessage(message, &data)
 	assert.NoError(t, err)
 
-	readMessage, content, err = readerConn.Read()
+	readMessage, content, err = readerConn.ReadMessage()
 	assert.NoError(t, err)
 	assert.Equal(t, *message, *readMessage)
 	assert.Equal(t, data, *content)
@@ -95,12 +96,12 @@ func TestLargeWrite(t *testing.T) {
 	for i := 0; i < testSize; i++ {
 		randomData[i] = make([]byte, messageSize)
 		_, _ = rand.Read(randomData[i])
-		err := writerConn.Write(message, &randomData[i])
+		err := writerConn.WriteMessage(message, &randomData[i])
 		assert.NoError(t, err)
 	}
 
 	for i := 0; i < testSize; i++ {
-		readMessage, data, err := readerConn.Read()
+		readMessage, data, err := readerConn.ReadMessage()
 		assert.NoError(t, err)
 		assert.Equal(t, *message, *readMessage)
 		assert.Equal(t, randomData[i], *data)
@@ -150,12 +151,12 @@ func TestRawConn(t *testing.T) {
 	}
 
 	for i := 0; i < testSize; i++ {
-		err := writerConn.Write(message, &randomData)
+		err := writerConn.WriteMessage(message, &randomData)
 		assert.NoError(t, err)
 	}
 
 	for i := 0; i < testSize; i++ {
-		readMessage, data, err := readerConn.Read()
+		readMessage, data, err := readerConn.ReadMessage()
 		assert.NoError(t, err)
 		assert.Equal(t, *message, *readMessage)
 		assert.Equal(t, randomData, *data)
@@ -204,10 +205,13 @@ func TestReadClose(t *testing.T) {
 		Operation:     32,
 		ContentLength: 0,
 	}
-	err := writerConn.Write(message, nil)
+	err := writerConn.WriteMessage(message, nil)
 	assert.NoError(t, err)
 
-	readMessage, content, err := readerConn.Read()
+	err = writerConn.Flush()
+	assert.NoError(t, err)
+
+	readMessage, content, err := readerConn.ReadMessage()
 	assert.NoError(t, err)
 	assert.NotNil(t, readMessage)
 	assert.Equal(t, *message, *readMessage)
@@ -216,7 +220,7 @@ func TestReadClose(t *testing.T) {
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
 
-	err = writerConn.Write(message, nil)
+	err = writerConn.WriteMessage(message, nil)
 	assert.NoError(t, err)
 	err = writerConn.Flush()
 	assert.Error(t, err)
@@ -243,29 +247,217 @@ func TestWriteClose(t *testing.T) {
 		Operation:     32,
 		ContentLength: 0,
 	}
-	err := writerConn.Write(message, nil)
+	err := writerConn.WriteMessage(message, nil)
 	assert.NoError(t, err)
 
-	readMessage, content, err := readerConn.Read()
+	err = writerConn.Flush()
+	assert.NoError(t, err)
+
+	readMessage, content, err := readerConn.ReadMessage()
 	assert.NoError(t, err)
 	assert.NotNil(t, readMessage)
 	assert.Equal(t, *message, *readMessage)
 	assert.Nil(t, content)
 
-	err = writerConn.Write(message, nil)
+	err = writerConn.WriteMessage(message, nil)
 	assert.NoError(t, err)
 
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
 	time.Sleep(time.Second)
-	_, _, err = readerConn.Read()
+	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionPaused)
 	assert.ErrorIs(t, readerConn.Error(), ConnectionPaused)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
 	err = writerConn.Close()
+	assert.NoError(t, err)
+}
+
+func TestBufferMessages(t *testing.T) {
+	reader, writer := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	readerConn := New(reader, &emptyLogger)
+	writerConn := New(writer, &emptyLogger)
+
+	rawWriteMessage := []byte("TEST CASE MESSAGE")
+
+	n, err := writerConn.Write(rawWriteMessage)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+
+	err = writerConn.Flush()
+	assert.NoError(t, err)
+
+	time.Sleep(time.Second)
+
+	rawReadMessage := make([]byte, len(rawWriteMessage))
+
+	n, err = io.ReadAtLeast(readerConn, rawReadMessage, len(rawWriteMessage))
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+	assert.Equal(t, rawWriteMessage, rawReadMessage)
+
+	err = readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
+}
+
+func TestReadFrom(t *testing.T) {
+	readerOne, writerOne := net.Pipe()
+	readerTwo, writerTwo := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	frisbeeWriter := New(writerTwo, &emptyLogger)
+	frisbeeReader := New(readerTwo, &emptyLogger)
+
+	done := make(chan struct{}, 1)
+
+	rawWriteMessage := []byte("TEST CASE MESSAGE")
+
+	go func() {
+		n, _ := io.Copy(frisbeeWriter, readerOne)
+		assert.Equal(t, int64(len(rawWriteMessage)), n)
+		done <- struct{}{}
+	}()
+
+	n, err := writerOne.Write(rawWriteMessage)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+
+	time.Sleep(time.Second)
+
+	err = writerOne.Close()
+	assert.NoError(t, err)
+
+	err = readerOne.Close()
+	assert.NoError(t, err)
+
+	<-done
+
+	err = frisbeeWriter.Flush()
+	assert.NoError(t, err)
+
+	rawReadMessage := make([]byte, len(rawWriteMessage))
+	n, err = frisbeeReader.Read(rawReadMessage)
+
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+	assert.Equal(t, rawWriteMessage, rawReadMessage)
+
+	err = frisbeeReader.Close()
+	assert.NoError(t, err)
+	err = frisbeeWriter.Close()
+	assert.NoError(t, err)
+}
+
+func TestWriteTo(t *testing.T) {
+	readerOne, writerOne := net.Pipe()
+	readerTwo, writerTwo := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	frisbeeWriter := New(writerTwo, &emptyLogger)
+	frisbeeReader := New(readerTwo, &emptyLogger)
+
+	done := make(chan struct{}, 1)
+
+	rawWriteMessage := []byte("TEST CASE MESSAGE")
+
+	n, err := frisbeeWriter.Write(rawWriteMessage)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+
+	err = frisbeeWriter.Flush()
+	assert.NoError(t, err)
+
+	time.Sleep(time.Second) // Making sure that the data has propagated into the frisbee reader
+
+	go func() {
+		n, _ := io.Copy(writerOne, frisbeeReader)
+		assert.Equal(t, int64(len(rawWriteMessage)), n)
+		done <- struct{}{}
+	}()
+
+	rawReadMessage := make([]byte, len(rawWriteMessage))
+	n, err = readerOne.Read(rawReadMessage)
+
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+	assert.Equal(t, rawWriteMessage, rawReadMessage)
+
+	err = frisbeeWriter.Close()
+	assert.NoError(t, err)
+
+	err = frisbeeReader.Close()
+	assert.NoError(t, err)
+
+	<-done
+
+	err = readerOne.Close()
+	assert.NoError(t, err)
+	err = writerOne.Close()
+	assert.NoError(t, err)
+}
+
+func TestIOCopy(t *testing.T) {
+	readerOne, writerOne := net.Pipe()
+	readerTwo, writerTwo := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	frisbeeWriterOne := New(writerOne, &emptyLogger)
+	frisbeeReaderOne := New(readerOne, &emptyLogger)
+
+	frisbeeWriterTwo := New(writerTwo, &emptyLogger)
+	frisbeeReaderTwo := New(readerTwo, &emptyLogger)
+
+	done := make(chan struct{}, 1)
+
+	rawWriteMessage := []byte("TEST CASE MESSAGE")
+
+	n, err := frisbeeWriterOne.Write(rawWriteMessage)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+
+	err = frisbeeWriterOne.Flush()
+	assert.NoError(t, err)
+
+	go func() {
+		n, _ := io.Copy(frisbeeWriterTwo, frisbeeReaderOne)
+		assert.Equal(t, int64(len(rawWriteMessage)), n)
+		done <- struct{}{}
+	}()
+
+	time.Sleep(time.Second)
+
+	err = frisbeeWriterOne.Close()
+	assert.NoError(t, err)
+
+	err = frisbeeReaderOne.Close()
+	assert.NoError(t, err)
+
+	<-done
+
+	err = frisbeeWriterTwo.Flush()
+	assert.NoError(t, err)
+
+	rawReadMessage := make([]byte, len(rawWriteMessage))
+	n, err = frisbeeReaderTwo.Read(rawReadMessage)
+
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessage), n)
+	assert.Equal(t, rawWriteMessage, rawReadMessage)
+
+	err = frisbeeReaderTwo.Close()
+	assert.NoError(t, err)
+	err = frisbeeWriterTwo.Close()
 	assert.NoError(t, err)
 }
 
@@ -296,14 +488,14 @@ func BenchmarkThroughputPipe32(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
@@ -340,14 +532,14 @@ func BenchmarkThroughputPipe512(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
@@ -395,14 +587,14 @@ func BenchmarkThroughputNetwork32(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
@@ -451,14 +643,14 @@ func BenchmarkThroughputNetwork512(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
@@ -507,14 +699,14 @@ func BenchmarkThroughputNetwork1024(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
@@ -563,14 +755,14 @@ func BenchmarkThroughputNetwork2048(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
@@ -619,14 +811,14 @@ func BenchmarkThroughputNetwork4096(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
@@ -675,14 +867,14 @@ func BenchmarkThroughputNetwork1mb(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		go func() {
 			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.Read()
+				readMessage, data, _ := readerConn.ReadMessage()
 				_ = data
 				_ = readMessage
 			}
 			done <- struct{}{}
 		}()
 		for i := 0; i < testSize; i++ {
-			_ = writerConn.Write(message, &randomData)
+			_ = writerConn.WriteMessage(message, &randomData)
 		}
 		<-done
 	}
