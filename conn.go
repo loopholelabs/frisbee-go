@@ -175,7 +175,7 @@ func (c *Conn) ReadFrom(r io.Reader) (n int64, err error) {
 	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], BUFFER)
 
-	for {
+	for err == nil {
 		var nn int
 		if c.state.Load() != CONNECTED {
 			return n, err
