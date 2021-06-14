@@ -293,6 +293,8 @@ func TestBufferMessages(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
+	time.Sleep(time.Second)
+
 	rawReadMessage := make([]byte, len(rawWriteMessage))
 
 	n, err = io.ReadAtLeast(readerConn, rawReadMessage, len(rawWriteMessage))
