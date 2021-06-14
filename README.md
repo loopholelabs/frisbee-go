@@ -1,6 +1,8 @@
 # Frisbee
 
-![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-brightgreen.svg)
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-brightgreen.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Build Status](https://loopholelabs.semaphoreci.com/badges/frisbee/branches/master.svg?style=shields&key=0ac9069a-bd8c-4d06-8790-97ba3f70d528)](https://loopholelabs.semaphoreci.com/projects/frisbee)
 [![Go Report Card](https://goreportcard.com/badge/github.com/loophole-labs/frisbee)](https://goreportcard.com/report/github.com/loophole-labs/frisbee)
 [![go-doc](https://godoc.org/github.com/loophole-labs/frisbee?status.svg)](https://godoc.org/github.com/loophole-labs/frisbee)
 
@@ -36,7 +38,7 @@ Everyone interacting in the Frisbee project’s codebases, issue trackers, chat 
 
 
 ## Project Managed By:
-![https://loopholelabs.io][LOOPHOLELABS]
+[![https://loopholelabs.io][LOOPHOLELABS]](https://loopholelabs.io)
 
 [GITREPO]: https://github.com/Loophole-Labs/frisbee
 [LOOPHOLELABS]: https://cdn.loopholelabs.io/loopholelabs/LoopholeLabsLogo.svg
