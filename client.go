@@ -69,7 +69,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 // to receive and handle incoming messages.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger())
+	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
 	if err != nil {
 		return err
 	}

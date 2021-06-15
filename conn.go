@@ -19,6 +19,7 @@ package frisbee
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/binary"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/loophole-labs/frisbee/internal/protocol"
@@ -69,8 +70,16 @@ type Conn struct {
 }
 
 // Connect creates a new TCP connection (using net.Dial) and warps it in a frisbee connection
-func Connect(network string, addr string, keepAlive time.Duration, logger *zerolog.Logger) (*Conn, error) {
-	conn, err := net.Dial(network, addr)
+func Connect(network string, addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Conn, error) {
+	var conn net.Conn
+	var err error
+
+	if TLSConfig != nil {
+		conn, err = tls.Dial(network, addr, TLSConfig)
+	} else {
+		conn, err = net.Dial(network, addr)
+	}
+
 	if err != nil {
 		return nil, errors.WithContext(err, DIAL)
 	}
