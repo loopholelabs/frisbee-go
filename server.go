@@ -17,6 +17,7 @@
 package frisbee
 
 import (
+	"crypto/tls"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"net"
@@ -111,15 +112,23 @@ func (s *Server) Start() error {
 		s.PreWrite = func(_ *Server) {}
 	}
 
-	l, err := net.Listen("tcp", s.addr)
+	var listener net.Listener
+	var err error
+
+	if s.options.TLSConfig != nil {
+		listener, err = tls.Listen("tcp", s.addr, s.options.TLSConfig)
+	} else {
+		listener, err = net.Listen("tcp", s.addr)
+	}
+
 	if err != nil {
 		return err
 	}
-	s.listener = l.(*net.TCPListener)
+	s.listener = listener.(*net.TCPListener)
 
 	go func() {
 		for {
-			newConn, err := l.Accept()
+			newConn, err := listener.Accept()
 			if err != nil {
 				if s.shutdown {
 					return

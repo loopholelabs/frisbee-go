@@ -135,7 +135,7 @@ func BenchmarkThroughput(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger)
+	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
@@ -202,7 +202,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger)
+	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
