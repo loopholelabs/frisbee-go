@@ -67,7 +67,7 @@ func TestClientRaw(t *testing.T) {
 	_, _ = rand.Read(data)
 
 	for q := 0; q < testSize; q++ {
-		err := c.Write(&Message{
+		err := c.WriteMessage(&Message{
 			To:            16,
 			From:          32,
 			Id:            uint32(q),
@@ -77,7 +77,7 @@ func TestClientRaw(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	err = c.Write(&Message{
+	err = c.WriteMessage(&Message{
 		To:            16,
 		From:          32,
 		Id:            0,
@@ -150,7 +150,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := c.Write(&Message{
+				err := c.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
 					Id:            uint32(q),
@@ -223,7 +223,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := c.Write(&Message{
+				err := c.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
 					Id:            uint32(q),

@@ -93,9 +93,19 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// Write sends a frisbee Message from the client to the server
-func (c *Client) Write(message *Message, content *[]byte) error {
+// WriteMessage sends a frisbee Message from the client to the server
+func (c *Client) WriteMessage(message *Message, content *[]byte) error {
 	return c.conn.WriteMessage(message, content)
+}
+
+// Write takes a byte slice and sends a BUFFER frisbee Message
+func (c *Client) Write(p []byte) (int, error) {
+	return c.conn.Write(p)
+}
+
+// Read takes a byte slices and reads a BUFFER frisbee Message into it
+func (c *Client) Read(p []byte) (int, error) {
+	return c.conn.Read(p)
 }
 
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.
@@ -167,7 +177,7 @@ func (c *Client) heartbeat() {
 			return
 		}
 		if c.conn.WriteBufferSize() == 0 {
-			err := c.Write(&Message{
+			err := c.WriteMessage(&Message{
 				Operation: HEARTBEAT,
 			}, nil)
 			if err != nil {

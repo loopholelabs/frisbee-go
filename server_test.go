@@ -69,7 +69,7 @@ func TestServerRaw(t *testing.T) {
 	_, _ = rand.Read(data)
 
 	for q := 0; q < testSize; q++ {
-		err := c.Write(&Message{
+		err := c.WriteMessage(&Message{
 			To:            16,
 			From:          32,
 			Id:            uint32(q),
@@ -79,7 +79,7 @@ func TestServerRaw(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	err = c.Write(&Message{
+	err = c.WriteMessage(&Message{
 		To:            16,
 		From:          32,
 		Id:            0,
