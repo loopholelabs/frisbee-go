@@ -211,7 +211,7 @@ func TestReadClose(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 5)
 
 	readMessage, content, err := readerConn.ReadMessage()
 	assert.NoError(t, err)
@@ -266,7 +266,7 @@ func TestWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 5)
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionPaused)
 	assert.ErrorIs(t, readerConn.Error(), ConnectionPaused)
@@ -294,7 +294,7 @@ func TestBufferMessages(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 5)
 
 	rawReadMessage := make([]byte, len(rawWriteMessage))
 
@@ -332,7 +332,7 @@ func TestReadFrom(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 5)
 
 	err = writerOne.Close()
 	assert.NoError(t, err)
@@ -378,7 +378,7 @@ func TestWriteTo(t *testing.T) {
 	err = frisbeeWriter.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second) // Making sure that the data has propagated into the frisbee reader
+	time.Sleep(time.Second * 5) // Making sure that the data has propagated into the frisbee reader
 
 	go func() {
 		n, _ := io.Copy(writerOne, frisbeeReader)
@@ -436,7 +436,7 @@ func TestIOCopy(t *testing.T) {
 		done <- struct{}{}
 	}()
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 5)
 
 	err = frisbeeWriterOne.Close()
 	assert.NoError(t, err)
