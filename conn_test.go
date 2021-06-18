@@ -419,6 +419,7 @@ func TestIOCopy(t *testing.T) {
 	frisbeeWriterTwo := New(writerTwo, &emptyLogger)
 	frisbeeReaderTwo := New(readerTwo, &emptyLogger)
 
+	start := make(chan struct{}, 1)
 	done := make(chan struct{}, 1)
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
@@ -431,10 +432,13 @@ func TestIOCopy(t *testing.T) {
 	assert.NoError(t, err)
 
 	go func() {
+		start <- struct{}{}
 		n, _ := io.Copy(frisbeeWriterTwo, frisbeeReaderOne)
 		assert.Equal(t, int64(len(rawWriteMessage)), n)
 		done <- struct{}{}
 	}()
+
+	<-start
 
 	time.Sleep(time.Second * 5)
 
