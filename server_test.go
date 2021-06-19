@@ -69,7 +69,7 @@ func TestServerRaw(t *testing.T) {
 	_, _ = rand.Read(data)
 
 	for q := 0; q < testSize; q++ {
-		err := c.Write(&Message{
+		err := c.WriteMessage(&Message{
 			To:            16,
 			From:          32,
 			Id:            uint32(q),
@@ -79,7 +79,7 @@ func TestServerRaw(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	err = c.Write(&Message{
+	err = c.WriteMessage(&Message{
 		To:            16,
 		From:          32,
 		Id:            0,
@@ -135,7 +135,7 @@ func BenchmarkThroughput(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger)
+	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
@@ -202,7 +202,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger)
+	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
