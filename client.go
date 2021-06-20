@@ -87,6 +87,16 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// Closed checks whether this client has been closed
+func (c *Client) Closed() bool {
+	return c.closed.Load()
+}
+
+// Error checks whether this client has an error
+func (c *Client) Error() error {
+	return c.conn.Error()
+}
+
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
 	c.closed.Store(true)
