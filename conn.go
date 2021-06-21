@@ -905,7 +905,7 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 
 		nn, err = r.Read(buf)
 		if nn == 0 {
-			continue
+			break
 		}
 
 		if err != nil {
