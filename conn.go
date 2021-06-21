@@ -893,7 +893,7 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 
 	s.Logger().Debug().Msgf("StreamConn ReadFrom called")
 
-	for err == nil {
+	for {
 		var nn int
 		if s.state.Load() != CONNECTED {
 			return n, err
@@ -902,15 +902,13 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 		if s.Closed() {
 			return n, ConnectionClosed
 		}
-
+		s.Logger().Debug().Msgf("StreamConn ReadFrom READING")
 		nn, err = r.Read(buf)
-		if nn == 0 {
+		if nn == 0 || err != nil {
 			break
 		}
 
-		if err != nil {
-			break
-		}
+		s.Logger().Debug().Msgf("ReadFrom read %d bytes: %+v", nn, buf)
 
 		n += int64(nn)
 
@@ -948,6 +946,7 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 			default:
 			}
 		}
+		s.Logger().Debug().Msgf("ReadFrom finished read, looping: %d", n)
 
 		s.Unlock()
 	}
