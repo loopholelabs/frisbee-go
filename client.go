@@ -87,6 +87,16 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// StreamConnCh returns a channel that can be listened on to retrieve stream connections as they're created
+func (c *Client) StreamConnCh() <-chan *StreamConn {
+	return c.conn.StreamConnCh
+}
+
+// NewStreamConn creates a new StreamConn from the underlying frisbee.Conn
+func (c *Client) NewStreamConn(id uint32) *StreamConn {
+	return c.conn.NewStreamConn(id)
+}
+
 // Closed checks whether this client has been closed
 func (c *Client) Closed() bool {
 	return c.closed.Load()
