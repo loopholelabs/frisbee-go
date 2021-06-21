@@ -804,6 +804,10 @@ func (c *Conn) NewStreamConn(id uint32) *StreamConn {
 	}
 }
 
+func (s *StreamConn) ID() uint32 {
+	return s.id
+}
+
 func (s *StreamConn) Closed() bool {
 	return s.closed.Load()
 }
