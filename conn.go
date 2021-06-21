@@ -798,12 +798,18 @@ type StreamConn struct {
 }
 
 func (c *Conn) NewStreamConn(id uint32) *StreamConn {
-	return &StreamConn{
+	streamConn := &StreamConn{
 		Conn:           c,
 		id:             id,
 		incomingBuffer: newIncomingBuffer(),
 		closed:         atomic.NewBool(false),
 	}
+
+	c.streamConnMutex.Lock()
+	c.streamConns[id] = streamConn
+	c.streamConnMutex.Unlock()
+
+	return streamConn
 }
 
 func (s *StreamConn) ID() uint32 {
