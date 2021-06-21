@@ -825,6 +825,7 @@ func (s *StreamConn) Close() {
 
 // Write takes a byte slice and sends a STREAM message
 func (s *StreamConn) Write(p []byte) (int, error) {
+	s.Logger().Debug().Msgf("StreamConn Write called with size %d", len(p))
 	var encodedMessage [protocol.MessageV0Size]byte
 
 	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
@@ -875,7 +876,7 @@ func (s *StreamConn) Write(p []byte) (int, error) {
 	}
 
 	s.Unlock()
-
+	s.Logger().Debug().Msgf("StreamConn Write done")
 	return len(p), nil
 }
 
@@ -889,6 +890,8 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
+
+	s.Logger().Debug().Msgf("StreamConn ReadFrom called")
 
 	for err == nil {
 		var nn int
@@ -952,6 +955,8 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 	if errors.Is(err, io.EOF) {
 		err = nil
 	}
+
+	s.Logger().Debug().Msgf("StreamConn ReadFrom done")
 
 	return
 }
