@@ -189,78 +189,77 @@ func (c *Conn) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-//
-//// ReadFrom is a function that will send buffer messages from an io.Reader until EOF or an error occurs
-//// In the event that the connection is closed, ReadFrom will return an error.
-//func (c *Conn) ReadFrom(r io.Reader) (n int64, err error) {
-//	buf := make([]byte, DefaultBufferSize)
-//
-//	var encodedMessage [protocol.MessageV0Size]byte
-//
-//	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-//	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], BUFFER)
-//
-//	for err == nil {
-//		var nn int
-//		if c.state.Load() != CONNECTED {
-//			return n, err
-//		}
-//
-//		nn, err = r.Read(buf)
-//		if nn == 0 {
-//			continue
-//		}
-//
-//		if err != nil {
-//			break
-//		}
-//
-//		n += int64(nn)
-//
-//		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(nn))
-//
-//		c.Lock()
-//
-//		_, err := c.writer.Write(encodedMessage[:])
-//		if err != nil {
-//			c.Unlock()
-//			if c.state.Load() != CONNECTED {
-//				err = c.Error()
-//				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//				return n, errors.WithContext(err, WRITE)
-//			}
-//			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//			return n, c.closeWithError(err)
-//		}
-//
-//		_, err = c.writer.Write(buf[:nn])
-//		if err != nil {
-//			c.Unlock()
-//			if c.state.Load() != CONNECTED {
-//				err = c.Error()
-//				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//				return n, errors.WithContext(err, WRITE)
-//			}
-//			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//			return n, c.closeWithError(err)
-//		}
-//
-//		if len(c.flusher) == 0 {
-//			select {
-//			case c.flusher <- struct{}{}:
-//			default:
-//			}
-//		}
-//
-//		c.Unlock()
-//	}
-//
-//	if errors.Is(err, io.EOF) {
-//		err = nil
-//	}
-//
-//	return
-//}
+// ReadFrom is a function that will send buffer messages from an io.Reader until EOF or an error occurs
+// In the event that the connection is closed, ReadFrom will return an error.
+func (c *Conn) ReadFrom(r io.Reader) (n int64, err error) {
+	buf := make([]byte, DefaultBufferSize)
+
+	var encodedMessage [protocol.MessageV0Size]byte
+
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], BUFFER)
+
+	for err == nil {
+		var nn int
+		if c.state.Load() != CONNECTED {
+			return n, err
+		}
+
+		nn, err = r.Read(buf)
+		if nn == 0 {
+			continue
+		}
+
+		if err != nil {
+			break
+		}
+
+		n += int64(nn)
+
+		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(nn))
+
+		c.Lock()
+
+		_, err := c.writer.Write(encodedMessage[:])
+		if err != nil {
+			c.Unlock()
+			if c.state.Load() != CONNECTED {
+				err = c.Error()
+				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, c.closeWithError(err)
+		}
+
+		_, err = c.writer.Write(buf[:nn])
+		if err != nil {
+			c.Unlock()
+			if c.state.Load() != CONNECTED {
+				err = c.Error()
+				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, c.closeWithError(err)
+		}
+
+		if len(c.flusher) == 0 {
+			select {
+			case c.flusher <- struct{}{}:
+			default:
+			}
+		}
+
+		c.Unlock()
+	}
+
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+
+	return
+}
 
 // WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
 //
@@ -826,7 +825,6 @@ func (s *StreamConn) Close() {
 
 // Write takes a byte slice and sends a STREAM message
 func (s *StreamConn) Write(p []byte) (int, error) {
-	s.Logger().Debug().Msgf("StreamConn Write called with size %d", len(p))
 	var encodedMessage [protocol.MessageV0Size]byte
 
 	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
@@ -877,89 +875,79 @@ func (s *StreamConn) Write(p []byte) (int, error) {
 	}
 
 	s.Unlock()
-	s.Logger().Debug().Msgf("StreamConn Write done")
 	return len(p), nil
 }
 
-//// ReadFrom is a function that will send STREAM messages from an io.Reader until EOF or an error occurs
-//// In the event that the connection is closed, ReadFrom will return an error.
-//func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
-//	buf := make([]byte, DefaultBufferSize)
-//
-//	var encodedMessage [protocol.MessageV0Size]byte
-//
-//	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-//	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
-//	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
-//
-//	s.Logger().Debug().Msgf("StreamConn ReadFrom called")
-//
-//	for {
-//		var nn int
-//		if s.state.Load() != CONNECTED {
-//			return n, err
-//		}
-//
-//		if s.Closed() {
-//			return n, ConnectionClosed
-//		}
-//		s.Logger().Debug().Msgf("StreamConn ReadFrom READING")
-//		nn, err = r.Read(buf)
-//		if nn == 0 || err != nil {
-//			break
-//		}
-//
-//		s.Logger().Debug().Msgf("ReadFrom ID %d, read %d bytes: %s", s.id, nn, string(buf[:nn]))
-//
-//		n += int64(nn)
-//
-//		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(nn))
-//
-//		s.Lock()
-//
-//		_, err := s.writer.Write(encodedMessage[:])
-//		if err != nil {
-//			s.Unlock()
-//			if s.state.Load() != CONNECTED {
-//				err = s.Error()
-//				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//				return n, errors.WithContext(err, WRITE)
-//			}
-//			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//			return n, s.closeWithError(err)
-//		}
-//
-//		_, err = s.writer.Write(buf[:nn])
-//		if err != nil {
-//			s.Unlock()
-//			if s.state.Load() != CONNECTED {
-//				err = s.Error()
-//				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//				return n, errors.WithContext(err, WRITE)
-//			}
-//			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-//			return n, s.closeWithError(err)
-//		}
-//
-//		if len(s.flusher) == 0 {
-//			select {
-//			case s.flusher <- struct{}{}:
-//			default:
-//			}
-//		}
-//		s.Logger().Debug().Msgf("ReadFrom id %d finished read, looping: %d", s.id, n)
-//
-//		s.Unlock()
-//	}
-//
-//	if errors.Is(err, io.EOF) {
-//		err = nil
-//	}
-//
-//	s.Logger().Debug().Msgf("StreamConn ReadFrom done")
-//
-//	return
-//}
+// ReadFrom is a function that will send STREAM messages from an io.Reader until EOF or an error occurs
+// In the event that the connection is closed, ReadFrom will return an error.
+func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
+	buf := make([]byte, DefaultBufferSize)
+
+	var encodedMessage [protocol.MessageV0Size]byte
+
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
+
+	for {
+		var nn int
+		if s.state.Load() != CONNECTED {
+			return n, err
+		}
+
+		if s.Closed() {
+			return n, ConnectionClosed
+		}
+		nn, err = r.Read(buf)
+		if nn == 0 || err != nil {
+			break
+		}
+
+		n += int64(nn)
+
+		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(nn))
+
+		s.Lock()
+
+		_, err := s.writer.Write(encodedMessage[:])
+		if err != nil {
+			s.Unlock()
+			if s.state.Load() != CONNECTED {
+				err = s.Error()
+				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, s.closeWithError(err)
+		}
+
+		_, err = s.writer.Write(buf[:nn])
+		if err != nil {
+			s.Unlock()
+			if s.state.Load() != CONNECTED {
+				err = s.Error()
+				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, s.closeWithError(err)
+		}
+
+		if len(s.flusher) == 0 {
+			select {
+			case s.flusher <- struct{}{}:
+			default:
+			}
+		}
+		s.Unlock()
+	}
+
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+
+	return
+}
 
 // Read is a function that will read buffer messages into a byte slice.
 // In the event that the connection is closed, Read will return an error.
