@@ -908,7 +908,7 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 			break
 		}
 
-		s.Logger().Debug().Msgf("ReadFrom read %d bytes: %+v", nn, buf)
+		s.Logger().Debug().Msgf("ReadFrom read %d bytes: %+v", nn, buf[:nn])
 
 		n += int64(nn)
 
