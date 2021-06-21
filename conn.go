@@ -351,15 +351,21 @@ func (c *Conn) WriteBufferSize() int {
 // Read is a function that will read buffer messages into a byte slice.
 // In the event that the connection is closed, Read will return an error.
 func (c *Conn) Read(p []byte) (int, error) {
+LOOP:
 	c.incomingBuffer.Lock()
-	defer c.incomingBuffer.Unlock()
 	if c.state.Load() != CONNECTED {
+		c.incomingBuffer.Unlock()
 		return 0, ConnectionClosed
 	}
+	for c.incomingBuffer.buffer.Len() == 0 {
+		c.incomingBuffer.Unlock()
+		goto LOOP
+	}
+	defer c.incomingBuffer.Unlock()
 	return c.incomingBuffer.buffer.Read(p)
 }
 
-// WriteTo is a function that will read buffer messages into an io.Writer until EOF or an error occurs
+// WriteTo is a function that will read buffer messages into an io.Writer until an error occurs
 // In the event that the connection is closed, WriteTo will return an error.
 func (c *Conn) WriteTo(w io.Writer) (n int64, err error) {
 	for err == nil {
@@ -371,7 +377,7 @@ func (c *Conn) WriteTo(w io.Writer) (n int64, err error) {
 		}
 		if c.incomingBuffer.buffer.Len() == 0 {
 			c.incomingBuffer.Unlock()
-			return n, nil
+			continue
 		} else {
 			nn, err = w.Write(c.incomingBuffer.buffer.Bytes())
 			if nn > 0 {
@@ -433,10 +439,6 @@ func (c *Conn) Close() error {
 	}
 	_ = c.conn.Close()
 	return err
-}
-
-func (c *Conn) GetStreamBuffer() {
-
 }
 
 func (c *Conn) killGoroutines() {
@@ -877,7 +879,7 @@ func (s *StreamConn) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// ReadFrom is a function that will send buffer messages from an io.Reader until EOF or an error occurs
+// ReadFrom is a function that will send STREAM messages from an io.Reader until EOF or an error occurs
 // In the event that the connection is closed, ReadFrom will return an error.
 func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 	buf := make([]byte, DefaultBufferSize)
@@ -957,14 +959,21 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 // Read is a function that will read buffer messages into a byte slice.
 // In the event that the connection is closed, Read will return an error.
 func (s *StreamConn) Read(p []byte) (int, error) {
+LOOP:
 	s.incomingBuffer.Lock()
-	defer s.incomingBuffer.Unlock()
 	if s.state.Load() != CONNECTED {
+		s.incomingBuffer.Unlock()
 		return 0, ConnectionClosed
 	}
 	if s.Closed() {
+		s.incomingBuffer.Unlock()
 		return 0, ConnectionClosed
 	}
+	for s.incomingBuffer.buffer.Len() == 0 {
+		s.incomingBuffer.Unlock()
+		goto LOOP
+	}
+	defer s.incomingBuffer.Unlock()
 	return s.incomingBuffer.buffer.Read(p)
 }
 
@@ -984,7 +993,7 @@ func (s *StreamConn) WriteTo(w io.Writer) (n int64, err error) {
 		}
 		if s.incomingBuffer.buffer.Len() == 0 {
 			s.incomingBuffer.Unlock()
-			return n, nil
+			continue
 		} else {
 			nn, err = w.Write(s.incomingBuffer.buffer.Bytes())
 			if nn > 0 {

@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
-	"time"
 )
 
 func TestNewConn(t *testing.T) {
@@ -211,7 +210,7 @@ func TestReadClose(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	readMessage, content, err := readerConn.ReadMessage()
 	assert.NoError(t, err)
@@ -266,7 +265,8 @@ func TestWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
+
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionPaused)
 	assert.ErrorIs(t, readerConn.Error(), ConnectionPaused)
@@ -294,7 +294,7 @@ func TestBufferMessages(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	rawReadMessage := make([]byte, len(rawWriteMessage))
 
@@ -332,7 +332,7 @@ func TestReadFrom(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	err = writerOne.Close()
 	assert.NoError(t, err)
@@ -378,7 +378,7 @@ func TestWriteTo(t *testing.T) {
 	err = frisbeeWriter.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5) // Making sure that the data has propagated into the frisbee reader
+	//time.Sleep(time.Second * 5) // Making sure that the data has propagated into the frisbee reader
 
 	go func() {
 		n, _ := io.Copy(writerOne, frisbeeReader)
@@ -440,7 +440,7 @@ func TestIOCopy(t *testing.T) {
 
 	<-start
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	err = frisbeeWriterOne.Close()
 	assert.NoError(t, err)
@@ -486,7 +486,7 @@ func TestStreamConn(t *testing.T) {
 	StreamReaderOne := <-frisbeeReader.StreamConnCh
 	rawReadMessageOne := make([]byte, len(rawWriteMessageOne))
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	n, err = StreamReaderOne.Read(rawReadMessageOne)
 	assert.NoError(t, err)
@@ -502,7 +502,7 @@ func TestStreamConn(t *testing.T) {
 	StreamReaderTwo := <-frisbeeReader.StreamConnCh
 	rawReadMessageTwo := make([]byte, len(rawWriteMessageTwo))
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
 	assert.NoError(t, err)
@@ -513,7 +513,7 @@ func TestStreamConn(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageOne), n)
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	n, err = StreamReaderOne.Read(rawReadMessageOne)
 	assert.NoError(t, err)
@@ -522,7 +522,7 @@ func TestStreamConn(t *testing.T) {
 
 	StreamWriterOne.Close()
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	n, err = StreamReaderOne.Read(rawReadMessageOne)
 	assert.Error(t, err)
@@ -532,7 +532,7 @@ func TestStreamConn(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageTwo), n)
 
-	time.Sleep(time.Second * 5)
+	//time.Sleep(time.Second * 5)
 
 	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
 	assert.NoError(t, err)
