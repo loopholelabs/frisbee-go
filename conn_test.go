@@ -466,6 +466,86 @@ func TestIOCopy(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestStreamConn(t *testing.T) {
+	readerOne, writerOne := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	frisbeeWriter := New(writerOne, &emptyLogger)
+	frisbeeReader := New(readerOne, &emptyLogger)
+
+	StreamWriterOne := frisbeeWriter.NewStreamConn(1)
+	StreamWriterTwo := frisbeeWriter.NewStreamConn(2)
+
+	rawWriteMessageOne := []byte("TEST CASE MESSAGE 1")
+
+	n, err := StreamWriterOne.Write(rawWriteMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+
+	StreamReaderOne := <-frisbeeReader.StreamConnCh
+	rawReadMessageOne := make([]byte, len(rawWriteMessageOne))
+
+	n, err = StreamReaderOne.Read(rawReadMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+	assert.Equal(t, rawWriteMessageOne, rawReadMessageOne)
+
+	rawWriteMessageTwo := []byte("TEST CASE MESSAGE 2")
+
+	n, err = StreamWriterTwo.Write(rawWriteMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+
+	StreamReaderTwo := <-frisbeeReader.StreamConnCh
+	rawReadMessageTwo := make([]byte, len(rawWriteMessageTwo))
+
+	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+	assert.Equal(t, rawWriteMessageTwo, rawReadMessageTwo)
+
+	n, err = StreamWriterOne.Write(rawWriteMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+
+	time.Sleep(time.Second * 5)
+
+	n, err = StreamReaderOne.Read(rawReadMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+	assert.Equal(t, rawWriteMessageOne, rawReadMessageOne)
+
+	StreamWriterOne.Close()
+
+	time.Sleep(time.Second * 5)
+
+	n, err = StreamReaderOne.Read(rawReadMessageOne)
+	assert.Error(t, err)
+	assert.Equal(t, 0, n)
+
+	n, err = StreamWriterTwo.Write(rawWriteMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+
+	time.Sleep(time.Second * 5)
+
+	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+	assert.Equal(t, rawWriteMessageTwo, rawReadMessageTwo)
+
+	err = StreamWriterOne.Conn.Close()
+	assert.NoError(t, err)
+	err = StreamWriterTwo.Conn.Close()
+	assert.NoError(t, err)
+
+	err = StreamReaderOne.Conn.Close()
+	assert.NoError(t, err)
+	err = StreamReaderTwo.Conn.Close()
+	assert.NoError(t, err)
+}
+
 func BenchmarkThroughputPipe32(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 32

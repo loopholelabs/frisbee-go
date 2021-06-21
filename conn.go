@@ -50,23 +50,37 @@ var (
 	defaultLogger = zerolog.New(os.Stdout)
 )
 
-const DEFAULT_BUFFER_SIZE = 1 << 19
+const DefaultBufferSize = 1 << 19
+
+type incomingBuffer struct {
+	sync.Mutex
+	buffer *bytes.Buffer
+}
+
+func newIncomingBuffer() *incomingBuffer {
+	return &incomingBuffer{
+		buffer: bytes.NewBuffer(make([]byte, 0, DefaultBufferSize)),
+	}
+}
 
 // Conn is the underlying frisbee connection which has extremely efficient read and write logic and
 // can handle the specific frisbee requirements. This is not meant to be used on its own, and instead is
 // meant to be used by frisbee client and server implementations
 type Conn struct {
 	sync.Mutex
-	conn             net.Conn
-	state            *atomic.Int32
-	writer           *bufio.Writer
-	flusher          chan struct{}
-	incomingMessages *ringbuffer.RingBuffer
-	buffer           *bytes.Buffer
-	bufferLock       sync.Mutex
-	logger           *zerolog.Logger
-	wg               sync.WaitGroup
-	error            *atomic.Error
+	conn               net.Conn
+	state              *atomic.Int32
+	writer             *bufio.Writer
+	flusher            chan struct{}
+	incomingMessages   *ringbuffer.RingBuffer
+	incomingBuffer     *incomingBuffer
+	streamConnMutex    sync.RWMutex
+	streamConns        map[uint32]*StreamConn
+	StreamConnCh       chan *StreamConn
+	streamConnBlocking bool
+	logger             *zerolog.Logger
+	wg                 sync.WaitGroup
+	error              *atomic.Error
 }
 
 // Connect creates a new TCP connection (using net.Dial) and warps it in a frisbee connection
@@ -91,13 +105,14 @@ func Connect(network string, addr string, keepAlive time.Duration, logger *zerol
 
 // New takes an existing net.Conn object and wraps it in a frisbee connection
 func New(c net.Conn, logger *zerolog.Logger) (conn *Conn) {
-	buffer := make([]byte, 0, DEFAULT_BUFFER_SIZE)
 	conn = &Conn{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
-		writer:           bufio.NewWriterSize(c, DEFAULT_BUFFER_SIZE),
-		incomingMessages: ringbuffer.NewRingBuffer(DEFAULT_BUFFER_SIZE),
-		buffer:           bytes.NewBuffer(buffer),
+		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
+		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
+		incomingBuffer:   newIncomingBuffer(),
+		streamConns:      make(map[uint32]*StreamConn),
+		StreamConnCh:     make(chan *StreamConn, 1024),
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(ConnectionClosed),
@@ -177,7 +192,7 @@ func (c *Conn) Write(p []byte) (int, error) {
 // ReadFrom is a function that will send buffer messages from an io.Reader until EOF or an error occurs
 // In the event that the connection is closed, ReadFrom will return an error.
 func (c *Conn) ReadFrom(r io.Reader) (n int64, err error) {
-	buf := make([]byte, DEFAULT_BUFFER_SIZE)
+	buf := make([]byte, DefaultBufferSize)
 
 	var encodedMessage [protocol.MessageV0Size]byte
 
@@ -336,35 +351,35 @@ func (c *Conn) WriteBufferSize() int {
 // Read is a function that will read buffer messages into a byte slice.
 // In the event that the connection is closed, Read will return an error.
 func (c *Conn) Read(p []byte) (int, error) {
-	c.bufferLock.Lock()
-	defer c.bufferLock.Unlock()
+	c.incomingBuffer.Lock()
+	defer c.incomingBuffer.Unlock()
 	if c.state.Load() != CONNECTED {
 		return 0, ConnectionClosed
 	}
-	return c.buffer.Read(p)
+	return c.incomingBuffer.buffer.Read(p)
 }
 
 // WriteTo is a function that will read buffer messages into an io.Writer until EOF or an error occurs
 // In the event that the connection is closed, WriteTo will return an error.
 func (c *Conn) WriteTo(w io.Writer) (n int64, err error) {
 	for err == nil {
-		c.bufferLock.Lock()
+		c.incomingBuffer.Lock()
 		var nn int
 		if c.state.Load() != CONNECTED {
-			c.bufferLock.Unlock()
+			c.incomingBuffer.Unlock()
 			return n, ConnectionClosed
 		}
-		if c.buffer.Len() == 0 {
-			c.bufferLock.Unlock()
+		if c.incomingBuffer.buffer.Len() == 0 {
+			c.incomingBuffer.Unlock()
 			return n, nil
 		} else {
-			nn, err = w.Write(c.buffer.Bytes())
+			nn, err = w.Write(c.incomingBuffer.buffer.Bytes())
 			if nn > 0 {
-				c.buffer.Next(nn)
+				c.incomingBuffer.buffer.Next(nn)
 				n += int64(nn)
 			}
 		}
-		c.bufferLock.Unlock()
+		c.incomingBuffer.Unlock()
 	}
 
 	if errors.Is(err, io.EOF) {
@@ -418,6 +433,10 @@ func (c *Conn) Close() error {
 	}
 	_ = c.conn.Close()
 	return err
+}
+
+func (c *Conn) GetStreamBuffer() {
+
 }
 
 func (c *Conn) killGoroutines() {
@@ -505,7 +524,7 @@ func (c *Conn) flushLoop() {
 }
 
 func (c *Conn) readLoop() {
-	buf := make([]byte, DEFAULT_BUFFER_SIZE)
+	buf := make([]byte, DefaultBufferSize)
 	var index int
 	for {
 		buf = buf[:cap(buf)]
@@ -546,14 +565,45 @@ func (c *Conn) readLoop() {
 			}
 
 			index += protocol.MessageV0Size
+
+			if decodedMessage.Operation == STREAMCLOSE {
+				c.streamConnMutex.RLock()
+				streamConn := c.streamConns[decodedMessage.Id]
+				c.streamConnMutex.RUnlock()
+				if streamConn != nil {
+					streamConn.closed.Store(true)
+					c.streamConnMutex.Lock()
+					delete(c.streamConns, decodedMessage.Id)
+					c.streamConnMutex.Unlock()
+				}
+				goto READ
+			}
 			if decodedMessage.ContentLength > 0 {
-				if decodedMessage.Operation == BUFFER {
-					if n-index < int(decodedMessage.ContentLength) {
-						c.bufferLock.Lock()
-						for c.buffer.Cap()-c.buffer.Len() < int(decodedMessage.ContentLength) {
-							c.buffer.Grow(1 << 19)
+				switch decodedMessage.Operation {
+				case STREAM:
+					c.streamConnMutex.RLock()
+					streamConn := c.streamConns[decodedMessage.Id]
+					c.streamConnMutex.RUnlock()
+					if streamConn == nil {
+						streamConn = c.NewStreamConn(decodedMessage.Id)
+						c.streamConnMutex.Lock()
+						c.streamConns[decodedMessage.Id] = streamConn
+						c.streamConnMutex.Unlock()
+						if !c.streamConnBlocking {
+							select {
+							case c.StreamConnCh <- streamConn:
+							default:
+							}
+						} else {
+							c.StreamConnCh <- streamConn
 						}
-						cp, err := c.buffer.Write(buf[index:n])
+					}
+					if n-index < int(decodedMessage.ContentLength) {
+						streamConn.incomingBuffer.Lock()
+						for streamConn.incomingBuffer.buffer.Cap()-streamConn.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
+							streamConn.incomingBuffer.buffer.Grow(1 << 19)
+						}
+						cp, err := streamConn.incomingBuffer.buffer.Write(buf[index:n])
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
 							c.wg.Done()
@@ -562,30 +612,68 @@ func (c *Conn) readLoop() {
 						}
 						min := int64(int(decodedMessage.ContentLength) - cp)
 						index = n
-						_, err = io.CopyN(c.buffer, c.conn, min)
+						_, err = io.CopyN(streamConn.incomingBuffer.buffer, c.conn, min)
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
 							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
-						c.bufferLock.Unlock()
+						streamConn.incomingBuffer.Unlock()
 					} else {
-						c.bufferLock.Lock()
-						for c.buffer.Cap()-c.buffer.Len() < int(decodedMessage.ContentLength) {
-							c.buffer.Grow(1 << 19)
+						streamConn.incomingBuffer.Lock()
+						for streamConn.incomingBuffer.buffer.Cap()-streamConn.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
+							streamConn.incomingBuffer.buffer.Grow(1 << 19)
 						}
-						cp, err := c.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
+						cp, err := streamConn.incomingBuffer.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
 							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
-						c.bufferLock.Unlock()
+						streamConn.incomingBuffer.Unlock()
 						index += cp
 					}
-				} else {
+				case BUFFER:
+					if n-index < int(decodedMessage.ContentLength) {
+						c.incomingBuffer.Lock()
+						for c.incomingBuffer.buffer.Cap()-c.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
+							c.incomingBuffer.buffer.Grow(1 << 19)
+						}
+						cp, err := c.incomingBuffer.buffer.Write(buf[index:n])
+						if err != nil {
+							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
+							c.wg.Done()
+							_ = c.closeWithError(err)
+							return
+						}
+						min := int64(int(decodedMessage.ContentLength) - cp)
+						index = n
+						_, err = io.CopyN(c.incomingBuffer.buffer, c.conn, min)
+						if err != nil {
+							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
+							c.wg.Done()
+							_ = c.closeWithError(err)
+							return
+						}
+						c.incomingBuffer.Unlock()
+					} else {
+						c.incomingBuffer.Lock()
+						for c.incomingBuffer.buffer.Cap()-c.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
+							c.incomingBuffer.buffer.Grow(1 << 19)
+						}
+						cp, err := c.incomingBuffer.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
+						if err != nil {
+							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
+							c.wg.Done()
+							_ = c.closeWithError(err)
+							return
+						}
+						c.incomingBuffer.Unlock()
+						index += cp
+					}
+				default:
 					readContent := make([]byte, decodedMessage.ContentLength)
 					if n-index < int(decodedMessage.ContentLength) {
 						for cap(buf) < int(decodedMessage.ContentLength) {
@@ -644,6 +732,7 @@ func (c *Conn) readLoop() {
 					return
 				}
 			}
+		READ:
 			if n == index {
 				index = 0
 				buf = buf[:cap(buf)]
@@ -697,4 +786,213 @@ func (c *Conn) readLoop() {
 			}
 		}
 	}
+}
+
+type StreamConn struct {
+	*Conn
+	id             uint32
+	incomingBuffer *incomingBuffer
+	closed         *atomic.Bool
+}
+
+func (c *Conn) NewStreamConn(id uint32) *StreamConn {
+	return &StreamConn{
+		Conn:           c,
+		id:             id,
+		incomingBuffer: newIncomingBuffer(),
+		closed:         atomic.NewBool(false),
+	}
+}
+
+func (s *StreamConn) Closed() bool {
+	return s.closed.Load()
+}
+
+func (s *StreamConn) Close() {
+	s.closed.Store(true)
+	_ = s.WriteMessage(&Message{
+		Id:            s.id,
+		Operation:     STREAMCLOSE,
+		ContentLength: 0,
+	}, nil)
+}
+
+// Write takes a byte slice and sends a STREAM message
+func (s *StreamConn) Write(p []byte) (int, error) {
+	var encodedMessage [protocol.MessageV0Size]byte
+
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(len(p)))
+
+	s.Lock()
+	if s.state.Load() != CONNECTED {
+		s.Unlock()
+		return 0, s.Error()
+	}
+
+	if s.Closed() {
+		s.Unlock()
+		return 0, ConnectionClosed
+	}
+
+	_, err := s.writer.Write(encodedMessage[:])
+	if err != nil {
+		s.Unlock()
+		if s.state.Load() != CONNECTED {
+			err = s.Error()
+			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return 0, errors.WithContext(err, WRITE)
+		}
+		s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+		return 0, s.closeWithError(err)
+	}
+
+	_, err = s.writer.Write(p)
+	if err != nil {
+		s.Unlock()
+		if s.state.Load() != CONNECTED {
+			err = s.Error()
+			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return 0, errors.WithContext(err, WRITE)
+		}
+		s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+		return 0, s.closeWithError(err)
+	}
+
+	if len(s.flusher) == 0 {
+		select {
+		case s.flusher <- struct{}{}:
+		default:
+		}
+	}
+
+	s.Unlock()
+
+	return len(p), nil
+}
+
+// ReadFrom is a function that will send buffer messages from an io.Reader until EOF or an error occurs
+// In the event that the connection is closed, ReadFrom will return an error.
+func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
+	buf := make([]byte, DefaultBufferSize)
+
+	var encodedMessage [protocol.MessageV0Size]byte
+
+	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
+
+	for err == nil {
+		var nn int
+		if s.state.Load() != CONNECTED {
+			return n, err
+		}
+
+		if s.Closed() {
+			return n, ConnectionClosed
+		}
+
+		nn, err = r.Read(buf)
+		if nn == 0 {
+			continue
+		}
+
+		if err != nil {
+			break
+		}
+
+		n += int64(nn)
+
+		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(nn))
+
+		s.Lock()
+
+		_, err := s.writer.Write(encodedMessage[:])
+		if err != nil {
+			s.Unlock()
+			if s.state.Load() != CONNECTED {
+				err = s.Error()
+				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, s.closeWithError(err)
+		}
+
+		_, err = s.writer.Write(buf[:nn])
+		if err != nil {
+			s.Unlock()
+			if s.state.Load() != CONNECTED {
+				err = s.Error()
+				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				return n, errors.WithContext(err, WRITE)
+			}
+			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			return n, s.closeWithError(err)
+		}
+
+		if len(s.flusher) == 0 {
+			select {
+			case s.flusher <- struct{}{}:
+			default:
+			}
+		}
+
+		s.Unlock()
+	}
+
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+
+	return
+}
+
+// Read is a function that will read buffer messages into a byte slice.
+// In the event that the connection is closed, Read will return an error.
+func (s *StreamConn) Read(p []byte) (int, error) {
+	s.incomingBuffer.Lock()
+	defer s.incomingBuffer.Unlock()
+	if s.state.Load() != CONNECTED {
+		return 0, ConnectionClosed
+	}
+	if s.Closed() {
+		return 0, ConnectionClosed
+	}
+	return s.incomingBuffer.buffer.Read(p)
+}
+
+// WriteTo is a function that will read buffer messages into an io.Writer until EOF or an error occurs
+// In the event that the connection is closed, WriteTo will return an error.
+func (s *StreamConn) WriteTo(w io.Writer) (n int64, err error) {
+	for err == nil {
+		s.incomingBuffer.Lock()
+		var nn int
+		if s.state.Load() != CONNECTED {
+			s.incomingBuffer.Unlock()
+			return n, ConnectionClosed
+		}
+		if s.Closed() {
+			s.incomingBuffer.Unlock()
+			return n, ConnectionClosed
+		}
+		if s.incomingBuffer.buffer.Len() == 0 {
+			s.incomingBuffer.Unlock()
+			return n, nil
+		} else {
+			nn, err = w.Write(s.incomingBuffer.buffer.Bytes())
+			if nn > 0 {
+				s.incomingBuffer.buffer.Next(nn)
+				n += int64(nn)
+			}
+		}
+		s.incomingBuffer.Unlock()
+	}
+
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	return
 }
