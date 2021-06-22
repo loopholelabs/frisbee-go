@@ -895,6 +895,8 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
 	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
 
+	newReader := bufio.NewReader(r)
+
 	for {
 		var nn int
 		if s.state.Load() != CONNECTED {
@@ -904,7 +906,7 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 		if s.Closed() {
 			return n, ConnectionClosed
 		}
-		nn, err = r.Read(buf)
+		nn, err = newReader.Read(buf)
 		if nn == 0 || err != nil {
 			break
 		}
