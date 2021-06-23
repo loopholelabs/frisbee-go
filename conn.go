@@ -812,6 +812,18 @@ func (c *Conn) NewStreamConn(id uint32) *StreamConn {
 	return streamConn
 }
 
+func (s *StreamConn) SetDeadline(t time.Time) error {
+	return s.conn.SetDeadline(t)
+}
+
+func (s *StreamConn) SetReadDeadline(t time.Time) error {
+	return s.conn.SetReadDeadline(t)
+}
+
+func (s *StreamConn) SetWriteDeadline(t time.Time) error {
+	return s.conn.SetWriteDeadline(t)
+}
+
 func (s *StreamConn) ID() uint32 {
 	return s.id
 }
