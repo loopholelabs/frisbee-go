@@ -129,6 +129,18 @@ func New(c net.Conn, logger *zerolog.Logger) (conn *Conn) {
 	return
 }
 
+func (c *Conn) SetDeadline(t time.Time) error {
+	return c.conn.SetDeadline(t)
+}
+
+func (c *Conn) SetReadDeadline(t time.Time) error {
+	return c.conn.SetReadDeadline(t)
+}
+
+func (c *Conn) SetWriteDeadline(t time.Time) error {
+	return c.conn.SetWriteDeadline(t)
+}
+
 // LocalAddr returns the local address of the underlying net.Conn
 func (c *Conn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
@@ -810,18 +822,6 @@ func (c *Conn) NewStreamConn(id uint32) *StreamConn {
 	c.streamConnMutex.Unlock()
 
 	return streamConn
-}
-
-func (s *StreamConn) SetDeadline(t time.Time) error {
-	return s.conn.SetDeadline(t)
-}
-
-func (s *StreamConn) SetReadDeadline(t time.Time) error {
-	return s.conn.SetReadDeadline(t)
-}
-
-func (s *StreamConn) SetWriteDeadline(t time.Time) error {
-	return s.conn.SetWriteDeadline(t)
 }
 
 func (s *StreamConn) ID() uint32 {
