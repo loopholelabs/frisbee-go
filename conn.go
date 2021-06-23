@@ -832,9 +832,9 @@ func (s *StreamConn) Closed() bool {
 	return s.closed.Load()
 }
 
-func (s *StreamConn) Close() {
+func (s *StreamConn) Close() error {
 	s.closed.Store(true)
-	_ = s.WriteMessage(&Message{
+	return s.WriteMessage(&Message{
 		Id:            s.id,
 		Operation:     STREAMCLOSE,
 		ContentLength: 0,
