@@ -118,16 +118,6 @@ func (c *Client) WriteMessage(message *Message, content *[]byte) error {
 	return c.conn.WriteMessage(message, content)
 }
 
-// Write takes a byte slice and sends a BUFFER frisbee Message
-func (c *Client) Write(p []byte) (int, error) {
-	return c.conn.Write(p)
-}
-
-// Read takes a byte slices and reads a BUFFER frisbee Message into it
-func (c *Client) Read(p []byte) (int, error) {
-	return c.conn.Read(p)
-}
-
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.
 // This is especially useful in proxying and streaming scenarios.
 func (c *Client) Raw() (net.Conn, error) {

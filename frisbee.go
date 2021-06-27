@@ -92,7 +92,6 @@ const (
 const (
 	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
 	HEARTBEAT = uint32(iota)
-	BUFFER
 	STREAM
 	STREAMCLOSE
 	RESERVED4
