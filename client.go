@@ -87,6 +87,16 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// StreamConnCh returns a channel that can be listened on to retrieve stream connections as they're created
+func (c *Client) StreamConnCh() <-chan *StreamConn {
+	return c.conn.StreamConnCh
+}
+
+// NewStreamConn creates a new StreamConn from the underlying frisbee.Conn
+func (c *Client) NewStreamConn(id uint32) *StreamConn {
+	return c.conn.NewStreamConn(id)
+}
+
 // Closed checks whether this client has been closed
 func (c *Client) Closed() bool {
 	return c.closed.Load()
@@ -106,16 +116,6 @@ func (c *Client) Close() error {
 // WriteMessage sends a frisbee Message from the client to the server
 func (c *Client) WriteMessage(message *Message, content *[]byte) error {
 	return c.conn.WriteMessage(message, content)
-}
-
-// Write takes a byte slice and sends a BUFFER frisbee Message
-func (c *Client) Write(p []byte) (int, error) {
-	return c.conn.Write(p)
-}
-
-// Read takes a byte slices and reads a BUFFER frisbee Message into it
-func (c *Client) Read(p []byte) (int, error) {
-	return c.conn.Read(p)
 }
 
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.

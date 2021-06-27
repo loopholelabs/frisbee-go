@@ -33,9 +33,9 @@ var (
 )
 
 const (
-	MessagePing   = uint32(0x0003) // PING
-	MessagePong   = uint32(0x0004) // PONG
-	MessagePacket = uint32(0x0005) // PACKET
+	MessagePing   = uint32(10) // PING
+	MessagePong   = uint32(11) // PONG
+	MessagePacket = uint32(12) // PACKET
 )
 
 const (

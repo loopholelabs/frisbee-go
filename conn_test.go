@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
-	"time"
 )
 
 func TestNewConn(t *testing.T) {
@@ -211,8 +210,6 @@ func TestReadClose(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
-
 	readMessage, content, err := readerConn.ReadMessage()
 	assert.NoError(t, err)
 	assert.NotNil(t, readMessage)
@@ -266,7 +263,6 @@ func TestWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionPaused)
 	assert.ErrorIs(t, readerConn.Error(), ConnectionPaused)
@@ -277,7 +273,7 @@ func TestWriteClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestBufferMessages(t *testing.T) {
+func TestStreamMessages(t *testing.T) {
 	reader, writer := net.Pipe()
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -287,18 +283,19 @@ func TestBufferMessages(t *testing.T) {
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 
-	n, err := writerConn.Write(rawWriteMessage)
+	writeStream := writerConn.NewStreamConn(1)
+
+	n, err := writeStream.Write(rawWriteMessage)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
 
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
-
 	rawReadMessage := make([]byte, len(rawWriteMessage))
+	readStream := <-readerConn.StreamConnCh
 
-	n, err = io.ReadAtLeast(readerConn, rawReadMessage, len(rawWriteMessage))
+	n, err = io.ReadAtLeast(readStream, rawReadMessage, len(rawWriteMessage))
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
 	assert.Equal(t, rawWriteMessage, rawReadMessage)
@@ -318,12 +315,14 @@ func TestReadFrom(t *testing.T) {
 	frisbeeWriter := New(writerTwo, &emptyLogger)
 	frisbeeReader := New(readerTwo, &emptyLogger)
 
+	writeStream := frisbeeWriter.NewStreamConn(1)
+
 	done := make(chan struct{}, 1)
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 
 	go func() {
-		n, _ := io.Copy(frisbeeWriter, readerOne)
+		n, _ := io.Copy(writeStream, readerOne)
 		assert.Equal(t, int64(len(rawWriteMessage)), n)
 		done <- struct{}{}
 	}()
@@ -331,8 +330,6 @@ func TestReadFrom(t *testing.T) {
 	n, err := writerOne.Write(rawWriteMessage)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
-
-	time.Sleep(time.Second * 5)
 
 	err = writerOne.Close()
 	assert.NoError(t, err)
@@ -345,8 +342,10 @@ func TestReadFrom(t *testing.T) {
 	err = frisbeeWriter.Flush()
 	assert.NoError(t, err)
 
+	readStream := <-frisbeeReader.StreamConnCh
+
 	rawReadMessage := make([]byte, len(rawWriteMessage))
-	n, err = frisbeeReader.Read(rawReadMessage)
+	n, err = readStream.Read(rawReadMessage)
 
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
@@ -367,21 +366,23 @@ func TestWriteTo(t *testing.T) {
 	frisbeeWriter := New(writerTwo, &emptyLogger)
 	frisbeeReader := New(readerTwo, &emptyLogger)
 
+	streamWriter := frisbeeWriter.NewStreamConn(1)
+
 	done := make(chan struct{}, 1)
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 
-	n, err := frisbeeWriter.Write(rawWriteMessage)
+	n, err := streamWriter.Write(rawWriteMessage)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
 
 	err = frisbeeWriter.Flush()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Second * 5) // Making sure that the data has propagated into the frisbee reader
+	streamReader := <-frisbeeReader.StreamConnCh
 
 	go func() {
-		n, _ := io.Copy(writerOne, frisbeeReader)
+		n, _ := io.Copy(writerOne, streamReader)
 		assert.Equal(t, int64(len(rawWriteMessage)), n)
 		done <- struct{}{}
 	}()
@@ -414,9 +415,13 @@ func TestIOCopy(t *testing.T) {
 	emptyLogger := zerolog.New(ioutil.Discard)
 
 	frisbeeWriterOne := New(writerOne, &emptyLogger)
+	streamWriterOne := frisbeeWriterOne.NewStreamConn(1)
+
 	frisbeeReaderOne := New(readerOne, &emptyLogger)
 
 	frisbeeWriterTwo := New(writerTwo, &emptyLogger)
+	streamWriterTwo := frisbeeWriterTwo.NewStreamConn(1)
+
 	frisbeeReaderTwo := New(readerTwo, &emptyLogger)
 
 	start := make(chan struct{}, 1)
@@ -424,23 +429,23 @@ func TestIOCopy(t *testing.T) {
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 
-	n, err := frisbeeWriterOne.Write(rawWriteMessage)
+	n, err := streamWriterOne.Write(rawWriteMessage)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
 
 	err = frisbeeWriterOne.Flush()
 	assert.NoError(t, err)
 
+	streamReaderOne := <-frisbeeReaderOne.StreamConnCh
+
 	go func() {
 		start <- struct{}{}
-		n, _ := io.Copy(frisbeeWriterTwo, frisbeeReaderOne)
+		n, _ := io.Copy(streamWriterTwo, streamReaderOne)
 		assert.Equal(t, int64(len(rawWriteMessage)), n)
 		done <- struct{}{}
 	}()
 
 	<-start
-
-	time.Sleep(time.Second * 5)
 
 	err = frisbeeWriterOne.Close()
 	assert.NoError(t, err)
@@ -453,8 +458,10 @@ func TestIOCopy(t *testing.T) {
 	err = frisbeeWriterTwo.Flush()
 	assert.NoError(t, err)
 
+	streamReaderTwo := <-frisbeeReaderTwo.StreamConnCh
+
 	rawReadMessage := make([]byte, len(rawWriteMessage))
-	n, err = frisbeeReaderTwo.Read(rawReadMessage)
+	n, err = streamReaderTwo.Read(rawReadMessage)
 
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessage), n)
@@ -463,6 +470,81 @@ func TestIOCopy(t *testing.T) {
 	err = frisbeeReaderTwo.Close()
 	assert.NoError(t, err)
 	err = frisbeeWriterTwo.Close()
+	assert.NoError(t, err)
+}
+
+func TestStreamConn(t *testing.T) {
+	readerOne, writerOne := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	frisbeeWriter := New(writerOne, &emptyLogger)
+	frisbeeReader := New(readerOne, &emptyLogger)
+
+	StreamWriterOne := frisbeeWriter.NewStreamConn(1)
+	StreamWriterTwo := frisbeeWriter.NewStreamConn(2)
+
+	rawWriteMessageOne := []byte("TEST CASE MESSAGE 1")
+
+	n, err := StreamWriterOne.Write(rawWriteMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+
+	StreamReaderOne := <-frisbeeReader.StreamConnCh
+	rawReadMessageOne := make([]byte, len(rawWriteMessageOne))
+
+	n, err = StreamReaderOne.Read(rawReadMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+	assert.Equal(t, rawWriteMessageOne, rawReadMessageOne)
+
+	rawWriteMessageTwo := []byte("TEST CASE MESSAGE 2")
+
+	n, err = StreamWriterTwo.Write(rawWriteMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+
+	StreamReaderTwo := <-frisbeeReader.StreamConnCh
+	rawReadMessageTwo := make([]byte, len(rawWriteMessageTwo))
+
+	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+	assert.Equal(t, rawWriteMessageTwo, rawReadMessageTwo)
+
+	n, err = StreamWriterOne.Write(rawWriteMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+
+	n, err = StreamReaderOne.Read(rawReadMessageOne)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageOne), n)
+	assert.Equal(t, rawWriteMessageOne, rawReadMessageOne)
+
+	err = StreamWriterOne.Close()
+	assert.NoError(t, err)
+
+	n, err = StreamReaderOne.Read(rawReadMessageOne)
+	assert.Error(t, err)
+	assert.Equal(t, 0, n)
+
+	n, err = StreamWriterTwo.Write(rawWriteMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+
+	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
+	assert.NoError(t, err)
+	assert.Equal(t, len(rawWriteMessageTwo), n)
+	assert.Equal(t, rawWriteMessageTwo, rawReadMessageTwo)
+
+	err = StreamWriterOne.Conn.Close()
+	assert.NoError(t, err)
+	err = StreamWriterTwo.Conn.Close()
+	assert.NoError(t, err)
+
+	err = StreamReaderOne.Conn.Close()
+	assert.NoError(t, err)
+	err = StreamReaderTwo.Conn.Close()
 	assert.NoError(t, err)
 }
 
