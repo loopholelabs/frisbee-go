@@ -493,8 +493,6 @@ func TestStreamConn(t *testing.T) {
 	StreamReaderOne := <-frisbeeReader.StreamConnCh
 	rawReadMessageOne := make([]byte, len(rawWriteMessageOne))
 
-	//time.Sleep(time.Second * 5)
-
 	n, err = StreamReaderOne.Read(rawReadMessageOne)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageOne), n)
@@ -509,8 +507,6 @@ func TestStreamConn(t *testing.T) {
 	StreamReaderTwo := <-frisbeeReader.StreamConnCh
 	rawReadMessageTwo := make([]byte, len(rawWriteMessageTwo))
 
-	//time.Sleep(time.Second * 5)
-
 	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageTwo), n)
@@ -520,8 +516,6 @@ func TestStreamConn(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageOne), n)
 
-	//time.Sleep(time.Second * 5)
-
 	n, err = StreamReaderOne.Read(rawReadMessageOne)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageOne), n)
@@ -530,8 +524,6 @@ func TestStreamConn(t *testing.T) {
 	err = StreamWriterOne.Close()
 	assert.NoError(t, err)
 
-	//time.Sleep(time.Second * 5)
-
 	n, err = StreamReaderOne.Read(rawReadMessageOne)
 	assert.Error(t, err)
 	assert.Equal(t, 0, n)
@@ -539,8 +531,6 @@ func TestStreamConn(t *testing.T) {
 	n, err = StreamWriterTwo.Write(rawWriteMessageTwo)
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageTwo), n)
-
-	//time.Sleep(time.Second * 5)
 
 	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
 	assert.NoError(t, err)
