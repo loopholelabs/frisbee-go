@@ -347,9 +347,9 @@ func (c *Conn) closeWithError(err error) error {
 }
 
 func (c *Conn) flushLoop() {
+	defer c.wg.Done()
 	for {
 		if _, ok := <-c.flusher; !ok {
-			c.wg.Done()
 			return
 		}
 		c.Lock()
@@ -357,7 +357,6 @@ func (c *Conn) flushLoop() {
 			err := c.writer.Flush()
 			if err != nil {
 				c.Unlock()
-				c.wg.Done()
 				_ = c.closeWithError(err)
 				return
 			}
@@ -367,12 +366,12 @@ func (c *Conn) flushLoop() {
 }
 
 func (c *Conn) readLoop() {
+	defer c.wg.Done()
 	buf := make([]byte, DefaultBufferSize)
 	var index int
 	for {
 		buf = buf[:cap(buf)]
 		if len(buf) < protocol.MessageV0Size {
-			c.wg.Done()
 			_ = c.closeWithError(InvalidBufferLength)
 			return
 		}
@@ -384,7 +383,6 @@ func (c *Conn) readLoop() {
 			n += nn
 			if err != nil {
 				if n < protocol.MessageV0Size {
-					c.wg.Done()
 					_ = c.closeWithError(err)
 					return
 				}
@@ -445,7 +443,6 @@ func (c *Conn) readLoop() {
 						cp, err := streamConn.incomingBuffer.buffer.Write(buf[index:n])
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
-							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
@@ -454,7 +451,6 @@ func (c *Conn) readLoop() {
 						_, err = io.CopyN(streamConn.incomingBuffer.buffer, c.conn, min)
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
-							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
@@ -467,7 +463,6 @@ func (c *Conn) readLoop() {
 						cp, err := streamConn.incomingBuffer.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
 						if err != nil {
 							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
-							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
@@ -485,7 +480,6 @@ func (c *Conn) readLoop() {
 						buf = buf[:cap(buf)]
 						min := int(decodedMessage.ContentLength) - cp
 						if len(buf) < min {
-							c.wg.Done()
 							_ = c.closeWithError(InvalidBufferLength)
 							return
 						}
@@ -496,9 +490,7 @@ func (c *Conn) readLoop() {
 							n += nn
 							if err != nil {
 								if n < min {
-									c.wg.Done()
 									_ = c.closeWithError(err)
-
 									return
 								}
 								break
@@ -516,7 +508,6 @@ func (c *Conn) readLoop() {
 					})
 					if err != nil {
 						c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
-						c.wg.Done()
 						_ = c.closeWithError(err)
 						return
 					}
@@ -528,7 +519,6 @@ func (c *Conn) readLoop() {
 				})
 				if err != nil {
 					c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
-					c.wg.Done()
 					_ = c.closeWithError(err)
 					return
 				}
@@ -538,7 +528,6 @@ func (c *Conn) readLoop() {
 				index = 0
 				buf = buf[:cap(buf)]
 				if len(buf) < protocol.MessageV0Size {
-					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)
 					break
 				}
@@ -549,7 +538,6 @@ func (c *Conn) readLoop() {
 					n += nn
 					if err != nil {
 						if n < protocol.MessageV0Size {
-							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
@@ -564,7 +552,6 @@ func (c *Conn) readLoop() {
 				buf = buf[:cap(buf)]
 				min := protocol.MessageV0Size - index
 				if len(buf) < min {
-					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)
 					break
 				}
@@ -575,7 +562,6 @@ func (c *Conn) readLoop() {
 					n += nn
 					if err != nil {
 						if n < min {
-							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
