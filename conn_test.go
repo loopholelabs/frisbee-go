@@ -222,6 +222,7 @@ func TestReadClose(t *testing.T) {
 	err = writerConn.WriteMessage(message, nil)
 	if err == nil {
 		err = writerConn.Flush()
+		assert.Error(t, err)
 	}
 	assert.ErrorIs(t, writerConn.Error(), ConnectionPaused)
 
