@@ -36,12 +36,12 @@ func TestClientRaw(t *testing.T) {
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverRouter[protocol.MessagePacket] = func(c *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePacket] = func(c *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		rawServerConn = c.Raw()
 		serverIsRaw <- struct{}{}
 		return
@@ -122,7 +122,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
-	serverRouter[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		return
 	}
 
@@ -183,7 +183,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 
 	finished := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Conn, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &Message{
 				To:            16,

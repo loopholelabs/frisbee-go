@@ -73,7 +73,7 @@ type Action int
 //	}
 //
 // These fields can be used however the user sees fit, however ContentLength must match the length of the content being
-// delivered with the frisbee message (see the Conn.WriteMessage function for more details).
+// delivered with the frisbee message (see the Async.WriteMessage function for more details).
 type Message protocol.Message
 
 // These are various frisbee actions, used to modify the state of the client or server from a router function:
@@ -92,7 +92,7 @@ const (
 const (
 	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
 	HEARTBEAT = uint32(iota)
-	STREAM
+	NEWSTREAM
 	STREAMCLOSE
 	RESERVED4
 	RESERVED5
