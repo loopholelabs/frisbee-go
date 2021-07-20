@@ -70,7 +70,7 @@ func TestClientRaw(t *testing.T) {
 		err := c.WriteMessage(&Message{
 			To:            16,
 			From:          32,
-			Id:            uint32(q),
+			Id:            uint64(q),
 			Operation:     protocol.MessagePing,
 			ContentLength: messageSize,
 		}, &data)
@@ -153,7 +153,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 				err := c.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
-					Id:            uint32(q),
+					Id:            uint64(q),
 					Operation:     protocol.MessagePing,
 					ContentLength: messageSize,
 				}, &data)
@@ -226,7 +226,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 				err := c.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
-					Id:            uint32(q),
+					Id:            uint64(q),
 					Operation:     protocol.MessagePing,
 					ContentLength: messageSize,
 				}, &data)

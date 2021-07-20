@@ -93,7 +93,7 @@ func (c *Client) StreamConnCh() <-chan *StreamConn {
 }
 
 // NewStreamConn creates a new StreamConn from the underlying frisbee.Conn
-func (c *Client) NewStreamConn(id uint32) *StreamConn {
+func (c *Client) NewStreamConn(id uint64) *StreamConn {
 	return c.conn.NewStreamConn(id)
 }
 

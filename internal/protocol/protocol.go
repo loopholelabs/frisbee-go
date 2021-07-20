@@ -103,7 +103,6 @@ func (fm *Message) Encode() (result [MessageSize]byte, err error) {
 			err = errors.WithContext(recoveredErr.(error), ENCODE)
 		}
 	}()
-
 	copy(result[ReservedOffset:ReservedOffset+ReservedSize], ReservedBytes)
 
 	binary.BigEndian.PutUint32(result[FromOffset:FromOffset+FromSize], fm.From)
