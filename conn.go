@@ -74,7 +74,7 @@ type Conn struct {
 	flusher          chan struct{}
 	incomingMessages *ringbuffer.RingBuffer
 	streamConnMutex  sync.RWMutex
-	streamConns      map[uint32]*StreamConn
+	streamConns      map[uint64]*StreamConn
 	StreamConnCh     chan *StreamConn
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
@@ -108,7 +108,7 @@ func New(c net.Conn, logger *zerolog.Logger) (conn *Conn) {
 		state:            atomic.NewInt32(CONNECTED),
 		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
 		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
-		streamConns:      make(map[uint32]*StreamConn),
+		streamConns:      make(map[uint64]*StreamConn),
 		StreamConnCh:     make(chan *StreamConn, 1024),
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
@@ -156,14 +156,13 @@ func (c *Conn) WriteMessage(message *Message, content *[]byte) error {
 		return InvalidContentLength
 	}
 
-	var encodedMessage [protocol.MessageV0Size]byte
-
-	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.FromV0Offset:protocol.FromV0Offset+protocol.FromV0Size], message.From)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ToV0Offset:protocol.ToV0Offset+protocol.ToV0Size], message.To)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], message.Id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], message.Operation)
-	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], message.ContentLength)
+	var encodedMessage [protocol.MessageSize]byte
+	copy(encodedMessage[protocol.ReservedOffset:protocol.ReservedOffset+protocol.ReservedSize], protocol.ReservedBytes)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.FromOffset:protocol.FromOffset+protocol.FromSize], message.From)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.ToOffset:protocol.ToOffset+protocol.ToSize], message.To)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], message.Id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], message.Operation)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], message.ContentLength)
 
 	c.Lock()
 	if c.state.Load() != CONNECTED {
@@ -371,18 +370,18 @@ func (c *Conn) readLoop() {
 	var index int
 	for {
 		buf = buf[:cap(buf)]
-		if len(buf) < protocol.MessageV0Size {
+		if len(buf) < protocol.MessageSize {
 			_ = c.closeWithError(InvalidBufferLength)
 			return
 		}
 		var n int
 		var err error
-		for n < protocol.MessageV0Size {
+		for n < protocol.MessageSize {
 			var nn int
 			nn, err = c.conn.Read(buf[n:])
 			n += nn
 			if err != nil {
-				if n < protocol.MessageV0Size {
+				if n < protocol.MessageSize {
 					_ = c.closeWithError(err)
 					return
 				}
@@ -392,20 +391,21 @@ func (c *Conn) readLoop() {
 
 		index = 0
 		for index < n {
-			if binary.BigEndian.Uint16(buf[index+protocol.VersionV0Offset:index+protocol.VersionV0Offset+protocol.VersionV0Size]) != protocol.Version0 {
+
+			if !bytes.Equal(buf[index+protocol.ReservedOffset:index+protocol.ReservedOffset+protocol.ReservedSize], protocol.ReservedBytes) {
 				c.Logger().Error().Msgf(InvalidBufferContents.Error())
 				break
 			}
 
-			decodedMessage := protocol.MessageV0{
-				From:          binary.BigEndian.Uint32(buf[index+protocol.FromV0Offset : index+protocol.FromV0Offset+protocol.FromV0Size]),
-				To:            binary.BigEndian.Uint32(buf[index+protocol.ToV0Offset : index+protocol.ToV0Offset+protocol.ToV0Size]),
-				Id:            binary.BigEndian.Uint32(buf[index+protocol.IdV0Offset : index+protocol.IdV0Offset+protocol.IdV0Size]),
-				Operation:     binary.BigEndian.Uint32(buf[index+protocol.OperationV0Offset : index+protocol.OperationV0Offset+protocol.OperationV0Size]),
-				ContentLength: binary.BigEndian.Uint64(buf[index+protocol.ContentLengthV0Offset : index+protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size]),
+			decodedMessage := protocol.Message{
+				From:          binary.BigEndian.Uint32(buf[index+protocol.FromOffset : index+protocol.FromOffset+protocol.FromSize]),
+				To:            binary.BigEndian.Uint32(buf[index+protocol.ToOffset : index+protocol.ToOffset+protocol.ToSize]),
+				Id:            binary.BigEndian.Uint64(buf[index+protocol.IdOffset : index+protocol.IdOffset+protocol.IdSize]),
+				Operation:     binary.BigEndian.Uint32(buf[index+protocol.OperationOffset : index+protocol.OperationOffset+protocol.OperationSize]),
+				ContentLength: binary.BigEndian.Uint64(buf[index+protocol.ContentLengthOffset : index+protocol.ContentLengthOffset+protocol.ContentLengthSize]),
 			}
 
-			index += protocol.MessageV0Size
+			index += protocol.MessageSize
 
 			if decodedMessage.Operation == STREAMCLOSE {
 				c.streamConnMutex.RLock()
@@ -502,7 +502,7 @@ func (c *Conn) readLoop() {
 						copy(readContent, buf[index:index+int(decodedMessage.ContentLength)])
 						index += int(decodedMessage.ContentLength)
 					}
-					err = c.incomingMessages.Push(&protocol.PacketV0{
+					err = c.incomingMessages.Push(&protocol.Packet{
 						Message: &decodedMessage,
 						Content: &readContent,
 					})
@@ -513,7 +513,7 @@ func (c *Conn) readLoop() {
 					}
 				}
 			} else {
-				err = c.incomingMessages.Push(&protocol.PacketV0{
+				err = c.incomingMessages.Push(&protocol.Packet{
 					Message: &decodedMessage,
 					Content: nil,
 				})
@@ -527,30 +527,30 @@ func (c *Conn) readLoop() {
 			if n == index {
 				index = 0
 				buf = buf[:cap(buf)]
-				if len(buf) < protocol.MessageV0Size {
+				if len(buf) < protocol.MessageSize {
 					_ = c.closeWithError(InvalidBufferLength)
 					break
 				}
 				n = 0
-				for n < protocol.MessageV0Size {
+				for n < protocol.MessageSize {
 					var nn int
 					nn, err = c.conn.Read(buf[n:])
 					n += nn
 					if err != nil {
-						if n < protocol.MessageV0Size {
+						if n < protocol.MessageSize {
 							_ = c.closeWithError(err)
 							return
 						}
 						break
 					}
 				}
-			} else if n-index < protocol.MessageV0Size {
+			} else if n-index < protocol.MessageSize {
 				copy(buf, buf[index:n])
 				n -= index
 				index = n
 
 				buf = buf[:cap(buf)]
-				min := protocol.MessageV0Size - index
+				min := protocol.MessageSize - index
 				if len(buf) < min {
 					_ = c.closeWithError(InvalidBufferLength)
 					break
@@ -577,12 +577,12 @@ func (c *Conn) readLoop() {
 
 type StreamConn struct {
 	*Conn
-	id             uint32
+	id             uint64
 	incomingBuffer *incomingBuffer
 	closed         *atomic.Bool
 }
 
-func (c *Conn) NewStreamConn(id uint32) *StreamConn {
+func (c *Conn) NewStreamConn(id uint64) *StreamConn {
 	streamConn := &StreamConn{
 		Conn:           c,
 		id:             id,
@@ -597,7 +597,7 @@ func (c *Conn) NewStreamConn(id uint32) *StreamConn {
 	return streamConn
 }
 
-func (s *StreamConn) ID() uint32 {
+func (s *StreamConn) ID() uint64 {
 	return s.id
 }
 
@@ -616,12 +616,12 @@ func (s *StreamConn) Close() error {
 
 // Write takes a byte slice and sends a STREAM message
 func (s *StreamConn) Write(p []byte) (int, error) {
-	var encodedMessage [protocol.MessageV0Size]byte
+	var encodedMessage [protocol.MessageSize]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
-	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(len(p)))
+	copy(encodedMessage[protocol.ReservedOffset:protocol.ReservedOffset+protocol.ReservedSize], protocol.ReservedBytes)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], s.id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], STREAM)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], uint64(len(p)))
 
 	s.Lock()
 	if s.state.Load() != CONNECTED {
@@ -674,11 +674,11 @@ func (s *StreamConn) Write(p []byte) (int, error) {
 func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 	buf := make([]byte, DefaultBufferSize)
 
-	var encodedMessage [protocol.MessageV0Size]byte
+	var encodedMessage [protocol.MessageSize]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[protocol.VersionV0Offset:protocol.VersionV0Offset+protocol.VersionV0Size], protocol.Version0)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.IdV0Offset:protocol.IdV0Offset+protocol.IdV0Size], s.id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationV0Offset:protocol.OperationV0Offset+protocol.OperationV0Size], STREAM)
+	copy(encodedMessage[protocol.ReservedOffset:protocol.ReservedOffset+protocol.ReservedSize], protocol.ReservedBytes)
+	binary.BigEndian.PutUint64(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], s.id)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], STREAM)
 
 	for {
 		var nn int
@@ -696,7 +696,7 @@ func (s *StreamConn) ReadFrom(r io.Reader) (n int64, err error) {
 
 		n += int64(nn)
 
-		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthV0Offset:protocol.ContentLengthV0Offset+protocol.ContentLengthV0Size], uint64(nn))
+		binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], uint64(nn))
 
 		s.Lock()
 

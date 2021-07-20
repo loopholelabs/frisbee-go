@@ -67,7 +67,7 @@ func (rb *RingBuffer) init(size uint64) {
 	rb.mask = size - 1
 }
 
-func (rb *RingBuffer) Push(item *protocol.PacketV0) error {
+func (rb *RingBuffer) Push(item *protocol.Packet) error {
 	var newNode *node
 	position := atomic.LoadUint64(&rb.head)
 	tail := atomic.LoadUint64(&rb.tail)
@@ -99,7 +99,7 @@ RETRY:
 	return nil
 }
 
-func (rb *RingBuffer) Pop() (*protocol.PacketV0, error) {
+func (rb *RingBuffer) Pop() (*protocol.Packet, error) {
 	var oldNode *node
 	var oldPosition = atomic.LoadUint64(&rb.tail)
 RETRY:
@@ -122,7 +122,7 @@ RETRY:
 	data := oldNode.data
 	oldNode.data = nil
 	atomic.StoreUint64(&oldNode.position, oldPosition+rb.mask+1)
-	return (*protocol.PacketV0)(data), nil
+	return (*protocol.Packet)(data), nil
 }
 
 func (rb *RingBuffer) Length() uint64 {

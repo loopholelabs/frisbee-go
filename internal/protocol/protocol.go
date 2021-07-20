@@ -17,6 +17,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"unsafe"
@@ -32,6 +33,10 @@ var (
 	InvalidBufferLength   = errors.New("invalid buffer length")
 )
 
+var (
+	ReservedBytes = []byte{byte(0xF >> 24), byte(0xB >> 16), byte(0xE >> 8), byte(0xE)}
+)
+
 const (
 	MessagePing   = uint32(10) // PING
 	MessagePong   = uint32(11) // PONG
@@ -39,104 +44,101 @@ const (
 )
 
 const (
-	ReservedV0Offset = 0
-	ReservedV0Size   = 6
+	ReservedOffset = 0 // 0
+	ReservedSize   = 4
 
-	VersionV0Offset = ReservedV0Offset + ReservedV0Size // 6
-	VersionV0Size   = 2
+	FromOffset = ReservedOffset + ReservedSize // 4
+	FromSize   = 4
 
-	FromV0Offset = VersionV0Offset + VersionV0Size // 8
-	FromV0Size   = 4
+	ToOffset = FromOffset + FromSize // 8
+	ToSize   = 4
 
-	ToV0Offset = FromV0Offset + FromV0Size // 12
-	ToV0Size   = 4
+	IdOffset = ToOffset + ToSize // 12
+	IdSize   = 8
 
-	IdV0Offset = ToV0Offset + ToV0Size // 16
-	IdV0Size   = 4
+	OperationOffset = IdOffset + IdSize // 20
+	OperationSize   = 4
 
-	OperationV0Offset = IdV0Offset + IdV0Size // 20
-	OperationV0Size   = 4
+	ContentLengthOffset = OperationOffset + OperationSize // 24
+	ContentLengthSize   = 8
 
-	ContentLengthV0Offset = OperationV0Offset + OperationV0Size // 24
-	ContentLengthV0Size   = 8
-
-	MessageV0Size = ContentLengthV0Offset + ContentLengthV0Size // 32
-	Version0      = uint16(0x00)                                // Version 0, 2 Bytes
+	MessageSize = ContentLengthOffset + ContentLengthSize // 32
 )
 
-type MessageV0 struct {
+type Message struct {
 	From          uint32 // 4 Bytes
 	To            uint32 // 4 Bytes
-	Id            uint32 // 4 Bytes
+	Id            uint64 // 8 Bytes
 	Operation     uint32 // 4 Bytes
 	ContentLength uint64 // 8 Bytes
 }
 
-type PacketV0 struct {
-	Message *MessageV0
+type Packet struct {
+	Message *Message
 	Content *[]byte
 }
 
-type V0Handler struct{}
+type Handler struct{}
 
-func NewDefaultHandler() V0Handler {
-	return NewV0Handler()
+func NewDefaultHandler() Handler {
+	return NewHandler()
 }
 
-func NewV0Handler() V0Handler {
-	return V0Handler{}
+func NewHandler() Handler {
+	return Handler{}
 }
 
-func (handler *V0Handler) Encode(from uint32, to uint32, id uint32, operation uint32, contentLength uint64) ([MessageV0Size]byte, error) {
-	return EncodeV0(from, to, id, operation, contentLength)
+func (handler *Handler) Encode(from uint32, to uint32, id uint64, operation uint32, contentLength uint64) ([MessageSize]byte, error) {
+	return Encode(from, to, id, operation, contentLength)
 }
 
-func (handler *V0Handler) Decode(buf []byte) (message MessageV0, err error) {
-	return DecodeV0(buf)
+func (handler *Handler) Decode(buf []byte) (message Message, err error) {
+	return Decode(buf)
 }
 
-// Encode MessageV0
-func (fm *MessageV0) Encode() (result [MessageV0Size]byte, err error) {
+// Encode Message
+func (fm *Message) Encode() (result [MessageSize]byte, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.WithContext(recoveredErr.(error), ENCODE)
 		}
 	}()
 
-	binary.BigEndian.PutUint16(result[VersionV0Offset:VersionV0Offset+VersionV0Size], Version0)
-	binary.BigEndian.PutUint32(result[FromV0Offset:FromV0Offset+FromV0Size], fm.From)
-	binary.BigEndian.PutUint32(result[ToV0Offset:ToV0Offset+ToV0Size], fm.To)
-	binary.BigEndian.PutUint32(result[IdV0Offset:IdV0Offset+IdV0Size], fm.Id)
-	binary.BigEndian.PutUint32(result[OperationV0Offset:OperationV0Offset+OperationV0Size], fm.Operation)
-	binary.BigEndian.PutUint64(result[ContentLengthV0Offset:ContentLengthV0Offset+ContentLengthV0Size], fm.ContentLength)
+	copy(result[ReservedOffset:ReservedOffset+ReservedSize], ReservedBytes)
+
+	binary.BigEndian.PutUint32(result[FromOffset:FromOffset+FromSize], fm.From)
+	binary.BigEndian.PutUint32(result[ToOffset:ToOffset+ToSize], fm.To)
+	binary.BigEndian.PutUint64(result[IdOffset:IdOffset+IdSize], fm.Id)
+	binary.BigEndian.PutUint32(result[OperationOffset:OperationOffset+OperationSize], fm.Operation)
+	binary.BigEndian.PutUint64(result[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], fm.ContentLength)
 
 	return
 }
 
-// Decode MessageV0
-func (fm *MessageV0) Decode(buf [MessageV0Size]byte) (err error) {
+// Decode Message
+func (fm *Message) Decode(buf [MessageSize]byte) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.WithContext(recoveredErr.(error), DECODE)
 		}
 	}()
 
-	if !validVersion(binary.BigEndian.Uint16(buf[VersionV0Offset : VersionV0Offset+VersionV0Size])) {
+	if !bytes.Equal(buf[ReservedOffset:ReservedOffset+ReservedSize], ReservedBytes) {
 		return InvalidMessageVersion
 	}
 
-	fm.From = binary.BigEndian.Uint32(buf[FromV0Offset : FromV0Offset+FromV0Size])
-	fm.To = binary.BigEndian.Uint32(buf[ToV0Offset : ToV0Offset+ToV0Size])
-	fm.Id = binary.BigEndian.Uint32(buf[IdV0Offset : IdV0Offset+IdV0Size])
-	fm.Operation = binary.BigEndian.Uint32(buf[OperationV0Offset : OperationV0Offset+OperationV0Size])
-	fm.ContentLength = binary.BigEndian.Uint64(buf[ContentLengthV0Offset : ContentLengthV0Offset+ContentLengthV0Size])
+	fm.From = binary.BigEndian.Uint32(buf[FromOffset : FromOffset+FromSize])
+	fm.To = binary.BigEndian.Uint32(buf[ToOffset : ToOffset+ToSize])
+	fm.Id = binary.BigEndian.Uint64(buf[IdOffset : IdOffset+IdSize])
+	fm.Operation = binary.BigEndian.Uint32(buf[OperationOffset : OperationOffset+OperationSize])
+	fm.ContentLength = binary.BigEndian.Uint64(buf[ContentLengthOffset : ContentLengthOffset+ContentLengthSize])
 
 	return nil
 }
 
-// EncodeV0 without a Handler
-func EncodeV0(from uint32, to uint32, id uint32, operation uint32, contentLength uint64) ([MessageV0Size]byte, error) {
-	message := MessageV0{
+// Encode without a Handler
+func Encode(from uint32, to uint32, id uint64, operation uint32, contentLength uint64) ([MessageSize]byte, error) {
+	message := Message{
 		From:          from,
 		To:            to,
 		Id:            id,
@@ -147,22 +149,13 @@ func EncodeV0(from uint32, to uint32, id uint32, operation uint32, contentLength
 	return message.Encode()
 }
 
-// DecodeV0 without a Handler
-func DecodeV0(buf []byte) (message MessageV0, err error) {
-	if len(buf) < MessageV0Size {
-		return MessageV0{}, InvalidBufferLength
+// Decode without a Handler
+func Decode(buf []byte) (message Message, err error) {
+	if len(buf) < MessageSize {
+		return Message{}, InvalidBufferLength
 	}
 
-	err = message.Decode(*(*[MessageV0Size]byte)(unsafe.Pointer(&buf[0])))
+	err = message.Decode(*(*[MessageSize]byte)(unsafe.Pointer(&buf[0])))
 
 	return
-}
-
-func validVersion(version uint16) bool {
-	switch version {
-	case Version0:
-		return true
-	default:
-		return false
-	}
 }

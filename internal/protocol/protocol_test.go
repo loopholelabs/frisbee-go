@@ -23,33 +23,30 @@ import (
 	"testing"
 )
 
-func TestValidVersion(t *testing.T) {
-	assert.Equal(t, true, validVersion(Version0))
-}
 
-func TestMessageV0EncodeDecode(t *testing.T) {
-	message := &MessageV0{
+func TestMessageEncodeDecode(t *testing.T) {
+	message := &Message{
 		From:          uint32(16),
 		To:            uint32(32),
-		Id:            uint32(64),
+		Id:            uint64(64),
 		Operation:     MessagePacket,
 		ContentLength: uint64(0),
 	}
 
-	correct := [MessageV0Size]byte{}
+	correct := [MessageSize]byte{}
 
-	binary.BigEndian.PutUint16(correct[VersionV0Offset:VersionV0Offset+VersionV0Size], Version0)
-	binary.BigEndian.PutUint32(correct[FromV0Offset:FromV0Offset+FromV0Size], uint32(16))
-	binary.BigEndian.PutUint32(correct[ToV0Offset:ToV0Offset+ToV0Size], uint32(32))
-	binary.BigEndian.PutUint32(correct[IdV0Offset:IdV0Offset+IdV0Size], uint32(64))
-	binary.BigEndian.PutUint32(correct[OperationV0Offset:OperationV0Offset+OperationV0Size], MessagePacket)
-	binary.BigEndian.PutUint64(correct[ContentLengthV0Offset:ContentLengthV0Offset+ContentLengthV0Size], uint64(0))
+	copy(correct[ReservedOffset:ReservedOffset+ReservedSize], ReservedBytes)
+	binary.BigEndian.PutUint32(correct[FromOffset:FromOffset+FromSize], uint32(16))
+	binary.BigEndian.PutUint32(correct[ToOffset:ToOffset+ToSize], uint32(32))
+	binary.BigEndian.PutUint64(correct[IdOffset:IdOffset+IdSize], uint64(64))
+	binary.BigEndian.PutUint32(correct[OperationOffset:OperationOffset+OperationSize], MessagePacket)
+	binary.BigEndian.PutUint64(correct[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], uint64(0))
 
 	encoded, err := message.Encode()
 	require.NoError(t, err)
 	assert.Equal(t, correct, encoded)
 
-	decoderMessage := &MessageV0{}
+	decoderMessage := &Message{}
 
 	err = decoderMessage.Decode(encoded)
 	require.NoError(t, err)
@@ -59,123 +56,123 @@ func TestMessageV0EncodeDecode(t *testing.T) {
 
 func TestDefaultHandler(t *testing.T) {
 	defaultHandler := NewDefaultHandler()
-	assert.Equal(t, defaultHandler, NewV0Handler())
+	assert.Equal(t, defaultHandler, NewHandler())
 }
 
-func TestEncodeDecodeHandlerV0(t *testing.T) {
-	handlerV0 := NewV0Handler()
+func TestEncodeDecodeHandler(t *testing.T) {
+	handler := NewHandler()
 
-	encodedBytes, err := handlerV0.Encode(16, 32, 64, MessagePacket, 512)
+	encodedBytes, err := handler.Encode(16, 32, 64, MessagePacket, 512)
 	assert.NoError(t, err)
 
-	message, err := handlerV0.Decode(encodedBytes[:])
+	message, err := handler.Decode(encodedBytes[:])
 	require.NoError(t, err)
 	assert.Equal(t, uint64(512), message.ContentLength)
-	assert.Equal(t, uint32(64), message.Id)
+	assert.Equal(t, uint64(64), message.Id)
 	assert.Equal(t, uint32(32), message.To)
 	assert.Equal(t, uint32(16), message.From)
 	assert.Equal(t, MessagePacket, message.Operation)
 
-	emptyEncodedBytes, err := handlerV0.Encode(16, 32, 64, MessagePing, 0)
+	emptyEncodedBytes, err := handler.Encode(16, 32, 64, MessagePing, 0)
 	assert.Equal(t, nil, err)
 
-	emptyMessage, err := handlerV0.Decode(emptyEncodedBytes[:])
+	emptyMessage, err := handler.Decode(emptyEncodedBytes[:])
 	require.NoError(t, err)
 	assert.Equal(t, uint64(0), emptyMessage.ContentLength)
-	assert.Equal(t, uint32(64), emptyMessage.Id)
+	assert.Equal(t, uint64(64), emptyMessage.Id)
 	assert.Equal(t, uint32(32), emptyMessage.To)
 	assert.Equal(t, uint32(16), emptyMessage.From)
 	assert.Equal(t, MessagePing, emptyMessage.Operation)
 
-	invalidMessage, err := handlerV0.Decode(emptyEncodedBytes[8:])
+	invalidMessage, err := handler.Decode(emptyEncodedBytes[8:])
 	require.Error(t, err)
 	assert.ErrorIs(t, InvalidBufferLength, err)
 	assert.Equal(t, uint64(0), invalidMessage.ContentLength)
-	assert.Equal(t, uint32(0), invalidMessage.Id)
+	assert.Equal(t, uint64(0), invalidMessage.Id)
 	assert.Equal(t, uint32(0), invalidMessage.To)
 	assert.Equal(t, uint32(0), invalidMessage.From)
 }
 
-func TestEncodeDecodeV0(t *testing.T) {
-	encodedBytes, err := EncodeV0(16, 32, 64, MessagePong, 512)
+func TestEncodeDecode(t *testing.T) {
+	encodedBytes, err := Encode(16, 32, 64, MessagePong, 512)
 	assert.Equal(t, nil, err)
 
-	message, err := DecodeV0(encodedBytes[:])
+	message, err := Decode(encodedBytes[:])
 	require.NoError(t, err)
 	assert.Equal(t, uint64(512), message.ContentLength)
-	assert.Equal(t, uint32(64), message.Id)
+	assert.Equal(t, uint64(64), message.Id)
 	assert.Equal(t, uint32(32), message.To)
 	assert.Equal(t, uint32(16), message.From)
 	assert.Equal(t, MessagePong, message.Operation)
 
-	emptyEncodedBytes, err := EncodeV0(16, 32, 64, MessagePing, 0)
+	emptyEncodedBytes, err := Encode(16, 32, 64, MessagePing, 0)
 	assert.Equal(t, nil, err)
 
-	emptyMessage, err := DecodeV0(emptyEncodedBytes[:])
+	emptyMessage, err := Decode(emptyEncodedBytes[:])
 	require.NoError(t, err)
 	assert.Equal(t, uint64(0), emptyMessage.ContentLength)
-	assert.Equal(t, uint32(64), emptyMessage.Id)
+	assert.Equal(t, uint64(64), emptyMessage.Id)
 	assert.Equal(t, uint32(32), emptyMessage.To)
 	assert.Equal(t, uint32(16), emptyMessage.From)
 	assert.Equal(t, MessagePing, emptyMessage.Operation)
 
-	invalidMessage, err := DecodeV0(emptyEncodedBytes[1:])
+	invalidMessage, err := Decode(emptyEncodedBytes[1:])
 	require.Error(t, err)
 	assert.ErrorIs(t, InvalidBufferLength, err)
 	assert.Equal(t, uint64(0), invalidMessage.ContentLength)
-	assert.Equal(t, uint32(0), invalidMessage.Id)
+	assert.Equal(t, uint64(0), invalidMessage.Id)
 	assert.Equal(t, uint32(0), invalidMessage.To)
 	assert.Equal(t, uint32(0), invalidMessage.From)
 }
 
 func BenchmarkEncodeHandler(b *testing.B) {
 
-	handlerV0 := NewV0Handler()
+	handler := NewHandler()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = handlerV0.Encode(uint32(i), uint32(i), uint32(i), MessagePacket, 512)
+		_, _ = handler.Encode(uint32(i), uint32(i), uint64(i), MessagePacket, 512)
 	}
 }
 
 func BenchmarkDecodeHandler(b *testing.B) {
-	handlerV0 := NewV0Handler()
-	encodedMessage, _ := handlerV0.Encode(0, 0, 0, MessagePacket, 512)
+	handler := NewHandler()
+	encodedMessage, _ := handler.Encode(0, 0, 0, MessagePacket, 512)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = handlerV0.Decode(encodedMessage[:])
+		_, _ = handler.Decode(encodedMessage[:])
 	}
 }
 
 func BenchmarkEncodeDecodeHandler(b *testing.B) {
-	handlerV0 := NewV0Handler()
+	handler := NewHandler()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encodedMessage, _ := handlerV0.Encode(uint32(i), uint32(i), uint32(i), MessagePacket, 512)
-		_, _ = handlerV0.Decode(encodedMessage[:])
+		encodedMessage, _ := handler.Encode(uint32(i), uint32(i), uint64(i), MessagePacket, 512)
+		_, _ = handler.Decode(encodedMessage[:])
 	}
 }
 
 func BenchmarkEncode(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, _ = EncodeV0(uint32(i), uint32(i), uint32(i), MessagePacket, 512)
+		_, _ = Encode(uint32(i), uint32(i), uint64(i), MessagePacket, 512)
 	}
 }
 
 func BenchmarkDecode(b *testing.B) {
-	encodedMessage, _ := EncodeV0(0, 0, 0, MessagePacket, 512)
+	encodedMessage, _ := Encode(0, 0, 0, MessagePacket, 512)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = DecodeV0(encodedMessage[:])
+		_, _ = Decode(encodedMessage[:])
 	}
 }
 
 func BenchmarkEncodeDecode(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encodedMessage, _ := EncodeV0(uint32(i), uint32(i), uint32(i), MessagePacket, 512)
-		_, _ = DecodeV0(encodedMessage[:])
+		encodedMessage, _ := Encode(uint32(i), uint32(i), uint64(i), MessagePacket, 512)
+		_, _ = Decode(encodedMessage[:])
 	}
 }
