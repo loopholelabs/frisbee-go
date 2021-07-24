@@ -39,7 +39,6 @@ type Sync struct {
 	conn   net.Conn
 	state  *atomic.Int32
 	logger *zerolog.Logger
-	wg     sync.WaitGroup
 	error  *atomic.Error
 }
 
