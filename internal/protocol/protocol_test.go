@@ -23,7 +23,6 @@ import (
 	"testing"
 )
 
-
 func TestMessageEncodeDecode(t *testing.T) {
 	message := &Message{
 		From:          uint32(16),

@@ -39,7 +39,8 @@ const (
 )
 
 var (
-	defaultLogger = zerolog.New(os.Stdout)
+	defaultLogger   = zerolog.New(os.Stdout)
+	defaultDeadline = time.Second * 5
 )
 
 const DefaultBufferSize = 1 << 19
@@ -64,4 +65,7 @@ type Conn interface {
 	SetWriteDeadline(time.Time) error
 	WriteMessage(*Message, *[]byte) error
 	ReadMessage() (*Message, *[]byte, error)
+	Logger() *zerolog.Logger
+	Error() error
+	Raw() net.Conn
 }

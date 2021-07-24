@@ -1,3 +1,19 @@
+/*
+	Copyright 2021 Loophole Labs
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+		   http://www.apache.org/licenses/LICENSE-2.0
+
+	Unless required by applicable law or agreed to in writing, software
+	distributed under the License is distributed on an "AS IS" BASIS,
+	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	See the License for the specific language governing permissions and
+	limitations under the License.
+*/
+
 package frisbee
 
 import (
@@ -35,7 +51,7 @@ type Async struct {
 	error            *atomic.Error
 }
 
-// ConnectAsync creates a new TCP connection (using net.Dial) and warps it in a frisbee connection
+// ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
 func ConnectAsync(network string, addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Async, error) {
 	var conn net.Conn
 	var err error
@@ -189,11 +205,12 @@ func (c *Async) ReadMessage() (*Message, *[]byte, error) {
 func (c *Async) Flush() error {
 	c.Lock()
 	if c.writer.Buffered() > 0 {
+		_ = c.SetWriteDeadline(time.Now().Add(defaultDeadline))
 		err := c.writer.Flush()
+		_ = c.SetWriteDeadline(time.Time{})
 		if err != nil {
 			c.Unlock()
-			_ = c.closeWithError(err)
-			return err
+			return c.closeWithError(err)
 		}
 	}
 	c.Unlock()
@@ -308,16 +325,11 @@ func (c *Async) flushLoop() {
 		if _, ok := <-c.flusher; !ok {
 			return
 		}
-		c.Lock()
-		if c.writer.Buffered() > 0 {
-			err := c.writer.Flush()
-			if err != nil {
-				c.Unlock()
-				_ = c.closeWithError(err)
-				return
-			}
+		err := c.Flush()
+		if err != nil {
+			_ = c.closeWithError(err)
+			return
 		}
-		c.Unlock()
 	}
 }
 
@@ -331,11 +343,16 @@ func (c *Async) readLoop() {
 			_ = c.closeWithError(InvalidBufferLength)
 			return
 		}
+
 		var n int
 		var err error
+		_ = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 		for n < protocol.MessageSize {
 			var nn int
 			nn, err = c.conn.Read(buf[n:])
+			if n == 0 {
+				_ = c.SetReadDeadline(time.Time{})
+			}
 			n += nn
 			if err != nil {
 				if n < protocol.MessageSize {
