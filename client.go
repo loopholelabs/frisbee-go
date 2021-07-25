@@ -33,7 +33,7 @@ type ClientRouter map[uint32]ClientRouterFunc
 // Client connects to a frisbee Server and can send and receive frisbee messages
 type Client struct {
 	addr             string
-	conn             *Conn
+	conn             *Async
 	router           ClientRouter
 	options          *Options
 	closed           *atomic.Bool
@@ -41,7 +41,7 @@ type Client struct {
 }
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
-// The Connect method must then be called to dial the server and initialize the connection
+// The ConnectAsync method must then be called to dial the server and initialize the connection
 func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
@@ -65,11 +65,11 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	}
 }
 
-// Connect actually connects to the given frisbee server, and starts the reactor goroutines
+// ConnectAsync actually connects to the given frisbee server, and starts the reactor goroutines
 // to receive and handle incoming messages.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
+	frisbeeConn, err := ConnectAsync("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
 	if err != nil {
 		return err
 	}
@@ -88,13 +88,13 @@ func (c *Client) Connect() error {
 }
 
 // StreamConnCh returns a channel that can be listened on to retrieve stream connections as they're created
-func (c *Client) StreamConnCh() <-chan *StreamConn {
+func (c *Client) StreamConnCh() <-chan *Stream {
 	return c.conn.StreamConnCh
 }
 
-// NewStreamConn creates a new StreamConn from the underlying frisbee.Conn
-func (c *Client) NewStreamConn(id uint32) *StreamConn {
-	return c.conn.NewStreamConn(id)
+// NewStreamConn creates a new Stream from the underlying frisbee.Async
+func (c *Client) NewStreamConn(id uint64) *Stream {
+	return c.conn.NewStream(id)
 }
 
 // Closed checks whether this client has been closed

@@ -36,12 +36,12 @@ func TestClientRaw(t *testing.T) {
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverRouter[protocol.MessagePacket] = func(c *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePacket] = func(c *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		rawServerConn = c.Raw()
 		serverIsRaw <- struct{}{}
 		return
@@ -70,7 +70,7 @@ func TestClientRaw(t *testing.T) {
 		err := c.WriteMessage(&Message{
 			To:            16,
 			From:          32,
-			Id:            uint32(q),
+			Id:            uint64(q),
 			Operation:     protocol.MessagePing,
 			ContentLength: messageSize,
 		}, &data)
@@ -122,7 +122,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
-	serverRouter[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		return
 	}
 
@@ -153,7 +153,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 				err := c.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
-					Id:            uint32(q),
+					Id:            uint64(q),
 					Operation:     protocol.MessagePing,
 					ContentLength: messageSize,
 				}, &data)
@@ -183,7 +183,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 
 	finished := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Conn, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &Message{
 				To:            16,
@@ -226,7 +226,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 				err := c.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
-					Id:            uint32(q),
+					Id:            uint64(q),
 					Operation:     protocol.MessagePing,
 					ContentLength: messageSize,
 				}, &data)
