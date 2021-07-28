@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -37,6 +38,7 @@ type Client struct {
 	router           ClientRouter
 	options          *Options
 	closed           *atomic.Bool
+	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
 }
 
@@ -76,10 +78,12 @@ func (c *Client) Connect() error {
 	c.conn = frisbeeConn
 	c.Logger().Info().Msgf("Connected to %s", c.addr)
 
+	c.wg.Add(1)
 	go c.reactor()
 	c.Logger().Debug().Msgf("Reactor started for %s", c.addr)
 
 	if c.options.Heartbeat > time.Duration(0) {
+		c.wg.Add(1)
 		go c.heartbeat()
 		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
 	}
@@ -109,7 +113,9 @@ func (c *Client) Error() error {
 
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
-	c.closed.Store(true)
+	if c.closed.CAS(false, true) {
+		defer c.wg.Wait()
+	}
 	return c.conn.Close()
 }
 
@@ -124,7 +130,9 @@ func (c *Client) Raw() (net.Conn, error) {
 	if c.conn == nil {
 		return nil, ConnectionNotInitialized
 	}
-	c.closed.Store(true)
+	if c.closed.CAS(false, true) {
+		defer c.wg.Wait()
+	}
 	return c.conn.Raw(), nil
 }
 
@@ -134,6 +142,7 @@ func (c *Client) Logger() *zerolog.Logger {
 }
 
 func (c *Client) reactor() {
+	defer c.wg.Done()
 	for {
 		if c.closed.Load() {
 			return
@@ -181,6 +190,7 @@ func (c *Client) reactor() {
 }
 
 func (c *Client) heartbeat() {
+	defer c.wg.Done()
 	for {
 		<-time.After(c.options.Heartbeat)
 		if c.closed.Load() {

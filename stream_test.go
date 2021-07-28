@@ -162,8 +162,26 @@ func TestStreamWriteTo(t *testing.T) {
 }
 
 func TestStreamIOCopy(t *testing.T) {
-	readerOne, writerOne := net.Pipe()
-	readerTwo, writerTwo := net.Pipe()
+	var readerOne, writerOne, readerTwo, writerTwo net.Conn
+	setup := make(chan struct{}, 1)
+
+	l, _ := net.Listen("tcp", ":3000")
+
+	go func() {
+		readerOne, _ = l.Accept()
+		setup <- struct{}{}
+	}()
+
+	writerOne, _ = net.Dial("tcp", ":3000")
+	<-setup
+
+	go func() {
+		readerTwo, _ = l.Accept()
+		setup <- struct{}{}
+	}()
+
+	writerTwo, _ = net.Dial("tcp", ":3000")
+	<-setup
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -193,7 +211,10 @@ func TestStreamIOCopy(t *testing.T) {
 
 	go func() {
 		start <- struct{}{}
-		n, _ := io.Copy(streamWriterTwo, streamReaderOne)
+		n, err := io.Copy(streamWriterTwo, streamReaderOne)
+		if n == 0 {
+			require.NoError(t, err)
+		}
 		require.Equal(t, int64(len(rawWriteMessage)), n)
 		done <- struct{}{}
 	}()
