@@ -65,7 +65,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	}
 }
 
-// ConnectAsync actually connects to the given frisbee server, and starts the reactor goroutines
+// Connect actually connects to the given frisbee server, and starts the reactor goroutines
 // to receive and handle incoming messages.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)

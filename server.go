@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 	"net"
 	"time"
 )
@@ -35,7 +36,7 @@ type Server struct {
 	listener *net.TCPListener
 	addr     string
 	router   ServerRouter
-	shutdown bool
+	shutdown *atomic.Bool
 	options  *Options
 
 	// OnOpened is a function run by the server whenever a connection is opened
@@ -65,9 +66,10 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	}
 
 	return &Server{
-		addr:    addr,
-		router:  router,
-		options: options,
+		addr:     addr,
+		router:   router,
+		options:  options,
+		shutdown: atomic.NewBool(false),
 	}
 }
 
@@ -130,7 +132,7 @@ func (s *Server) Start() error {
 		for {
 			newConn, err := listener.Accept()
 			if err != nil {
-				if s.shutdown {
+				if s.shutdown.Load() {
 					return
 				}
 				s.Logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
@@ -217,6 +219,6 @@ func (s *Server) Logger() *zerolog.Logger {
 
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
-	s.shutdown = true
+	s.shutdown.Store(true)
 	return s.listener.Close()
 }
