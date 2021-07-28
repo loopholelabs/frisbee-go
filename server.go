@@ -20,12 +20,13 @@ import (
 	"crypto/tls"
 	"github.com/loophole-labs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 	"net"
 	"time"
 )
 
 // ServerRouterFunc defines a message handler for a specific frisbee message
-type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+type ServerRouterFunc func(c *Async, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
 
 // ServerRouter maps frisbee message types to specific handler functions (of type ServerRouterFunc)
 type ServerRouter map[uint32]ServerRouterFunc
@@ -35,14 +36,14 @@ type Server struct {
 	listener *net.TCPListener
 	addr     string
 	router   ServerRouter
-	shutdown bool
+	shutdown *atomic.Bool
 	options  *Options
 
 	// OnOpened is a function run by the server whenever a connection is opened
-	OnOpened func(server *Server, c *Conn) Action
+	OnOpened func(server *Server, c *Async) Action
 
 	// OnClosed is a function run by the server whenever a connection is closed
-	OnClosed func(server *Server, c *Conn, err error) Action
+	OnClosed func(server *Server, c *Async, err error) Action
 
 	// OnShutdown is run by the server before it shuts down
 	OnShutdown func(server *Server)
@@ -58,24 +59,25 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	options := loadOptions(opts...)
 
 	if options.Heartbeat > time.Duration(0) {
-		router[HEARTBEAT] = func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		router[HEARTBEAT] = func(c *Async, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			outgoingMessage = &incomingMessage
 			return
 		}
 	}
 
 	return &Server{
-		addr:    addr,
-		router:  router,
-		options: options,
+		addr:     addr,
+		router:   router,
+		options:  options,
+		shutdown: atomic.NewBool(false),
 	}
 }
 
-func (s *Server) onOpened(c *Conn) Action {
+func (s *Server) onOpened(c *Async) Action {
 	return s.OnOpened(s, c)
 }
 
-func (s *Server) onClosed(c *Conn, err error) Action {
+func (s *Server) onClosed(c *Async, err error) Action {
 	return s.OnClosed(s, c, err)
 }
 
@@ -93,13 +95,13 @@ func (s *Server) preWrite() {
 func (s *Server) Start() error {
 
 	if s.OnClosed == nil {
-		s.OnClosed = func(_ *Server, _ *Conn, err error) Action {
+		s.OnClosed = func(_ *Server, _ *Async, err error) Action {
 			return NONE
 		}
 	}
 
 	if s.OnOpened == nil {
-		s.OnOpened = func(_ *Server, _ *Conn) Action {
+		s.OnOpened = func(_ *Server, _ *Async) Action {
 			return NONE
 		}
 	}
@@ -130,7 +132,7 @@ func (s *Server) Start() error {
 		for {
 			newConn, err := listener.Accept()
 			if err != nil {
-				if s.shutdown {
+				if s.shutdown.Load() {
 					return
 				}
 				s.Logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
@@ -146,7 +148,7 @@ func (s *Server) Start() error {
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
 	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
-	frisbeeConn := New(newConn, s.Logger())
+	frisbeeConn := NewAsync(newConn, s.Logger())
 
 	openedAction := s.onOpened(frisbeeConn)
 
@@ -217,6 +219,6 @@ func (s *Server) Logger() *zerolog.Logger {
 
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
-	s.shutdown = true
+	s.shutdown.Store(true)
 	return s.listener.Close()
 }
