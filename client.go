@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -33,15 +34,16 @@ type ClientRouter map[uint32]ClientRouterFunc
 // Client connects to a frisbee Server and can send and receive frisbee messages
 type Client struct {
 	addr             string
-	conn             *Conn
+	conn             *Async
 	router           ClientRouter
 	options          *Options
 	closed           *atomic.Bool
+	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
 }
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
-// The Connect method must then be called to dial the server and initialize the connection
+// The ConnectAsync method must then be called to dial the server and initialize the connection
 func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
@@ -69,17 +71,19 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 // to receive and handle incoming messages.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := Connect("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
+	frisbeeConn, err := ConnectAsync("tcp", c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
 	if err != nil {
 		return err
 	}
 	c.conn = frisbeeConn
 	c.Logger().Info().Msgf("Connected to %s", c.addr)
 
+	c.wg.Add(1)
 	go c.reactor()
 	c.Logger().Debug().Msgf("Reactor started for %s", c.addr)
 
 	if c.options.Heartbeat > time.Duration(0) {
+		c.wg.Add(1)
 		go c.heartbeat()
 		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
 	}
@@ -87,9 +91,36 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// StreamChannel returns a channel that can be listened on to retrieve stream connections as they're created
+func (c *Client) StreamChannel() <-chan *Stream {
+	return c.conn.StreamChannel()
+}
+
+// NewStreamConn creates a new Stream from the underlying frisbee.Async
+func (c *Client) NewStreamConn(id uint64) *Stream {
+	return c.conn.NewStream(id)
+}
+
+// Closed checks whether this client has been closed
+func (c *Client) Closed() bool {
+	return c.closed.Load()
+}
+
+// Error checks whether this client has an error
+func (c *Client) Error() error {
+	return c.conn.Error()
+}
+
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
-	c.closed.Store(true)
+	if c.closed.CAS(false, true) {
+		err := c.conn.Close()
+		if err != nil {
+			return err
+		}
+		c.wg.Wait()
+		return nil
+	}
 	return c.conn.Close()
 }
 
@@ -98,23 +129,17 @@ func (c *Client) WriteMessage(message *Message, content *[]byte) error {
 	return c.conn.WriteMessage(message, content)
 }
 
-// Write takes a byte slice and sends a BUFFER frisbee Message
-func (c *Client) Write(p []byte) (int, error) {
-	return c.conn.Write(p)
-}
-
-// Read takes a byte slices and reads a BUFFER frisbee Message into it
-func (c *Client) Read(p []byte) (int, error) {
-	return c.conn.Read(p)
-}
-
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.
 // This is especially useful in proxying and streaming scenarios.
 func (c *Client) Raw() (net.Conn, error) {
 	if c.conn == nil {
 		return nil, ConnectionNotInitialized
 	}
-	c.closed.Store(true)
+	if c.closed.CAS(false, true) {
+		conn := c.conn.Raw()
+		c.wg.Wait()
+		return conn, nil
+	}
 	return c.conn.Raw(), nil
 }
 
@@ -124,6 +149,7 @@ func (c *Client) Logger() *zerolog.Logger {
 }
 
 func (c *Client) reactor() {
+	defer c.wg.Done()
 	for {
 		if c.closed.Load() {
 			return
@@ -171,6 +197,7 @@ func (c *Client) reactor() {
 }
 
 func (c *Client) heartbeat() {
+	defer c.wg.Done()
 	for {
 		<-time.After(c.options.Heartbeat)
 		if c.closed.Load() {

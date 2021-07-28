@@ -43,7 +43,7 @@
 //	const PING = uint32(1)
 //	const PONG = uint32(2)
 //
-//	func handlePing(_ *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+//	func handlePing(_ *frisbee.Async, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 //		if incomingMessage.ContentLength > 0 {
 //			log.Printf("Server Received Message: %s", incomingContent)
 //			outgoingMessage = &frisbee.Message{
@@ -107,7 +107,7 @@
 //		signal.Notify(exit, os.Interrupt)
 //
 //		c := frisbee.NewClient("127.0.0.1:8192", router)
-//		err := c.Connect()
+//		err := c.ConnectAsync()
 //		if err != nil {
 //			panic(err)
 //		}

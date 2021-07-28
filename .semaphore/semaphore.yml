@@ -52,10 +52,10 @@ blocks:
       jobs:
         - name: Test
           commands:
-            - go test ./...
+            - go test ./... -timeout 60s
         - name: Test (Race Conditions)
           commands:
-            - go test ./... -race
+            - go test ./... -race -timeout 60s
       prologue:
         commands:
           - sem-version go 1.16
@@ -74,10 +74,29 @@ blocks:
       jobs:
         - name: Benchmark
           commands:
-            - go test -bench=. ./...
+            - go test -bench=. ./... -v -timeout 60s
         - name: Benchmark (Race Conditons)
           commands:
-            - go test -bench=. ./... -race
+            - go test -bench=. ./... -race -v -timeout 60s
+      prologue:
+        commands:
+          - sem-version go 1.16
+          - export GO111MODULE=on
+          - export GOPATH=~/go
+          - 'export PATH=/home/semaphore/go/bin:$PATH'
+          - checkout
+          - cache restore
+          - go get ./...
+      epilogue:
+        always:
+          commands:
+            - cache save
+  - name: Flaky Tests
+    task:
+      jobs:
+      - name: TestStreamIOCopy (200x)
+        commands:
+          - go test ./... -run TestStreamIOCopy -count=200 -v -timeout 800s
       prologue:
         commands:
           - sem-version go 1.16
