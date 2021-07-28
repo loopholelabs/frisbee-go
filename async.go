@@ -205,8 +205,12 @@ func (c *Async) ReadMessage() (*Message, *[]byte, error) {
 func (c *Async) Flush() error {
 	c.Lock()
 	if c.writer.Buffered() > 0 {
-		_ = c.SetWriteDeadline(time.Now().Add(defaultDeadline))
-		err := c.writer.Flush()
+		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
+		if err != nil {
+			c.Unlock()
+			return c.closeWithError(err)
+		}
+		err = c.writer.Flush()
 		_ = c.SetWriteDeadline(time.Time{})
 		if err != nil {
 			c.Unlock()
@@ -260,9 +264,9 @@ func (c *Async) killGoroutines() {
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
-	_ = c.conn.SetReadDeadline(time.Now())
+	_ = c.SetDeadline(time.Now())
 	c.wg.Wait()
-	_ = c.conn.SetReadDeadline(time.Time{})
+	_ = c.SetDeadline(time.Time{})
 }
 
 func (c *Async) pause() error {
@@ -346,7 +350,11 @@ func (c *Async) readLoop() {
 
 		var n int
 		var err error
-		_ = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+		err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+		if err != nil {
+			_ = c.closeWithError(err)
+			return
+		}
 		for n < protocol.MessageSize {
 			var nn int
 			nn, err = c.conn.Read(buf[n:])
