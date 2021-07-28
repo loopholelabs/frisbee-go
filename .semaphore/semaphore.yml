@@ -91,6 +91,25 @@ blocks:
         always:
           commands:
             - cache save
+  - name: Flaky Tests
+      task:
+        jobs:
+        - name: TestStreamIOCopy (200x)
+          commands:
+            - go test ./... -run TestStreamIOCopy -count=200 -v
+        prologue:
+          commands:
+            - sem-version go 1.16
+            - export GO111MODULE=on
+            - export GOPATH=~/go
+            - 'export PATH=/home/semaphore/go/bin:$PATH'
+            - checkout
+            - cache restore
+            - go get ./...
+        epilogue:
+          always:
+            commands:
+              - cache save
   - name: Building
     task:
       jobs:
