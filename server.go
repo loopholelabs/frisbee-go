@@ -25,7 +25,7 @@ import (
 )
 
 // ServerRouterFunc defines a message handler for a specific frisbee message
-type ServerRouterFunc func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+type ServerRouterFunc func(c *Async, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
 
 // ServerRouter maps frisbee message types to specific handler functions (of type ServerRouterFunc)
 type ServerRouter map[uint32]ServerRouterFunc
@@ -39,10 +39,10 @@ type Server struct {
 	options  *Options
 
 	// OnOpened is a function run by the server whenever a connection is opened
-	OnOpened func(server *Server, c *Conn) Action
+	OnOpened func(server *Server, c *Async) Action
 
 	// OnClosed is a function run by the server whenever a connection is closed
-	OnClosed func(server *Server, c *Conn, err error) Action
+	OnClosed func(server *Server, c *Async, err error) Action
 
 	// OnShutdown is run by the server before it shuts down
 	OnShutdown func(server *Server)
@@ -58,7 +58,7 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	options := loadOptions(opts...)
 
 	if options.Heartbeat > time.Duration(0) {
-		router[HEARTBEAT] = func(c *Conn, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		router[HEARTBEAT] = func(c *Async, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			outgoingMessage = &incomingMessage
 			return
 		}
@@ -71,11 +71,11 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 	}
 }
 
-func (s *Server) onOpened(c *Conn) Action {
+func (s *Server) onOpened(c *Async) Action {
 	return s.OnOpened(s, c)
 }
 
-func (s *Server) onClosed(c *Conn, err error) Action {
+func (s *Server) onClosed(c *Async, err error) Action {
 	return s.OnClosed(s, c, err)
 }
 
@@ -93,13 +93,13 @@ func (s *Server) preWrite() {
 func (s *Server) Start() error {
 
 	if s.OnClosed == nil {
-		s.OnClosed = func(_ *Server, _ *Conn, err error) Action {
+		s.OnClosed = func(_ *Server, _ *Async, err error) Action {
 			return NONE
 		}
 	}
 
 	if s.OnOpened == nil {
-		s.OnOpened = func(_ *Server, _ *Conn) Action {
+		s.OnOpened = func(_ *Server, _ *Async) Action {
 			return NONE
 		}
 	}
@@ -146,7 +146,7 @@ func (s *Server) Start() error {
 func (s *Server) handleConn(newConn net.Conn) {
 	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
 	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
-	frisbeeConn := New(newConn, s.Logger())
+	frisbeeConn := NewAsync(newConn, s.Logger())
 
 	openedAction := s.onOpened(frisbeeConn)
 
