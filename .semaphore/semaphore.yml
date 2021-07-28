@@ -96,7 +96,7 @@ blocks:
       jobs:
       - name: TestStreamIOCopy (200x)
         commands:
-          - go test ./... -run TestStreamIOCopy -count=200 -v -timeout 60s
+          - go test ./... -run TestStreamIOCopy -count=200 -v -timeout 600s
       prologue:
         commands:
           - sem-version go 1.16
