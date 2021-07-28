@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adding TLS functionality to Frisbee servers and clients
 - Separating Frisbee Connections into Synchronous and Asynchronous connections
 
+### Fixes
+- Frisbee `Server` and `Client` now wait for goroutines to close when they are closed
+- Frisbee read loop and write (flush) loops implement deadlines
+
 ### Changes
 - Frisbee Message `ID` field is now a `uint64` (which makes UUID generation easier)
 - `TestStreamIOCopy` now uses `net.Conn` instead of `net.Pipe` for testing
