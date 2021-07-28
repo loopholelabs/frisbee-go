@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Features
 - Adding TLS functionality to Frisbee servers and clients
 - Separating Frisbee Connections into Synchronous and Asynchronous connections
+- Create multiplexed streams on top of existing frisbee connections (Async connections only)
 
 ### Fixes
 - Frisbee `Server` and `Client` now wait for goroutines to close when they are closed
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changes
 - Frisbee Message `ID` field is now a `uint64` (which makes UUID generation easier)
 - `TestStreamIOCopy` now uses `net.Conn` instead of `net.Pipe` for testing
+- Removed Buffer messages (for raw data), replaced them with multiplexed streams
 
 ## [v0.1.2] - 2021-06-14
 ### Features
