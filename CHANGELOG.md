@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Features
 - Adding TLS functionality to Frisbee servers and clients
+- Separating Frisbee Connections into Synchronous and Asynchronous connections
+
+### Changes
+- Frisbee Message `ID` field is now a `uint64` (which makes UUID generation easier)
+- `TestStreamIOCopy` now uses `net.Conn` instead of `net.Pipe` for testing
 
 ## [v0.1.2] - 2021-06-14
 ### Features
