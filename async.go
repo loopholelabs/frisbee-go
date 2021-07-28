@@ -45,7 +45,7 @@ type Async struct {
 	incomingMessages *ringbuffer.RingBuffer
 	streamConnMutex  sync.RWMutex
 	streamConns      map[uint64]*Stream
-	StreamConnCh     chan *Stream
+	streamConnCh     chan *Stream
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
 	error            *atomic.Error
@@ -79,7 +79,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
 		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
 		streamConns:      make(map[uint64]*Stream),
-		StreamConnCh:     make(chan *Stream, 1024),
+		streamConnCh:     make(chan *Stream, 1024),
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(ConnectionClosed),
@@ -119,6 +119,11 @@ func (c *Async) LocalAddr() net.Addr {
 // RemoteAddr returns the remote address of the underlying net.Conn
 func (c *Async) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
+}
+
+// StreamChannel returns a channel that can be listened to for new stream connections
+func (c *Async) StreamChannel() <-chan *Stream {
+	return c.streamConnCh
 }
 
 // WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
@@ -413,7 +418,7 @@ func (c *Async) readLoop() {
 						c.streamConns[decodedMessage.Id] = streamConn
 						c.streamConnMutex.Unlock()
 						select {
-						case c.StreamConnCh <- streamConn:
+						case c.streamConnCh <- streamConn:
 						default:
 						}
 					}

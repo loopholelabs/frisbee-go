@@ -91,9 +91,9 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-// StreamConnCh returns a channel that can be listened on to retrieve stream connections as they're created
-func (c *Client) StreamConnCh() <-chan *Stream {
-	return c.conn.StreamConnCh
+// StreamChannel returns a channel that can be listened on to retrieve stream connections as they're created
+func (c *Client) StreamChannel() <-chan *Stream {
+	return c.conn.StreamChannel()
 }
 
 // NewStreamConn creates a new Stream from the underlying frisbee.Async

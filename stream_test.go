@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestStreamMessages(t *testing.T) {
@@ -45,7 +46,9 @@ func TestStreamMessages(t *testing.T) {
 	assert.NoError(t, err)
 
 	rawReadMessage := make([]byte, len(rawWriteMessage))
-	readStream := <-readerConn.StreamConnCh
+	streamChannel := readerConn.StreamChannel()
+
+	readStream := <-streamChannel
 
 	n, err = io.ReadAtLeast(readStream, rawReadMessage, len(rawWriteMessage))
 	assert.NoError(t, err)
@@ -94,7 +97,7 @@ func TestStreamReadFrom(t *testing.T) {
 	err = frisbeeWriter.Flush()
 	assert.NoError(t, err)
 
-	readStream := <-frisbeeReader.StreamConnCh
+	readStream := <-frisbeeReader.streamConnCh
 
 	rawReadMessage := make([]byte, len(rawWriteMessage))
 	n, err = readStream.Read(rawReadMessage)
@@ -131,7 +134,7 @@ func TestStreamWriteTo(t *testing.T) {
 	err = frisbeeWriter.Flush()
 	assert.NoError(t, err)
 
-	streamReader := <-frisbeeReader.StreamConnCh
+	streamReader := <-frisbeeReader.streamConnCh
 
 	go func() {
 		n, _ := io.Copy(writerOne, streamReader)
@@ -206,7 +209,7 @@ func TestStreamIOCopy(t *testing.T) {
 	err = frisbeeWriterOne.Flush()
 	assert.NoError(t, err)
 
-	streamReaderOne := <-frisbeeReaderOne.StreamConnCh
+	streamReaderOne := <-frisbeeReaderOne.streamConnCh
 
 	go func() {
 		start <- struct{}{}
@@ -220,6 +223,8 @@ func TestStreamIOCopy(t *testing.T) {
 
 	<-start
 
+	time.Sleep(time.Second * 5)
+
 	err = frisbeeWriterOne.Close()
 	assert.NoError(t, err)
 
@@ -231,7 +236,7 @@ func TestStreamIOCopy(t *testing.T) {
 	err = frisbeeWriterTwo.Flush()
 	assert.NoError(t, err)
 
-	streamReaderTwo := <-frisbeeReaderTwo.StreamConnCh
+	streamReaderTwo := <-frisbeeReaderTwo.streamConnCh
 
 	rawReadMessage := make([]byte, len(rawWriteMessage))
 	n, err = streamReaderTwo.Read(rawReadMessage)
@@ -266,7 +271,7 @@ func TestNewStream(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageOne), n)
 
-	StreamReaderOne := <-frisbeeReader.StreamConnCh
+	StreamReaderOne := <-frisbeeReader.streamConnCh
 	rawReadMessageOne := make([]byte, len(rawWriteMessageOne))
 
 	n, err = StreamReaderOne.Read(rawReadMessageOne)
@@ -280,7 +285,7 @@ func TestNewStream(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(rawWriteMessageTwo), n)
 
-	StreamReaderTwo := <-frisbeeReader.StreamConnCh
+	StreamReaderTwo := <-frisbeeReader.streamConnCh
 	rawReadMessageTwo := make([]byte, len(rawWriteMessageTwo))
 
 	n, err = StreamReaderTwo.Read(rawReadMessageTwo)
