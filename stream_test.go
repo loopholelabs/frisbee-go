@@ -166,13 +166,6 @@ func TestStreamIOCopy(t *testing.T) {
 	setup := make(chan struct{}, 1)
 
 	l, _ := net.Listen("tcp", ":0")
-	defer func() {
-		_ = readerOne.Close()
-		_ = writerOne.Close()
-		_ = readerTwo.Close()
-		_ = writerTwo.Close()
-		_ = l.Close()
-	}()
 
 	go func() {
 		readerOne, _ = l.Accept()
@@ -219,7 +212,7 @@ func TestStreamIOCopy(t *testing.T) {
 	go func() {
 		start <- struct{}{}
 		n, err := io.Copy(streamWriterTwo, streamReaderOne)
-		if n == 0 {
+		if n != int64(len(rawWriteMessage)) {
 			require.NoError(t, err)
 		}
 		require.Equal(t, int64(len(rawWriteMessage)), n)
@@ -251,6 +244,9 @@ func TestStreamIOCopy(t *testing.T) {
 	err = frisbeeReaderTwo.Close()
 	assert.NoError(t, err)
 	err = frisbeeWriterTwo.Close()
+	assert.NoError(t, err)
+
+	err = l.Close()
 	assert.NoError(t, err)
 }
 
