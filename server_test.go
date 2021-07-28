@@ -38,12 +38,12 @@ func TestServerRaw(t *testing.T) {
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverRouter[protocol.MessagePacket] = func(c *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePacket] = func(c *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		rawServerConn = c.Raw()
 		serverIsRaw <- struct{}{}
 		return
@@ -72,7 +72,7 @@ func TestServerRaw(t *testing.T) {
 		err := c.WriteMessage(&Message{
 			To:            16,
 			From:          32,
-			Id:            uint32(q),
+			Id:            uint64(q),
 			Operation:     protocol.MessagePing,
 			ContentLength: messageSize,
 		}, &data)
@@ -123,7 +123,7 @@ func BenchmarkThroughput(b *testing.B) {
 	addr := ":8192"
 	router := make(ServerRouter)
 
-	router[protocol.MessagePing] = func(_ *Conn, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	router[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		return
 	}
 
@@ -135,7 +135,7 @@ func BenchmarkThroughput(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync("tcp", addr, time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
@@ -151,7 +151,7 @@ func BenchmarkThroughput(b *testing.B) {
 				err := frisbeeConn.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
-					Id:            uint32(q),
+					Id:            uint64(q),
 					Operation:     protocol.MessagePing,
 					ContentLength: messageSize,
 				}, &data)
@@ -181,7 +181,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	addr := ":8192"
 	router := make(ServerRouter)
 
-	router[protocol.MessagePing] = func(_ *Conn, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	router[protocol.MessagePing] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 		if incomingMessage.Id == testSize-1 {
 			outgoingMessage = &Message{
 				To:            16,
@@ -202,7 +202,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := Connect("tcp", addr, time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync("tcp", addr, time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
@@ -219,7 +219,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 				err := frisbeeConn.WriteMessage(&Message{
 					To:            uint32(i),
 					From:          uint32(i),
-					Id:            uint32(q),
+					Id:            uint64(q),
 					Operation:     protocol.MessagePing,
 					ContentLength: messageSize,
 				}, &data)
