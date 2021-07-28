@@ -50,11 +50,11 @@ func TestHelpers(t *testing.T) {
 }
 
 func TestRingBuffer(t *testing.T) {
-	testPacket := func() *protocol.PacketV0 {
-		return &protocol.PacketV0{}
+	testPacket := func() *protocol.Packet {
+		return &protocol.Packet{}
 	}
-	testPacket2 := func() *protocol.PacketV0 {
-		return &protocol.PacketV0{
+	testPacket2 := func() *protocol.Packet {
+		return &protocol.Packet{
 			Content: &[]byte{1},
 		}
 	}
