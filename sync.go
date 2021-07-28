@@ -241,7 +241,7 @@ func (c *Sync) pause() error {
 	} else if c.state.Load() == PAUSED {
 		return ConnectionPaused
 	}
-	return ConnectionNotInitialized
+	return ConnectionClosed
 }
 
 func (c *Sync) close() error {
@@ -260,9 +260,9 @@ func (c *Sync) closeWithError(err error) error {
 		return err
 	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
 		pauseError := c.pause()
-		if errors.Is(pauseError, ConnectionNotInitialized) {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but connection not initialized (inner error: %+v)", err)
-			return ConnectionNotInitialized
+		if errors.Is(pauseError, ConnectionClosed) {
+			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
+			return ConnectionClosed
 		} else {
 			c.Logger().Debug().Msgf("attempted to close connection with error, but error was EOF so pausing connection instead (inner error: %+v)", err)
 			return ConnectionPaused
