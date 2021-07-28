@@ -165,14 +165,21 @@ func TestStreamIOCopy(t *testing.T) {
 	var readerOne, writerOne, readerTwo, writerTwo net.Conn
 	setup := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
+	defer func() {
+		_ = readerOne.Close()
+		_ = writerOne.Close()
+		_ = readerTwo.Close()
+		_ = writerTwo.Close()
+		_ = l.Close()
+	}()
 
 	go func() {
 		readerOne, _ = l.Accept()
 		setup <- struct{}{}
 	}()
 
-	writerOne, _ = net.Dial("tcp", ":3000")
+	writerOne, _ = net.Dial("tcp", l.Addr().String())
 	<-setup
 
 	go func() {
@@ -180,7 +187,7 @@ func TestStreamIOCopy(t *testing.T) {
 		setup <- struct{}{}
 	}()
 
-	writerTwo, _ = net.Dial("tcp", ":3000")
+	writerTwo, _ = net.Dial("tcp", l.Addr().String())
 	<-setup
 
 	emptyLogger := zerolog.New(ioutil.Discard)
