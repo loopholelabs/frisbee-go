@@ -223,7 +223,7 @@ func TestStreamIOCopy(t *testing.T) {
 
 	<-start
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 3)
 
 	err = frisbeeWriterOne.Close()
 	assert.NoError(t, err)
