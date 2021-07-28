@@ -19,6 +19,7 @@ package frisbee
 import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io"
 	"io/ioutil"
 	"net"
@@ -182,33 +183,33 @@ func TestStreamIOCopy(t *testing.T) {
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 
 	n, err := streamWriterOne.Write(rawWriteMessage)
-	assert.NoError(t, err)
-	assert.Equal(t, len(rawWriteMessage), n)
+	require.NoError(t, err)
+	require.Equal(t, len(rawWriteMessage), n)
 
 	err = frisbeeWriterOne.Flush()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	streamReaderOne := <-frisbeeReaderOne.StreamConnCh
 
 	go func() {
 		start <- struct{}{}
 		n, _ := io.Copy(streamWriterTwo, streamReaderOne)
-		assert.Equal(t, int64(len(rawWriteMessage)), n)
+		require.Equal(t, int64(len(rawWriteMessage)), n)
 		done <- struct{}{}
 	}()
 
 	<-start
 
 	err = frisbeeWriterOne.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = frisbeeReaderOne.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	<-done
 
 	err = frisbeeWriterTwo.Flush()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	streamReaderTwo := <-frisbeeReaderTwo.StreamConnCh
 
