@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -38,6 +39,7 @@ type Server struct {
 	router   ServerRouter
 	shutdown *atomic.Bool
 	options  *Options
+	wg       sync.WaitGroup
 
 	// OnOpened is a function run by the server whenever a connection is opened
 	OnOpened func(server *Server, c *Async) Action
@@ -128,7 +130,9 @@ func (s *Server) Start() error {
 	}
 	s.listener = listener.(*net.TCPListener)
 
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		for {
 			newConn, err := listener.Accept()
 			if err != nil {
@@ -220,5 +224,6 @@ func (s *Server) Logger() *zerolog.Logger {
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
 	s.shutdown.Store(true)
+	defer s.wg.Wait()
 	return s.listener.Close()
 }
