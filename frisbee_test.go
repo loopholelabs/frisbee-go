@@ -37,7 +37,7 @@ func ExampleNewClient() {
 func ExampleNewServer() {
 	router := make(frisbee.ServerRouter)
 
-	router[0] = func(c *frisbee.Conn, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	router[0] = func(c *frisbee.Async, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
 		return
 	}
 
