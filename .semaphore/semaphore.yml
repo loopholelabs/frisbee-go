@@ -74,10 +74,10 @@ blocks:
       jobs:
         - name: Benchmark
           commands:
-            - go test -bench=. ./...
+            - go test -bench=. ./... -v
         - name: Benchmark (Race Conditons)
           commands:
-            - go test -bench=. ./... -race
+            - go test -bench=. ./... -race -v
       prologue:
         commands:
           - sem-version go 1.16
