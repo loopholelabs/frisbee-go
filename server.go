@@ -34,7 +34,7 @@ type ServerRouter map[uint32]ServerRouterFunc
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
-	listener *net.TCPListener
+	listener net.Listener
 	addr     string
 	router   ServerRouter
 	shutdown *atomic.Bool
@@ -116,25 +116,22 @@ func (s *Server) Start() error {
 		s.PreWrite = func(_ *Server) {}
 	}
 
-	var listener net.Listener
 	var err error
-
 	if s.options.TLSConfig != nil {
-		listener, err = tls.Listen("tcp", s.addr, s.options.TLSConfig)
+		s.listener, err = tls.Listen("tcp", s.addr, s.options.TLSConfig)
 	} else {
-		listener, err = net.Listen("tcp", s.addr)
+		s.listener, err = net.Listen("tcp", s.addr)
 	}
 
 	if err != nil {
 		return err
 	}
-	s.listener = listener.(*net.TCPListener)
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		for {
-			newConn, err := listener.Accept()
+			newConn, err := s.listener.Accept()
 			if err != nil {
 				if s.shutdown.Load() {
 					return
