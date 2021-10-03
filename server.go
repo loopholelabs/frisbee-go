@@ -147,10 +147,13 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) handleConn(newConn net.Conn) {
-	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
-	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
-	frisbeeConn := NewAsync(newConn, s.Logger())
+	switch v := newConn.(type) {
+	case *net.TCPConn:
+		_ = v.SetKeepAlive(true)
+		_ = v.SetKeepAlivePeriod(s.options.KeepAlive)
+	}
 
+	frisbeeConn := NewAsync(newConn, s.Logger())
 	openedAction := s.onOpened(frisbeeConn)
 
 	switch openedAction {
