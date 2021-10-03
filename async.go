@@ -111,6 +111,15 @@ func (c *Async) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
 }
 
+// ConnectionState returns the tls.ConnectionState of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Async) ConnectionState() (tls.ConnectionState, error) {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.ConnectionState(), nil
+	}
+	return tls.ConnectionState{}, NotTLSConnectionError
+}
+
 // LocalAddr returns the local address of the underlying net.Conn
 func (c *Async) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
