@@ -3,8 +3,8 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-brightgreen.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Build Status](https://loopholelabs.semaphoreci.com/badges/frisbee/branches/master.svg?style=shields&key=0ac9069a-bd8c-4d06-8790-97ba3f70d528)](https://loopholelabs.semaphoreci.com/projects/frisbee)
-[![Go Report Card](https://goreportcard.com/badge/github.com/loophole-labs/frisbee)](https://goreportcard.com/report/github.com/loophole-labs/frisbee)
-[![go-doc](https://godoc.org/github.com/loophole-labs/frisbee?status.svg)](https://godoc.org/github.com/loophole-labs/frisbee)
+[![Go Report Card](https://goreportcard.com/badge/github.com/loopholelabs/frisbee)](https://goreportcard.com/report/github.com/loopholelabs/frisbee)
+[![go-doc](https://godoc.org/github.com/loopholelabs/frisbee?status.svg)](https://godoc.org/github.com/loopholelabs/frisbee)
 
 This is the [Go](http://golang.org) library for
 [Frisbee](https://loopholelabs.io/docs/frisbee), a bring-your-own protocol messaging framework designed for performance and stability.
@@ -25,7 +25,7 @@ Documentation and example usage is available at [https://loopholelabs.io/docs/fr
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at [https://github.com/Loophole-Labs/frisbee][GITREPO]. For more contribution information check out [the contribution guide](https://github.com/Loophole-Labs/frisbee/blob/master/CONTRIBUTING.md).
+Bug reports and pull requests are welcome on GitHub at [https://github.com/loopholelabs/frisbee][GITREPO]. For more contribution information check out [the contribution guide](https://github.com/loopholelabs/frisbee/blob/master/CONTRIBUTING.md).
 
 
 ## License
@@ -40,6 +40,6 @@ Everyone interacting in the Frisbee project’s codebases, issue trackers, chat 
 ## Project Managed By:
 [![https://loopholelabs.io][LOOPHOLELABS]](https://loopholelabs.io)
 
-[GITREPO]: https://github.com/Loophole-Labs/frisbee
+[GITREPO]: https://github.com/loopholelabs/frisbee
 [LOOPHOLELABS]: https://cdn.loopholelabs.io/loopholelabs/LoopholeLabsLogo.svg
 [HOMEPAGE]: https://loopholelabs.io/docs/frisbee

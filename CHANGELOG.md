@@ -35,14 +35,14 @@ functions
 
 ## [v0.1.1] - 2021-06-04
 ### Fixes
-- (LOOP-87,LOOP-88)-fix-message-offsets ([#23](https://github.com/Loophole-Labs/frisbee/issues/23))
+- (LOOP-87,LOOP-88)-fix-message-offsets ([#23](https://github.com/loopholelabs/frisbee/issues/23))
 - fixing reactor not closing and heartbeat not closing bugs
 
 ## [v0.1.0] - 2021-06-03
 Initial Release of Frisbee
 
 [Unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v0.1.3...HEAD
-[v0.1.3]: https://github.com/Loophole-Labs/frisbee/compare/v0.1.2...v0.1.3
-[v0.1.2]: https://github.com/Loophole-Labs/frisbee/compare/v0.1.1...v0.1.2
-[v0.1.1]: https://github.com/Loophole-Labs/frisbee/compare/v0.1.0...v0.1.1
-[v0.1.0]: https://github.com/Loophole-Labs/frisbee/releases/tag/v0.1.0
+[v0.1.3]: https://github.com/loopholelabs/frisbee/compare/v0.1.2...v0.1.3
+[v0.1.2]: https://github.com/loopholelabs/frisbee/compare/v0.1.1...v0.1.2
+[v0.1.1]: https://github.com/loopholelabs/frisbee/compare/v0.1.0...v0.1.1
+[v0.1.0]: https://github.com/loopholelabs/frisbee/releases/tag/v0.1.0

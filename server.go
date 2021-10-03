@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"crypto/tls"
-	"github.com/loophole-labs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"

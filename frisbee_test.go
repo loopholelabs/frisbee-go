@@ -17,7 +17,7 @@
 package frisbee_test
 
 import (
-	"github.com/loophole-labs/frisbee"
+	"github.com/loopholelabs/frisbee"
 	"github.com/rs/zerolog"
 	"os"
 )
