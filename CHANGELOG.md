@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixes
+- Frisbee `Server` and `Client` now handle TLS connections properly 
+- Frisbee `Server` and `Client` now return an error if the `router` provided to them is not valid
+- Initial error value of the `Async.Conn` and `Sync.Conn` is `nil`
 
 ## [v0.1.3] - 2021-07-28
 ### Features

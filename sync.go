@@ -71,7 +71,7 @@ func NewSync(c net.Conn, logger *zerolog.Logger) (conn *Sync) {
 		conn:   c,
 		state:  atomic.NewInt32(CONNECTED),
 		logger: logger,
-		error:  atomic.NewError(ConnectionClosed),
+		error:  atomic.NewError(nil),
 	}
 
 	if logger == nil {

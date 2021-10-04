@@ -86,7 +86,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		streamConnCh:     make(chan *Stream, 1024),
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
-		error:            atomic.NewError(ConnectionClosed),
+		error:            atomic.NewError(nil),
 	}
 
 	if logger == nil {

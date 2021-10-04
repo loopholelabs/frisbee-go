@@ -52,11 +52,14 @@ func TestClientRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
-	err := s.Start()
+	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
-	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	err = s.Start()
+	require.NoError(t, err)
+
+	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
@@ -131,13 +134,20 @@ func BenchmarkClientThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
-	err := s.Start()
+	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
 	if err != nil {
 		panic(err)
 	}
 
-	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	err = s.Start()
+	if err != nil {
+		panic(err)
+	}
+
+	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	if err != nil {
+		panic(err)
+	}
 	err = c.Connect()
 	if err != nil {
 		panic(err)
@@ -204,13 +214,20 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
-	err := s.Start()
+	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
 	if err != nil {
 		panic(err)
 	}
 
-	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	err = s.Start()
+	if err != nil {
+		panic(err)
+	}
+
+	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	if err != nil {
+		panic(err)
+	}
 	err = c.Connect()
 	if err != nil {
 		panic(err)

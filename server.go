@@ -56,7 +56,13 @@ type Server struct {
 
 // NewServer returns an uninitialized frisbee Server with the registered ServerRouter.
 // The Start method must then be called to start the server and listen for connections
-func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
+func NewServer(addr string, router ServerRouter, opts ...Option) (*Server, error) {
+
+	for i := uint32(0); i < RESERVED9; i++ {
+		if _, ok := router[i]; ok {
+			return nil, InvalidRouter
+		}
+	}
 
 	options := loadOptions(opts...)
 
@@ -72,7 +78,7 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 		router:   router,
 		options:  options,
 		shutdown: atomic.NewBool(false),
-	}
+	}, nil
 }
 
 func (s *Server) onOpened(c *Async) Action {
