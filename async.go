@@ -52,14 +52,14 @@ type Async struct {
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectAsync(network string, addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Async, error) {
+func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Async, error) {
 	var conn net.Conn
 	var err error
 
 	if TLSConfig != nil {
-		conn, err = tls.Dial(network, addr, TLSConfig)
+		conn, err = tls.Dial("tcp", addr, TLSConfig)
 	} else {
-		conn, err = net.Dial(network, addr)
+		conn, err = net.Dial("tcp", addr)
 		_ = conn.(*net.TCPConn).SetKeepAlive(true)
 		_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 	}
