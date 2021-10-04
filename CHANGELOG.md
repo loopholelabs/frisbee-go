@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frisbee `Server` and `Client` now return an error if the `router` provided to them is not valid
 - Initial error value of the `Async.Conn` and `Sync.Conn` is `nil`
 
+### Changes
+- `ConnectSync` and `ConnectAsync` no longer have the `network` field, it is now "tcp" by default
+
 ## [v0.1.3] - 2021-07-28
 ### Features
 - Adding TLS functionality to Frisbee servers and clients
