@@ -18,8 +18,8 @@ package frisbee
 
 import (
 	"encoding/binary"
-	"github.com/loophole-labs/frisbee/internal/errors"
-	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/protocol"
 	"go.uber.org/atomic"
 	"io"
 )

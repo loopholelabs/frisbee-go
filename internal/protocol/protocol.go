@@ -19,7 +19,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/loophole-labs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/errors"
 	"unsafe"
 )
 

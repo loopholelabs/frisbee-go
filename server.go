@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"crypto/tls"
-	"github.com/loophole-labs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -34,7 +34,7 @@ type ServerRouter map[uint32]ServerRouterFunc
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
-	listener *net.TCPListener
+	listener net.Listener
 	addr     string
 	router   ServerRouter
 	shutdown *atomic.Bool
@@ -56,7 +56,13 @@ type Server struct {
 
 // NewServer returns an uninitialized frisbee Server with the registered ServerRouter.
 // The Start method must then be called to start the server and listen for connections
-func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
+func NewServer(addr string, router ServerRouter, opts ...Option) (*Server, error) {
+
+	for i := uint32(0); i < RESERVED9; i++ {
+		if _, ok := router[i]; ok {
+			return nil, InvalidRouter
+		}
+	}
 
 	options := loadOptions(opts...)
 
@@ -72,7 +78,7 @@ func NewServer(addr string, router ServerRouter, opts ...Option) *Server {
 		router:   router,
 		options:  options,
 		shutdown: atomic.NewBool(false),
-	}
+	}, nil
 }
 
 func (s *Server) onOpened(c *Async) Action {
@@ -116,25 +122,22 @@ func (s *Server) Start() error {
 		s.PreWrite = func(_ *Server) {}
 	}
 
-	var listener net.Listener
 	var err error
-
 	if s.options.TLSConfig != nil {
-		listener, err = tls.Listen("tcp", s.addr, s.options.TLSConfig)
+		s.listener, err = tls.Listen("tcp", s.addr, s.options.TLSConfig)
 	} else {
-		listener, err = net.Listen("tcp", s.addr)
+		s.listener, err = net.Listen("tcp", s.addr)
 	}
 
 	if err != nil {
 		return err
 	}
-	s.listener = listener.(*net.TCPListener)
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		for {
-			newConn, err := listener.Accept()
+			newConn, err := s.listener.Accept()
 			if err != nil {
 				if s.shutdown.Load() {
 					return
@@ -150,10 +153,13 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) handleConn(newConn net.Conn) {
-	_ = newConn.(*net.TCPConn).SetKeepAlive(true)
-	_ = newConn.(*net.TCPConn).SetKeepAlivePeriod(s.options.KeepAlive)
-	frisbeeConn := NewAsync(newConn, s.Logger())
+	switch v := newConn.(type) {
+	case *net.TCPConn:
+		_ = v.SetKeepAlive(true)
+		_ = v.SetKeepAlivePeriod(s.options.KeepAlive)
+	}
 
+	frisbeeConn := NewAsync(newConn, s.Logger())
 	openedAction := s.onOpened(frisbeeConn)
 
 	switch openedAction {
