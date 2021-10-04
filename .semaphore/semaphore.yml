@@ -13,7 +13,7 @@ blocks:
             - golangci-lint run --skip-dirs-use-default
       prologue:
         commands:
-          - sem-version go 1.17
+          - sem-version go 1.16
           - export GO111MODULE=on
           - export GOPATH=~/go
           - 'export PATH=/home/semaphore/go/bin:$PATH'
@@ -34,7 +34,7 @@ blocks:
             - ./snyk-linux test
       prologue:
         commands:
-          - sem-version go 1.17
+          - sem-version go 1.16
           - export GO111MODULE=on
           - export GOPATH=~/go
           - 'export PATH=/home/semaphore/go/bin:$PATH'
@@ -58,7 +58,7 @@ blocks:
             - go test ./... -race -timeout 60s
       prologue:
         commands:
-          - sem-version go 1.17
+          - sem-version go 1.16
           - export GO111MODULE=on
           - export GOPATH=~/go
           - 'export PATH=/home/semaphore/go/bin:$PATH'
@@ -80,7 +80,7 @@ blocks:
             - go test -bench=. ./... -race -v -timeout 60s
       prologue:
         commands:
-          - sem-version go 1.17
+          - sem-version go 1.16
           - export GO111MODULE=on
           - export GOPATH=~/go
           - 'export PATH=/home/semaphore/go/bin:$PATH'
@@ -99,7 +99,7 @@ blocks:
           - go test ./... -run TestStreamIOCopy -count=200 -v -timeout 800s
       prologue:
         commands:
-          - sem-version go 1.17
+          - sem-version go 1.16
           - export GO111MODULE=on
           - export GOPATH=~/go
           - 'export PATH=/home/semaphore/go/bin:$PATH'
@@ -118,7 +118,7 @@ blocks:
             - go build -v .
       prologue:
         commands:
-          - sem-version go 1.17
+          - sem-version go 1.16
           - export GO111MODULE=on
           - export GOPATH=~/go
           - 'export PATH=/home/semaphore/go/bin:$PATH'

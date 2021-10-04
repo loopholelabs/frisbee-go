@@ -51,16 +51,12 @@ func ConnectSync(network string, addr string, keepAlive time.Duration, logger *z
 		conn, err = tls.Dial(network, addr, TLSConfig)
 	} else {
 		conn, err = net.Dial(network, addr)
+		_ = conn.(*net.TCPConn).SetKeepAlive(true)
+		_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 	}
 
 	if err != nil {
 		return nil, errors.WithContext(err, DIAL)
-	}
-
-  switch v := conn.(type) {
-	case *net.TCPConn:
-		_ = v.SetKeepAlive(true)
-		_ = v.SetKeepAlivePeriod(keepAlive)
 	}
 
 	return NewSync(conn, logger), nil
