@@ -56,7 +56,8 @@ func ConnectSync(network string, addr string, keepAlive time.Duration, logger *z
 	if err != nil {
 		return nil, errors.WithContext(err, DIAL)
 	}
-	switch v := conn.(type) {
+
+  switch v := conn.(type) {
 	case *net.TCPConn:
 		_ = v.SetKeepAlive(true)
 		_ = v.SetKeepAlivePeriod(keepAlive)
