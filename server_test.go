@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/protocol"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -54,11 +54,14 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
-	err := s.Start()
+	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
-	c := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	err = s.Start()
+	require.NoError(t, err)
+
+	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
@@ -128,8 +131,13 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server := NewServer(addr, router, WithLogger(&emptyLogger))
-	err := server.Start()
+	server, err := NewServer(addr, router, WithLogger(&emptyLogger))
+	if err != nil {
+		log.Printf("Could not start server")
+		panic(err)
+	}
+
+	err = server.Start()
 	if err != nil {
 		log.Printf("Could not start server")
 		panic(err)
@@ -195,8 +203,13 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server := NewServer(addr, router, WithLogger(&emptyLogger))
-	err := server.Start()
+	server, err := NewServer(addr, router, WithLogger(&emptyLogger))
+	if err != nil {
+		log.Printf("Could not start server")
+		panic(err)
+	}
+
+	err = server.Start()
 	if err != nil {
 		log.Printf("Could not start server")
 		panic(err)

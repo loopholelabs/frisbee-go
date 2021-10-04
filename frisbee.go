@@ -17,8 +17,8 @@
 package frisbee
 
 import (
-	"github.com/loophole-labs/frisbee/internal/errors"
-	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/protocol"
 )
 
 // These are various frisbee error contexts that can be returned by the client or server:
@@ -53,6 +53,7 @@ var (
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferContents    = errors.New("invalid buffer contents")
 	InvalidBufferLength      = errors.New("invalid buffer length")
+	InvalidRouter            = errors.New("invalid router configuration, a reserved value may have been used")
 )
 
 // Action is an ENUM used to modify the state of the client or server from a router function
