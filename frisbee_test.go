@@ -17,7 +17,7 @@
 package frisbee_test
 
 import (
-	"github.com/loophole-labs/frisbee"
+	"github.com/loopholelabs/frisbee"
 	"github.com/rs/zerolog"
 	"os"
 )
@@ -31,7 +31,7 @@ func ExampleNewClient() {
 
 	logger := zerolog.New(os.Stdout)
 
-	frisbee.NewClient("127.0.0.1:8080", router, frisbee.WithLogger(&logger))
+	_, _ = frisbee.NewClient("127.0.0.1:8080", router, frisbee.WithLogger(&logger))
 }
 
 func ExampleNewServer() {
@@ -43,5 +43,5 @@ func ExampleNewServer() {
 
 	logger := zerolog.New(os.Stdout)
 
-	frisbee.NewServer("127.0.0.1:8080", router, frisbee.WithLogger(&logger))
+	_, _ = frisbee.NewServer("127.0.0.1:8080", router, frisbee.WithLogger(&logger))
 }

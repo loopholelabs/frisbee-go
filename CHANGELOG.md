@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.4] - 2021-10-03
+### Fixes
+- Frisbee `Server` and `Client` now handle TLS connections properly (tested with MTLS)
+- Frisbee `Server` and `Client` now return an error if the `router` provided to them is not valid
+- Initial error value of the `Async.Conn` and `Sync.Conn` is `nil`
+
+### Changes
+- `ConnectSync` and `ConnectAsync` no longer have the `network` field, it is now "tcp" by default
+
 ## [v0.1.3] - 2021-07-28
 ### Features
 - Adding TLS functionality to Frisbee servers and clients
@@ -35,14 +44,15 @@ functions
 
 ## [v0.1.1] - 2021-06-04
 ### Fixes
-- (LOOP-87,LOOP-88)-fix-message-offsets ([#23](https://github.com/Loophole-Labs/frisbee/issues/23))
+- (LOOP-87,LOOP-88)-fix-message-offsets ([#23](https://github.com/loopholelabs/frisbee/issues/23))
 - fixing reactor not closing and heartbeat not closing bugs
 
 ## [v0.1.0] - 2021-06-03
 Initial Release of Frisbee
 
-[Unreleased]: https://github.com/olivierlacan/keep-a-changelog/compare/v0.1.3...HEAD
-[v0.1.3]: https://github.com/Loophole-Labs/frisbee/compare/v0.1.2...v0.1.3
-[v0.1.2]: https://github.com/Loophole-Labs/frisbee/compare/v0.1.1...v0.1.2
-[v0.1.1]: https://github.com/Loophole-Labs/frisbee/compare/v0.1.0...v0.1.1
-[v0.1.0]: https://github.com/Loophole-Labs/frisbee/releases/tag/v0.1.0
+[Unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.1.4...HEAD
+[v0.1.4]: https://github.com/loopholelabs/frisbee/compare/v0.1.3...v0.1.4
+[v0.1.3]: https://github.com/loopholelabs/frisbee/compare/v0.1.2...v0.1.3
+[v0.1.2]: https://github.com/loopholelabs/frisbee/compare/v0.1.1...v0.1.2
+[v0.1.1]: https://github.com/loopholelabs/frisbee/compare/v0.1.0...v0.1.1
+[v0.1.0]: https://github.com/loopholelabs/frisbee/releases/tag/v0.1.0

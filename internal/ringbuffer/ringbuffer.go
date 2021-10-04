@@ -17,8 +17,8 @@
 package ringbuffer
 
 import (
-	"github.com/loophole-labs/frisbee/internal/errors"
-	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/protocol"
 	"runtime"
 	"sync/atomic"
 	"unsafe"
