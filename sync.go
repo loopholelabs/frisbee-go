@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loophole-labs/frisbee/internal/errors"
-	"github.com/loophole-labs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/protocol"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"io"
@@ -43,21 +43,21 @@ type Sync struct {
 }
 
 // ConnectSync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectSync(network string, addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Sync, error) {
+func ConnectSync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Sync, error) {
 	var conn net.Conn
 	var err error
 
 	if TLSConfig != nil {
-		conn, err = tls.Dial(network, addr, TLSConfig)
+		conn, err = tls.Dial("tcp", addr, TLSConfig)
 	} else {
-		conn, err = net.Dial(network, addr)
+		conn, err = net.Dial("tcp", addr)
+		_ = conn.(*net.TCPConn).SetKeepAlive(true)
+		_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 	}
 
 	if err != nil {
 		return nil, errors.WithContext(err, DIAL)
 	}
-	_ = conn.(*net.TCPConn).SetKeepAlive(true)
-	_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
 
 	return NewSync(conn, logger), nil
 }
@@ -68,7 +68,7 @@ func NewSync(c net.Conn, logger *zerolog.Logger) (conn *Sync) {
 		conn:   c,
 		state:  atomic.NewInt32(CONNECTED),
 		logger: logger,
-		error:  atomic.NewError(ConnectionClosed),
+		error:  atomic.NewError(nil),
 	}
 
 	if logger == nil {
@@ -90,6 +90,15 @@ func (c *Sync) SetReadDeadline(t time.Time) error {
 // SetWriteDeadline sets the write deadline on the underlying net.Conn
 func (c *Sync) SetWriteDeadline(t time.Time) error {
 	return c.conn.SetWriteDeadline(t)
+}
+
+// ConnectionState returns the tls.ConnectionState of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Sync) ConnectionState() (tls.ConnectionState, error) {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.ConnectionState(), nil
+	}
+	return tls.ConnectionState{}, NotTLSConnectionError
 }
 
 // LocalAddr returns the local address of the underlying net.Conn

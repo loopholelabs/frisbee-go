@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestNewAsync(t *testing.T) {
@@ -217,6 +218,8 @@ func TestAsyncReadClose(t *testing.T) {
 
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
+
+	time.Sleep(time.Millisecond * 100)
 
 	err = writerConn.WriteMessage(message, nil)
 	if err == nil {

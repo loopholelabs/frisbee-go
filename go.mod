@@ -1,4 +1,4 @@
-module github.com/loophole-labs/frisbee
+module github.com/loopholelabs/frisbee
 
 go 1.15
 
