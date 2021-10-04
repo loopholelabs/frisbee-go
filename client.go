@@ -17,7 +17,7 @@
 package frisbee
 
 import (
-	"github.com/loophole-labs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -44,7 +44,14 @@ type Client struct {
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
 // The ConnectAsync method must then be called to dial the server and initialize the connection
-func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
+func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error) {
+
+	for i := uint32(0); i < RESERVED9; i++ {
+		if _, ok := router[i]; ok {
+			return nil, InvalidRouter
+		}
+	}
+
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
 	if options.Heartbeat > time.Duration(0) {
@@ -64,7 +71,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) *Client {
 		options:          options,
 		closed:           atomic.NewBool(false),
 		heartbeatChannel: heartbeatChannel,
-	}
+	}, nil
 }
 
 // Connect actually connects to the given frisbee server, and starts the reactor goroutines

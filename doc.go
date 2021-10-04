@@ -34,7 +34,7 @@
 //	package main
 //
 //	import (
-//		"github.com/loophole-labs/frisbee"
+//		"github.com/loopholelabs/frisbee"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"
@@ -83,7 +83,7 @@
 //
 //	import (
 //		"fmt"
-//		"github.com/loophole-labs/frisbee"
+//		"github.com/loopholelabs/frisbee"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"
@@ -106,8 +106,11 @@
 //		exit := make(chan os.Signal)
 //		signal.Notify(exit, os.Interrupt)
 //
-//		c := frisbee.NewClient("127.0.0.1:8192", router)
-//		err := c.ConnectAsync()
+//		c, err := frisbee.NewClient("127.0.0.1:8192", router)
+//		if err != nil {
+//			panic(err)
+//		}
+//		err = c.ConnectAsync()
 //		if err != nil {
 //			panic(err)
 //		}
@@ -138,7 +141,7 @@
 //		}
 //	}
 //
-// (Examples taken from https://github.com/Loophole-Labs/frisbee-examples/)
+// (Examples taken from https://github.com/loopholelabs/frisbee-examples/)
 //
 // This example is a simple echo client/server, where the client will repeatedly send messages to the server,
 // and the server will echo them back. Its purpose is to describe the flow of messages from Frisbee Client to Server,

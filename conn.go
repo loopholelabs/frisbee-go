@@ -18,12 +18,17 @@ package frisbee
 
 import (
 	"bytes"
+	"crypto/tls"
+	"github.com/loopholelabs/frisbee/internal/errors"
 	"github.com/rs/zerolog"
 	"net"
 	"os"
 	"sync"
 	"time"
 )
+
+// DefaultBufferSize is the size of the default buffer
+const DefaultBufferSize = 1 << 19
 
 // These are states that frisbee connections can be in:
 const (
@@ -43,7 +48,9 @@ var (
 	defaultDeadline = time.Second * 5
 )
 
-const DefaultBufferSize = 1 << 19
+var (
+	NotTLSConnectionError = errors.New("connection is not of type *tls.Conn")
+)
 
 type incomingBuffer struct {
 	sync.Mutex
@@ -60,6 +67,7 @@ type Conn interface {
 	Close() error
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
+	ConnectionState() (tls.ConnectionState, error)
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
