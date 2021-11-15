@@ -384,7 +384,7 @@ func (c *Async) readLoop() {
 			var nn int
 			c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 			nn, err = c.conn.Read(buf[n:])
-			c.Logger().Debug().Msgf("Read %s on %s", nn, c.RemoteAddr())
+			c.Logger().Debug().Msgf("Read %d on %s", nn, c.RemoteAddr())
 			if n == 0 {
 				_ = c.SetReadDeadline(time.Time{})
 			}
@@ -502,7 +502,7 @@ func (c *Async) readLoop() {
 							var nn int
 							c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 							nn, err = c.conn.Read(buf[n:])
-							c.Logger().Debug().Msgf("Read %s on %s", nn, c.RemoteAddr())
+							c.Logger().Debug().Msgf("Read %d on %s", nn, c.RemoteAddr())
 							if n == 0 {
 								_ = c.SetReadDeadline(time.Time{})
 							}
@@ -560,7 +560,7 @@ func (c *Async) readLoop() {
 					var nn int
 					c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 					nn, err = c.conn.Read(buf[n:])
-					c.Logger().Debug().Msgf("Read %s on %s", nn, c.RemoteAddr())
+					c.Logger().Debug().Msgf("Read %d on %s", nn, c.RemoteAddr())
 					if n == 0 {
 						_ = c.SetReadDeadline(time.Time{})
 					}
