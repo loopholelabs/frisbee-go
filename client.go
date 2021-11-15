@@ -133,6 +133,11 @@ func (c *Client) WriteMessage(message *Message, content *[]byte) error {
 	return c.conn.WriteMessage(message, content)
 }
 
+// ErrorChannel returns an error channel that can be listened to see if this client has an error
+func (c *Client) ErrorChannel() <-chan error {
+	return c.conn.ErrorChannel()
+}
+
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.
 // This is especially useful in proxying and streaming scenarios.
 func (c *Client) Raw() (net.Conn, error) {
