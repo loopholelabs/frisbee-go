@@ -304,6 +304,7 @@ func (c *Async) pause() error {
 func (c *Async) close() error {
 	if c.state.CAS(CONNECTED, CLOSED) {
 		c.error.Store(ConnectionClosed)
+		c.Logger().Debug().Msg("Connection close called, killing goroutines")
 		c.killGoroutines()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
@@ -312,6 +313,7 @@ func (c *Async) close() error {
 		c.Unlock()
 		return nil
 	} else if c.state.CAS(PAUSED, CLOSED) {
+		c.Logger().Debug().Msg("Connection going into paused state")
 		c.error.Store(ConnectionClosed)
 		return nil
 	}
@@ -319,24 +321,25 @@ func (c *Async) close() error {
 }
 
 func (c *Async) closeWithError(err error) error {
+	c.Logger().Debug().Err(err).Msgf("Attempted to Close Connection with Error")
 	if os.IsTimeout(err) {
 		return err
 	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
 		pauseError := c.pause()
 		if errors.Is(pauseError, ConnectionClosed) {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
+			c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but connection already closed")
 			return ConnectionClosed
 		} else {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but error was EOF so pausing connection instead (inner error: %+v)", err)
+			c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but error was EOF so pausing connection instead")
 			return ConnectionPaused
 		}
 	} else {
 		closeError := c.close()
 		if errors.Is(closeError, ConnectionClosed) {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
+			c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but connection already closed")
 			return ConnectionClosed
 		} else {
-			c.Logger().Debug().Msgf("closing connection with error: %+v", err)
+			c.Logger().Debug().Err(err).Msgf("closing connection with error")
 		}
 	}
 	c.error.Store(err)
