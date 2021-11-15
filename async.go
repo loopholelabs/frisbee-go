@@ -49,6 +49,7 @@ type Async struct {
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
 	error            *atomic.Error
+	errorCh          chan error
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -83,6 +84,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(nil),
+		errorCh:          make(chan error, 1),
 	}
 
 	if logger == nil {
@@ -133,6 +135,11 @@ func (c *Async) RemoteAddr() net.Addr {
 // StreamChannel returns a channel that can be listened to for new stream connections
 func (c *Async) StreamChannel() <-chan *Stream {
 	return c.streamConnCh
+}
+
+// ErrorChannel returns a channel that can be listened to for errors on the Frisbee connection
+func (c *Async) ErrorChannel() <-chan error {
+	return c.errorCh
 }
 
 // WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
@@ -333,6 +340,10 @@ func (c *Async) closeWithError(err error) error {
 		}
 	}
 	c.error.Store(err)
+	select {
+	case c.errorCh <- err:
+	default:
+	}
 	_ = c.conn.Close()
 	return err
 }
