@@ -28,7 +28,6 @@ import (
 	"go.uber.org/atomic"
 	"io"
 	"net"
-	"os"
 	"sync"
 	"time"
 )
@@ -321,10 +320,7 @@ func (c *Async) close() error {
 }
 
 func (c *Async) closeWithError(err error) error {
-	c.Logger().Debug().Err(err).Msgf("Attempted to Close Connection with Error")
-	if os.IsTimeout(err) {
-		return err
-	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
 		pauseError := c.pause()
 		if errors.Is(pauseError, ConnectionClosed) {
 			c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but connection already closed")
@@ -385,9 +381,7 @@ func (c *Async) readLoop() {
 		}
 		for n < protocol.MessageSize {
 			var nn int
-			c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 			nn, err = c.conn.Read(buf[n:])
-			c.Logger().Debug().Msgf("Read %d on %s", nn, c.RemoteAddr())
 			if n == 0 {
 				_ = c.SetReadDeadline(time.Time{})
 			}
@@ -503,9 +497,7 @@ func (c *Async) readLoop() {
 						}
 						for n < min {
 							var nn int
-							c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 							nn, err = c.conn.Read(buf[n:])
-							c.Logger().Debug().Msgf("Read %d on %s", nn, c.RemoteAddr())
 							if n == 0 {
 								_ = c.SetReadDeadline(time.Time{})
 							}
@@ -561,9 +553,7 @@ func (c *Async) readLoop() {
 				}
 				for n < protocol.MessageSize {
 					var nn int
-					c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 					nn, err = c.conn.Read(buf[n:])
-					c.Logger().Debug().Msgf("Read %d on %s", nn, c.RemoteAddr())
 					if n == 0 {
 						_ = c.SetReadDeadline(time.Time{})
 					}
@@ -595,9 +585,7 @@ func (c *Async) readLoop() {
 				}
 				for n < min {
 					var nn int
-					c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 					nn, err = c.conn.Read(buf[index+n:])
-					c.Logger().Debug().Msgf("Read %d on %s", nn, c.RemoteAddr())
 					if n == 0 {
 						_ = c.SetReadDeadline(time.Time{})
 					}
