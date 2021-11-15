@@ -382,7 +382,9 @@ func (c *Async) readLoop() {
 		}
 		for n < protocol.MessageSize {
 			var nn int
+			c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 			nn, err = c.conn.Read(buf[n:])
+			c.Logger().Debug().Msgf("Read %s on %s", nn, c.RemoteAddr())
 			if n == 0 {
 				_ = c.SetReadDeadline(time.Time{})
 			}
@@ -498,7 +500,9 @@ func (c *Async) readLoop() {
 						}
 						for n < min {
 							var nn int
+							c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 							nn, err = c.conn.Read(buf[n:])
+							c.Logger().Debug().Msgf("Read %s on %s", nn, c.RemoteAddr())
 							if n == 0 {
 								_ = c.SetReadDeadline(time.Time{})
 							}
@@ -554,7 +558,9 @@ func (c *Async) readLoop() {
 				}
 				for n < protocol.MessageSize {
 					var nn int
+					c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 					nn, err = c.conn.Read(buf[n:])
+					c.Logger().Debug().Msgf("Read %s on %s", nn, c.RemoteAddr())
 					if n == 0 {
 						_ = c.SetReadDeadline(time.Time{})
 					}
@@ -586,7 +592,9 @@ func (c *Async) readLoop() {
 				}
 				for n < min {
 					var nn int
+					c.Logger().Debug().Msgf("Attempting to Read on %s", c.RemoteAddr())
 					nn, err = c.conn.Read(buf[index+n:])
+					c.Logger().Debug().Msgf("Read %s on %s", nn, c.RemoteAddr())
 					if n == 0 {
 						_ = c.SetReadDeadline(time.Time{})
 					}
