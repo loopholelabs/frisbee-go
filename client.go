@@ -55,9 +55,6 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
 	if options.Heartbeat > time.Duration(0) {
-		if router[HEARTBEAT] != nil {
-			options.Logger.Warn().Msgf("message type %d is reserved, it will be overwritten", HEARTBEAT)
-		}
 		heartbeatChannel = make(chan struct{}, 1)
 		router[HEARTBEAT] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			heartbeatChannel <- struct{}{}

@@ -65,10 +65,8 @@ func NewServer(addr string, router ServerRouter, opts ...Option) (*Server, error
 	}
 
 	options := loadOptions(opts...)
-
 	if options.Heartbeat > time.Duration(0) {
-		router[HEARTBEAT] = func(c *Async, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
-			options.Logger.Debug().Msgf("Heartbeat from %s", c.RemoteAddr())
+		router[HEARTBEAT] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			outgoingMessage = &incomingMessage
 			return
 		}

@@ -480,9 +480,17 @@ func (c *Async) readLoop() {
 							return
 						}
 						n = 0
+						err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+						if err != nil {
+							_ = c.closeWithError(err)
+							return
+						}
 						for n < min {
 							var nn int
 							nn, err = c.conn.Read(buf[n:])
+							if n == 0 {
+								_ = c.SetReadDeadline(time.Time{})
+							}
 							n += nn
 							if err != nil {
 								if n < min {
@@ -528,9 +536,17 @@ func (c *Async) readLoop() {
 					break
 				}
 				n = 0
+				err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+				if err != nil {
+					_ = c.closeWithError(err)
+					return
+				}
 				for n < protocol.MessageSize {
 					var nn int
 					nn, err = c.conn.Read(buf[n:])
+					if n == 0 {
+						_ = c.SetReadDeadline(time.Time{})
+					}
 					n += nn
 					if err != nil {
 						if n < protocol.MessageSize {
@@ -552,9 +568,17 @@ func (c *Async) readLoop() {
 					break
 				}
 				n = 0
+				err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+				if err != nil {
+					_ = c.closeWithError(err)
+					return
+				}
 				for n < min {
 					var nn int
 					nn, err = c.conn.Read(buf[index+n:])
+					if n == 0 {
+						_ = c.SetReadDeadline(time.Time{})
+					}
 					n += nn
 					if err != nil {
 						if n < min {

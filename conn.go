@@ -45,7 +45,7 @@ const (
 
 var (
 	defaultLogger   = zerolog.New(os.Stdout)
-	defaultDeadline = time.Second * 5
+	defaultDeadline = time.Second * 30
 )
 
 var (

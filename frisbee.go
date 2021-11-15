@@ -93,8 +93,14 @@ const (
 const (
 	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
 	HEARTBEAT = uint32(iota)
+
+	// NEWSTREAM is used to open a new multiplexed stream
 	NEWSTREAM
+
+	// STREAMCLOSE is used to close a multiplexed stream
 	STREAMCLOSE
+
+	RESERVED3
 	RESERVED4
 	RESERVED5
 	RESERVED6
