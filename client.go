@@ -213,9 +213,7 @@ func (c *Client) heartbeat() {
 			return
 		}
 		if c.conn.WriteBufferSize() == 0 {
-			err := c.WriteMessage(&Message{
-				Operation: HEARTBEAT,
-			}, nil)
+			err := c.WriteMessage(HEARTBEATMessage, nil)
 			if err != nil {
 				c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())
 				_ = c.Close()
