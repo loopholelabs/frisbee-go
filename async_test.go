@@ -277,6 +277,65 @@ func TestAsyncWriteClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAsyncTimeout(t *testing.T) {
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	var reader, writer net.Conn
+	start := make(chan struct{}, 1)
+
+	l, _ := net.Listen("tcp", ":3000")
+
+	go func() {
+		reader, _ = l.Accept()
+		start <- struct{}{}
+	}()
+
+	writer, _ = net.Dial("tcp", ":3000")
+	<-start
+
+	readerConn := NewAsync(reader, &emptyLogger)
+	writerConn := NewAsync(writer, &emptyLogger)
+
+	message := &Message{
+		To:            16,
+		From:          32,
+		Id:            64,
+		Operation:     32,
+		ContentLength: 0,
+	}
+	err := writerConn.WriteMessage(message, nil)
+	assert.NoError(t, err)
+
+	err = writerConn.Flush()
+	assert.NoError(t, err)
+
+	readMessage, content, err := readerConn.ReadMessage()
+	assert.NoError(t, err)
+	assert.NotNil(t, readMessage)
+	assert.Equal(t, *message, *readMessage)
+	assert.Nil(t, content)
+
+	time.Sleep(defaultDeadline * 10)
+
+	err = writerConn.Error()
+	assert.NoError(t, err)
+
+	err = writerConn.WriteMessage(message, nil)
+	assert.NoError(t, err)
+
+	err = writerConn.conn.Close()
+	assert.NoError(t, err)
+
+	_, _, err = readerConn.ReadMessage()
+	assert.ErrorIs(t, err, ConnectionClosed)
+	assert.ErrorIs(t, readerConn.Error(), ConnectionClosed)
+
+	err = readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
+}
+
 func BenchmarkAsyncThroughputPipe32(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 32

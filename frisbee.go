@@ -99,7 +99,8 @@ const (
 	// STREAMCLOSE is used to close a multiplexed stream
 	STREAMCLOSE
 
-	RESERVED3
+	NOOP
+
 	RESERVED4
 	RESERVED5
 	RESERVED6
@@ -112,5 +113,10 @@ var (
 	// HEARTBEATMessage is a pre-allocated Frisbee Message for HEARTBEAT Messages
 	HEARTBEATMessage = &Message{
 		Operation: HEARTBEAT,
+	}
+
+	// NOOPMessage is a pre-allocated Frisbee Message for NOOP Messages
+	NOOPMessage = &Message{
+		Operation: NOOP,
 	}
 )
