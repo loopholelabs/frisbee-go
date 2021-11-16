@@ -231,7 +231,7 @@ func (c *Async) Flush() error {
 			return c.closeWithError(err)
 		}
 		err = c.writer.Flush()
-		_ = c.SetWriteDeadline(time.Time{})
+		_ = c.SetWriteDeadline(emptyTime)
 		if err != nil {
 			c.Unlock()
 			return c.closeWithError(err)
@@ -258,7 +258,7 @@ func (c *Async) Logger() *zerolog.Logger {
 	return c.logger
 }
 
-// Error returns the error that caused the frisbee.Async to close or go into a paused state
+// Error returns the error that caused the frisbee.Async to close
 func (c *Async) Error() error {
 	return c.error.Load()
 }
@@ -289,17 +289,6 @@ func (c *Async) killGoroutines() {
 	_ = c.SetDeadline(time.Time{})
 }
 
-func (c *Async) pause() error {
-	if c.state.CAS(CONNECTED, PAUSED) {
-		c.error.Store(ConnectionPaused)
-		c.killGoroutines()
-		return nil
-	} else if c.state.Load() == PAUSED {
-		return ConnectionPaused
-	}
-	return ConnectionClosed
-}
-
 func (c *Async) close() error {
 	if c.state.CAS(CONNECTED, CLOSED) {
 		c.error.Store(ConnectionClosed)
@@ -311,32 +300,17 @@ func (c *Async) close() error {
 		}
 		c.Unlock()
 		return nil
-	} else if c.state.CAS(PAUSED, CLOSED) {
-		c.Logger().Debug().Msg("Connection going into paused state")
-		c.error.Store(ConnectionClosed)
-		return nil
 	}
 	return ConnectionClosed
 }
 
 func (c *Async) closeWithError(err error) error {
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-		pauseError := c.pause()
-		if errors.Is(pauseError, ConnectionClosed) {
-			c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but connection already closed")
-			return ConnectionClosed
-		} else {
-			c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but error was EOF so pausing connection instead")
-			return ConnectionPaused
-		}
+	closeError := c.close()
+	if errors.Is(closeError, ConnectionClosed) {
+		c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but connection already closed")
+		return ConnectionClosed
 	} else {
-		closeError := c.close()
-		if errors.Is(closeError, ConnectionClosed) {
-			c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but connection already closed")
-			return ConnectionClosed
-		} else {
-			c.Logger().Debug().Err(err).Msgf("closing connection with error")
-		}
+		c.Logger().Debug().Err(err).Msgf("closing connection with error")
 	}
 	c.error.Store(err)
 	select {
@@ -490,17 +464,9 @@ func (c *Async) readLoop() {
 							return
 						}
 						n = 0
-						err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
-						if err != nil {
-							_ = c.closeWithError(err)
-							return
-						}
 						for n < min {
 							var nn int
 							nn, err = c.conn.Read(buf[n:])
-							if n == 0 {
-								_ = c.SetReadDeadline(time.Time{})
-							}
 							n += nn
 							if err != nil {
 								if n < min {
@@ -546,17 +512,9 @@ func (c *Async) readLoop() {
 					break
 				}
 				n = 0
-				err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
-				if err != nil {
-					_ = c.closeWithError(err)
-					return
-				}
 				for n < protocol.MessageSize {
 					var nn int
 					nn, err = c.conn.Read(buf[n:])
-					if n == 0 {
-						_ = c.SetReadDeadline(time.Time{})
-					}
 					n += nn
 					if err != nil {
 						if n < protocol.MessageSize {
@@ -578,17 +536,9 @@ func (c *Async) readLoop() {
 					break
 				}
 				n = 0
-				err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
-				if err != nil {
-					_ = c.closeWithError(err)
-					return
-				}
 				for n < min {
 					var nn int
 					nn, err = c.conn.Read(buf[index+n:])
-					if n == 0 {
-						_ = c.SetReadDeadline(time.Time{})
-					}
 					n += nn
 					if err != nil {
 						if n < min {

@@ -49,7 +49,6 @@ const (
 var (
 	InvalidContentLength     = errors.New("invalid content length")
 	ConnectionClosed         = errors.New("connection closed")
-	ConnectionPaused         = errors.New("connection paused")
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferContents    = errors.New("invalid buffer contents")
 	InvalidBufferLength      = errors.New("invalid buffer length")
@@ -107,4 +106,11 @@ const (
 	RESERVED7
 	RESERVED8
 	RESERVED9
+)
+
+var (
+	// HEARTBEATMessage is a pre-allocated Frisbee Message for HEARTBEAT Messages
+	HEARTBEATMessage = &Message{
+		Operation: HEARTBEAT,
+	}
 )
