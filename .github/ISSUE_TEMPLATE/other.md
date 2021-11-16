@@ -1,6 +1,6 @@
 ---
 name: Other
-about: An different type of issue
+about: A different type of issue
 title: ''
 labels: question
 assignees: ShivanshVij
