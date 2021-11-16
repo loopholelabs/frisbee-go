@@ -41,7 +41,7 @@ const (
 
 var (
 	defaultLogger   = zerolog.New(os.Stdout)
-	defaultDeadline = time.Millisecond * 500
+	defaultDeadline = time.Second
 	emptyTime       = time.Time{}
 )
 

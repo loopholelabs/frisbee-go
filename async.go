@@ -338,6 +338,7 @@ func (c *Async) flushLoop() {
 }
 
 func (c *Async) handleTimeout() error {
+	c.Logger().Debug().Msg("Handling Timeout Using NOOP Message")
 	err := c.WriteMessage(NOOPMessage, nil)
 	if err != nil {
 		return err
@@ -347,6 +348,8 @@ func (c *Async) handleTimeout() error {
 	if err != nil {
 		return err
 	}
+
+	c.Logger().Debug().Msg("NOOP Message sent successfully, connection is still alive")
 
 	return nil
 }
