@@ -55,9 +55,6 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
 	if options.Heartbeat > time.Duration(0) {
-		if router[HEARTBEAT] != nil {
-			options.Logger.Warn().Msgf("message type %d is reserved, it will be overwritten", HEARTBEAT)
-		}
 		heartbeatChannel = make(chan struct{}, 1)
 		router[HEARTBEAT] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			heartbeatChannel <- struct{}{}
@@ -136,6 +133,11 @@ func (c *Client) WriteMessage(message *Message, content *[]byte) error {
 	return c.conn.WriteMessage(message, content)
 }
 
+// ErrorChannel returns an error channel that can be listened to see if this client has an error
+func (c *Client) ErrorChannel() <-chan error {
+	return c.conn.ErrorChannel()
+}
+
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.
 // This is especially useful in proxying and streaming scenarios.
 func (c *Client) Raw() (net.Conn, error) {
@@ -211,9 +213,7 @@ func (c *Client) heartbeat() {
 			return
 		}
 		if c.conn.WriteBufferSize() == 0 {
-			err := c.WriteMessage(&Message{
-				Operation: HEARTBEAT,
-			}, nil)
+			err := c.WriteMessage(HEARTBEATMessage, nil)
 			if err != nil {
 				c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())
 				_ = c.Close()

@@ -49,7 +49,6 @@ const (
 var (
 	InvalidContentLength     = errors.New("invalid content length")
 	ConnectionClosed         = errors.New("connection closed")
-	ConnectionPaused         = errors.New("connection paused")
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferContents    = errors.New("invalid buffer contents")
 	InvalidBufferLength      = errors.New("invalid buffer length")
@@ -93,12 +92,39 @@ const (
 const (
 	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
 	HEARTBEAT = uint32(iota)
+
+	// NEWSTREAM is used to open a new multiplexed stream
 	NEWSTREAM
+
+	// STREAMCLOSE is used to close a multiplexed stream
 	STREAMCLOSE
-	RESERVED4
+
+	// PING is used to check if a client is still alive
+	PING
+
+	// PONG is used to respond to a PING message
+	PONG
+
 	RESERVED5
 	RESERVED6
 	RESERVED7
 	RESERVED8
 	RESERVED9
+)
+
+var (
+	// HEARTBEATMessage is a pre-allocated Frisbee Message for HEARTBEAT Messages
+	HEARTBEATMessage = &Message{
+		Operation: HEARTBEAT,
+	}
+
+	// PINGMessage is a pre-allocated Frisbee Message for PING Messages
+	PINGMessage = &Message{
+		Operation: PING,
+	}
+
+	// PONGMessage is a pre-allocated Frisbee Message for PONG Messages
+	PONGMessage = &Message{
+		Operation: PONG,
+	}
 )

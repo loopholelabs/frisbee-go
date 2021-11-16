@@ -65,9 +65,8 @@ func NewServer(addr string, router ServerRouter, opts ...Option) (*Server, error
 	}
 
 	options := loadOptions(opts...)
-
 	if options.Heartbeat > time.Duration(0) {
-		router[HEARTBEAT] = func(c *Async, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		router[HEARTBEAT] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
 			outgoingMessage = &incomingMessage
 			return
 		}
@@ -173,7 +172,6 @@ func (s *Server) handleConn(newConn net.Conn) {
 		_ = s.Shutdown()
 		s.onShutdown()
 		return
-	default:
 	}
 
 	for {
@@ -197,7 +195,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
 				s.preWrite()
-				err := frisbeeConn.WriteMessage(outgoingMessage, &outgoingContent)
+				err = frisbeeConn.WriteMessage(outgoingMessage, &outgoingContent)
 				if err != nil {
 					_ = frisbeeConn.Close()
 					s.onClosed(frisbeeConn, err)
@@ -216,7 +214,6 @@ func (s *Server) handleConn(newConn net.Conn) {
 				_ = s.Shutdown()
 				s.OnShutdown(s)
 				return
-			default:
 			}
 		}
 	}

@@ -26,7 +26,6 @@ import (
 	"go.uber.org/atomic"
 	"io"
 	"net"
-	"os"
 	"sync"
 	"time"
 )
@@ -243,21 +242,8 @@ func (c *Sync) Close() error {
 	return err
 }
 
-func (c *Sync) pause() error {
-	if c.state.CAS(CONNECTED, PAUSED) {
-		c.error.Store(ConnectionPaused)
-		return nil
-	} else if c.state.Load() == PAUSED {
-		return ConnectionPaused
-	}
-	return ConnectionClosed
-}
-
 func (c *Sync) close() error {
 	if c.state.CAS(CONNECTED, CLOSED) {
-		c.error.Store(ConnectionClosed)
-		return nil
-	} else if c.state.CAS(PAUSED, CLOSED) {
 		c.error.Store(ConnectionClosed)
 		return nil
 	}
@@ -265,25 +251,12 @@ func (c *Sync) close() error {
 }
 
 func (c *Sync) closeWithError(err error) error {
-	if os.IsTimeout(err) {
-		return err
-	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-		pauseError := c.pause()
-		if errors.Is(pauseError, ConnectionClosed) {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
-			return ConnectionClosed
-		} else {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but error was EOF so pausing connection instead (inner error: %+v)", err)
-			return ConnectionPaused
-		}
+	closeError := c.close()
+	if errors.Is(closeError, ConnectionClosed) {
+		c.Logger().Debug().Err(err).Msg("attempted to close connection with error, but connection already closed")
+		return ConnectionClosed
 	} else {
-		closeError := c.close()
-		if errors.Is(closeError, ConnectionClosed) {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
-			return ConnectionClosed
-		} else {
-			c.Logger().Debug().Msgf("closing connection with error: %+v", err)
-		}
+		c.Logger().Debug().Err(err).Msgf("closing connection with error")
 	}
 	c.error.Store(err)
 	_ = c.conn.Close()
