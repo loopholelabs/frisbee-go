@@ -37,15 +37,12 @@ const (
 
 	// CLOSED is used to specify that the connection has been closed (possibly due to an error)
 	CLOSED
-
-	// PAUSED is used in the event of a read or write error and puts the connection into a paused state,
-	// this is then used by the reconnection logic to resume the connection
-	PAUSED
 )
 
 var (
 	defaultLogger   = zerolog.New(os.Stdout)
-	defaultDeadline = time.Second * 30
+	defaultDeadline = time.Second
+	emptyTime       = time.Time{}
 )
 
 var (
