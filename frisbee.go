@@ -99,9 +99,12 @@ const (
 	// STREAMCLOSE is used to close a multiplexed stream
 	STREAMCLOSE
 
-	NOOP
+	// PING is used to check if a client is still alive
+	PING
 
-	RESERVED4
+	// PONG is used to respond to a PING message
+	PONG
+
 	RESERVED5
 	RESERVED6
 	RESERVED7
@@ -115,8 +118,13 @@ var (
 		Operation: HEARTBEAT,
 	}
 
-	// NOOPMessage is a pre-allocated Frisbee Message for NOOP Messages
-	NOOPMessage = &Message{
-		Operation: NOOP,
+	// PINGMessage is a pre-allocated Frisbee Message for PING Messages
+	PINGMessage = &Message{
+		Operation: PING,
+	}
+
+	// PONGMessage is a pre-allocated Frisbee Message for PONG Messages
+	PONGMessage = &Message{
+		Operation: PONG,
 	}
 )

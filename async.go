@@ -49,6 +49,7 @@ type Async struct {
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
 	error            *atomic.Error
+	pongCh           chan struct{}
 	errorCh          chan error
 }
 
@@ -84,6 +85,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(nil),
+		pongCh:           make(chan struct{}, 1),
 		errorCh:          make(chan error, 1),
 	}
 
@@ -337,9 +339,21 @@ func (c *Async) flushLoop() {
 	}
 }
 
+func (c *Async) waitForPONG() {
+	timer := time.NewTimer(defaultDeadline)
+	defer func() { timer.Stop(); c.wg.Done() }()
+	select {
+	case <-timer.C:
+		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
+		_ = c.closeWithError(os.ErrDeadlineExceeded)
+	case <-c.pongCh:
+		c.Logger().Debug().Msg("PONG message received on time, connection is alive")
+	}
+}
+
 func (c *Async) handleTimeout() error {
-	c.Logger().Debug().Msg("Handling Timeout Using NOOP Message")
-	err := c.WriteMessage(NOOPMessage, nil)
+	c.Logger().Debug().Msg("Handling Timeout Using PING Message")
+	err := c.WriteMessage(PINGMessage, nil)
 	if err != nil {
 		return err
 	}
@@ -349,7 +363,9 @@ func (c *Async) handleTimeout() error {
 		return err
 	}
 
-	c.Logger().Debug().Msg("NOOP Message sent successfully, connection is still alive")
+	c.Logger().Debug().Msg("PING Message sent successfully, will wait for PONG in a separate thread")
+	c.wg.Add(1)
+	go c.waitForPONG()
 
 	return nil
 }
@@ -414,7 +430,19 @@ func (c *Async) readLoop() {
 			index += protocol.MessageSize
 
 			switch decodedMessage.Operation {
-			case NOOP:
+			case PING:
+				c.Logger().Debug().Msg("PING Message received by read loop, sending back PONG message")
+				err = c.WriteMessage(PONGMessage, nil)
+				if err != nil {
+					_ = c.closeWithError(err)
+					return
+				}
+			case PONG:
+				c.Logger().Debug().Msg("PONG Message received by read loop")
+				select {
+				case c.pongCh <- struct{}{}:
+				default:
+				}
 			case STREAMCLOSE:
 				c.streamConnMutex.RLock()
 				streamConn := c.streamConns[decodedMessage.Id]
