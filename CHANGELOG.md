@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.5] - 2021-11-16
+### Fixes
+- Frisbee `Server` and `Client` now properly use timeouts for `Async` connections everywhere
+- Connection timeouts are handled using `PING` `PONG` messages at the connection level to guarantee that the connection is closed
+
+### Changes
+- The `paused` connection state has been removed as it was not being used and only causing problems
+- The default read and write deadline has been reduced to 1 second, and the heartbeat time has been reduced to 500 ms
+
 ## [v0.1.4] - 2021-10-03
 ### Fixes
 - Frisbee `Server` and `Client` now handle TLS connections properly (tested with MTLS)
@@ -50,7 +59,8 @@ functions
 ## [v0.1.0] - 2021-06-03
 Initial Release of Frisbee
 
-[Unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.1.5...HEAD
+[v0.1.5]: https://github.com/loopholelabs/frisbee/compare/v0.1.4...v0.1.5
 [v0.1.4]: https://github.com/loopholelabs/frisbee/compare/v0.1.3...v0.1.4
 [v0.1.3]: https://github.com/loopholelabs/frisbee/compare/v0.1.2...v0.1.3
 [v0.1.2]: https://github.com/loopholelabs/frisbee/compare/v0.1.1...v0.1.2

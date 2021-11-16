@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io"
 	"io/ioutil"
 	"net"
 	"testing"
@@ -260,7 +261,7 @@ func TestSyncReadClose(t *testing.T) {
 
 	err = writerConn.WriteMessage(message, nil)
 	assert.Error(t, err)
-	assert.ErrorIs(t, writerConn.Error(), ConnectionPaused)
+	assert.ErrorIs(t, writerConn.Error(), io.ErrClosedPipe)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
@@ -306,8 +307,8 @@ func TestSyncWriteClose(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, _, err = readerConn.ReadMessage()
-	assert.ErrorIs(t, err, ConnectionPaused)
-	assert.ErrorIs(t, readerConn.Error(), ConnectionPaused)
+	assert.ErrorIs(t, err, io.EOF)
+	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)

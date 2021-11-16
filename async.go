@@ -49,6 +49,8 @@ type Async struct {
 	logger           *zerolog.Logger
 	wg               sync.WaitGroup
 	error            *atomic.Error
+	pongCh           chan struct{}
+	errorCh          chan error
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -83,6 +85,8 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(nil),
+		pongCh:           make(chan struct{}, 1),
+		errorCh:          make(chan error, 1),
 	}
 
 	if logger == nil {
@@ -135,6 +139,11 @@ func (c *Async) StreamChannel() <-chan *Stream {
 	return c.streamConnCh
 }
 
+// ErrorChannel returns a channel that can be listened to for errors on the Frisbee connection
+func (c *Async) ErrorChannel() <-chan error {
+	return c.errorCh
+}
+
 // WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
@@ -162,10 +171,10 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 		c.Unlock()
 		if c.state.Load() != CONNECTED {
 			err = c.Error()
-			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing encoded message")
 			return errors.WithContext(err, WRITE)
 		}
-		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+		c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing encoded message")
 		return c.closeWithError(err)
 	}
 	if content != nil {
@@ -174,10 +183,10 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 			c.Unlock()
 			if c.state.Load() != CONNECTED {
 				err = c.Error()
-				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+				c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing message content")
 				return errors.WithContext(err, WRITE)
 			}
-			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing message content")
 			return c.closeWithError(err)
 		}
 	}
@@ -205,10 +214,10 @@ func (c *Async) ReadMessage() (*Message, *[]byte, error) {
 	if err != nil {
 		if c.state.Load() != CONNECTED {
 			err = c.Error()
-			c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
+			c.Logger().Error().Err(errors.WithContext(err, POP)).Msg("error while popping from message queue")
 			return nil, nil, errors.WithContext(err, POP)
 		}
-		c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
+		c.Logger().Error().Err(errors.WithContext(err, POP)).Msg("error while popping from message queue")
 		return nil, nil, errors.WithContext(c.closeWithError(err), POP)
 	}
 
@@ -225,11 +234,11 @@ func (c *Async) Flush() error {
 			return c.closeWithError(err)
 		}
 		err = c.writer.Flush()
-		_ = c.SetWriteDeadline(time.Time{})
 		if err != nil {
 			c.Unlock()
 			return c.closeWithError(err)
 		}
+
 	}
 	c.Unlock()
 	return nil
@@ -252,7 +261,7 @@ func (c *Async) Logger() *zerolog.Logger {
 	return c.logger
 }
 
-// Error returns the error that caused the frisbee.Async to close or go into a paused state
+// Error returns the error that caused the frisbee.Async to close
 func (c *Async) Error() error {
 	return c.error.Load()
 }
@@ -280,59 +289,38 @@ func (c *Async) killGoroutines() {
 	c.Unlock()
 	_ = c.SetDeadline(time.Now())
 	c.wg.Wait()
-	_ = c.SetDeadline(time.Time{})
-}
-
-func (c *Async) pause() error {
-	if c.state.CAS(CONNECTED, PAUSED) {
-		c.error.Store(ConnectionPaused)
-		c.killGoroutines()
-		return nil
-	} else if c.state.Load() == PAUSED {
-		return ConnectionPaused
-	}
-	return ConnectionClosed
+	_ = c.SetDeadline(emptyTime)
 }
 
 func (c *Async) close() error {
 	if c.state.CAS(CONNECTED, CLOSED) {
 		c.error.Store(ConnectionClosed)
+		c.Logger().Error().Msg("connection close called, killing goroutines")
 		c.killGoroutines()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
+			_ = c.SetWriteDeadline(emptyTime)
 			_ = c.writer.Flush()
 		}
 		c.Unlock()
-		return nil
-	} else if c.state.CAS(PAUSED, CLOSED) {
-		c.error.Store(ConnectionClosed)
 		return nil
 	}
 	return ConnectionClosed
 }
 
 func (c *Async) closeWithError(err error) error {
-	if os.IsTimeout(err) {
-		return err
-	} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-		pauseError := c.pause()
-		if errors.Is(pauseError, ConnectionClosed) {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
-			return ConnectionClosed
-		} else {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but error was EOF so pausing connection instead (inner error: %+v)", err)
-			return ConnectionPaused
-		}
+	closeError := c.close()
+	if errors.Is(closeError, ConnectionClosed) {
+		c.Logger().Error().Err(err).Msg("attempted to close connection with error, but connection already closed")
+		return ConnectionClosed
 	} else {
-		closeError := c.close()
-		if errors.Is(closeError, ConnectionClosed) {
-			c.Logger().Debug().Msgf("attempted to close connection with error, but connection already closed (inner error: %+v)", err)
-			return ConnectionClosed
-		} else {
-			c.Logger().Debug().Msgf("closing connection with error: %+v", err)
-		}
+		c.Logger().Error().Err(err).Msgf("closing connection with error")
 	}
 	c.error.Store(err)
+	select {
+	case c.errorCh <- err:
+	default:
+	}
 	_ = c.conn.Close()
 	return err
 }
@@ -351,6 +339,37 @@ func (c *Async) flushLoop() {
 	}
 }
 
+func (c *Async) waitForPONG() {
+	timer := time.NewTimer(defaultDeadline)
+	defer func() { timer.Stop(); c.wg.Done() }()
+	select {
+	case <-timer.C:
+		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
+		_ = c.closeWithError(os.ErrDeadlineExceeded)
+	case <-c.pongCh:
+		c.Logger().Debug().Msg("PONG message received on time, connection is alive")
+	}
+}
+
+func (c *Async) handleTimeout() error {
+	c.Logger().Debug().Msg("Handling Timeout Using PING Message")
+	err := c.WriteMessage(PINGMessage, nil)
+	if err != nil {
+		return err
+	}
+
+	err = c.Flush()
+	if err != nil {
+		return err
+	}
+
+	c.Logger().Debug().Msg("PING Message sent successfully, will wait for PONG in a separate thread")
+	c.wg.Add(1)
+	go c.waitForPONG()
+
+	return nil
+}
+
 func (c *Async) readLoop() {
 	defer c.wg.Done()
 	buf := make([]byte, DefaultBufferSize)
@@ -358,26 +377,33 @@ func (c *Async) readLoop() {
 	for {
 		buf = buf[:cap(buf)]
 		if len(buf) < protocol.MessageSize {
+			c.Logger().Debug().Err(InvalidBufferLength).Msg("error during read loop, calling closeWithError")
 			_ = c.closeWithError(InvalidBufferLength)
 			return
 		}
 
 		var n int
 		var err error
-		err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
-		if err != nil {
-			_ = c.closeWithError(err)
-			return
-		}
 		for n < protocol.MessageSize {
 			var nn int
-			nn, err = c.conn.Read(buf[n:])
-			if n == 0 {
-				_ = c.SetReadDeadline(time.Time{})
+			err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+			if err != nil {
+				c.Logger().Debug().Err(err).Msg("error setting read deadline during read loop, calling closeWithError")
+				_ = c.closeWithError(err)
+				return
 			}
+			nn, err = c.conn.Read(buf[n:])
 			n += nn
 			if err != nil {
 				if n < protocol.MessageSize {
+					if os.IsTimeout(err) {
+						err = c.handleTimeout()
+						if err != nil {
+							_ = c.closeWithError(err)
+							return
+						}
+						continue
+					}
 					_ = c.closeWithError(err)
 					return
 				}
@@ -389,7 +415,7 @@ func (c *Async) readLoop() {
 		for index < n {
 
 			if !bytes.Equal(buf[index+protocol.ReservedOffset:index+protocol.ReservedOffset+protocol.ReservedSize], protocol.ReservedBytes) {
-				c.Logger().Error().Msgf(InvalidBufferContents.Error())
+				c.Logger().Error().Err(InvalidBufferContents).Msg("invalid initial bytes in buffer, discarding")
 				break
 			}
 
@@ -403,7 +429,21 @@ func (c *Async) readLoop() {
 
 			index += protocol.MessageSize
 
-			if decodedMessage.Operation == STREAMCLOSE {
+			switch decodedMessage.Operation {
+			case PING:
+				c.Logger().Debug().Msg("PING Message received by read loop, sending back PONG message")
+				err = c.WriteMessage(PONGMessage, nil)
+				if err != nil {
+					_ = c.closeWithError(err)
+					return
+				}
+			case PONG:
+				c.Logger().Debug().Msg("PONG Message received by read loop")
+				select {
+				case c.pongCh <- struct{}{}:
+				default:
+				}
+			case STREAMCLOSE:
 				c.streamConnMutex.RLock()
 				streamConn := c.streamConns[decodedMessage.Id]
 				c.streamConnMutex.RUnlock()
@@ -413,113 +453,122 @@ func (c *Async) readLoop() {
 					delete(c.streamConns, decodedMessage.Id)
 					c.streamConnMutex.Unlock()
 				}
-				goto READ
-			}
-			if decodedMessage.ContentLength > 0 {
-				switch decodedMessage.Operation {
-				case NEWSTREAM:
-					c.streamConnMutex.RLock()
-					streamConn := c.streamConns[decodedMessage.Id]
-					c.streamConnMutex.RUnlock()
-					if streamConn == nil {
-						streamConn = c.NewStream(decodedMessage.Id)
-						c.streamConnMutex.Lock()
-						c.streamConns[decodedMessage.Id] = streamConn
-						c.streamConnMutex.Unlock()
-						select {
-						case c.streamConnCh <- streamConn:
-						default:
-						}
-					}
-					if n-index < int(decodedMessage.ContentLength) {
-						streamConn.incomingBuffer.Lock()
-						for streamConn.incomingBuffer.buffer.Cap()-streamConn.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
-							streamConn.incomingBuffer.buffer.Grow(DefaultBufferSize)
-						}
-						cp, err := streamConn.incomingBuffer.buffer.Write(buf[index:n])
-						if err != nil {
-							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
-							_ = c.closeWithError(err)
-							return
-						}
-						min := int64(int(decodedMessage.ContentLength) - cp)
-						index = n
-						_, err = io.CopyN(streamConn.incomingBuffer.buffer, c.conn, min)
-						if err != nil {
-							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
-							_ = c.closeWithError(err)
-							return
-						}
-						streamConn.incomingBuffer.Unlock()
-					} else {
-						streamConn.incomingBuffer.Lock()
-						for streamConn.incomingBuffer.buffer.Cap()-streamConn.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
-							streamConn.incomingBuffer.buffer.Grow(DefaultBufferSize)
-						}
-						cp, err := streamConn.incomingBuffer.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
-						if err != nil {
-							c.Logger().Debug().Msgf(errors.WithContext(err, WRITE).Error())
-							_ = c.closeWithError(err)
-							return
-						}
-						streamConn.incomingBuffer.Unlock()
-						index += cp
-					}
-				default:
-					readContent := make([]byte, decodedMessage.ContentLength)
-					if n-index < int(decodedMessage.ContentLength) {
-						for cap(buf) < int(decodedMessage.ContentLength) {
-							buf = append(buf[:cap(buf)], 0)
-							buf = buf[:cap(buf)]
-						}
-						cp := copy(readContent, buf[index:n])
-						buf = buf[:cap(buf)]
-						min := int(decodedMessage.ContentLength) - cp
-						if len(buf) < min {
-							_ = c.closeWithError(InvalidBufferLength)
-							return
-						}
-						n = 0
-						for n < min {
-							var nn int
-							nn, err = c.conn.Read(buf[n:])
-							n += nn
-							if err != nil {
-								if n < min {
-									_ = c.closeWithError(err)
-									return
-								}
-								break
+			default:
+				if decodedMessage.ContentLength > 0 {
+					switch decodedMessage.Operation {
+					case NEWSTREAM:
+						c.streamConnMutex.RLock()
+						streamConn := c.streamConns[decodedMessage.Id]
+						c.streamConnMutex.RUnlock()
+						if streamConn == nil {
+							streamConn = c.NewStream(decodedMessage.Id)
+							c.streamConnMutex.Lock()
+							c.streamConns[decodedMessage.Id] = streamConn
+							c.streamConnMutex.Unlock()
+							select {
+							case c.streamConnCh <- streamConn:
+							default:
 							}
 						}
-						copy(readContent[cp:], buf[:min])
-						index = min
-					} else {
-						copy(readContent, buf[index:index+int(decodedMessage.ContentLength)])
-						index += int(decodedMessage.ContentLength)
+						if n-index < int(decodedMessage.ContentLength) {
+							streamConn.incomingBuffer.Lock()
+							for streamConn.incomingBuffer.buffer.Cap()-streamConn.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
+								streamConn.incomingBuffer.buffer.Grow(DefaultBufferSize)
+							}
+							cp, err := streamConn.incomingBuffer.buffer.Write(buf[index:n])
+							if err != nil {
+								c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error reading to streamConn incoming Buffer")
+								_ = c.closeWithError(err)
+								return
+							}
+							min := int64(int(decodedMessage.ContentLength) - cp)
+							index = n
+							err = c.SetReadDeadline(emptyTime)
+							if err != nil {
+								_ = c.closeWithError(err)
+								return
+							}
+							_, err = io.CopyN(streamConn.incomingBuffer.buffer, c.conn, min)
+							if err != nil {
+								c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while copying to streamConn incoming buffer")
+								_ = c.closeWithError(err)
+								return
+							}
+							streamConn.incomingBuffer.Unlock()
+						} else {
+							streamConn.incomingBuffer.Lock()
+							for streamConn.incomingBuffer.buffer.Cap()-streamConn.incomingBuffer.buffer.Len() < int(decodedMessage.ContentLength) {
+								streamConn.incomingBuffer.buffer.Grow(DefaultBufferSize)
+							}
+							cp, err := streamConn.incomingBuffer.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
+							if err != nil {
+								c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing to streamConn buffer")
+								_ = c.closeWithError(err)
+								return
+							}
+							streamConn.incomingBuffer.Unlock()
+							index += cp
+						}
+					default:
+						readContent := make([]byte, decodedMessage.ContentLength)
+						if n-index < int(decodedMessage.ContentLength) {
+							for cap(buf) < int(decodedMessage.ContentLength) {
+								buf = append(buf[:cap(buf)], 0)
+								buf = buf[:cap(buf)]
+							}
+							cp := copy(readContent, buf[index:n])
+							buf = buf[:cap(buf)]
+							min := int(decodedMessage.ContentLength) - cp
+							if len(buf) < min {
+								_ = c.closeWithError(InvalidBufferLength)
+								return
+							}
+							n = 0
+							err = c.SetReadDeadline(emptyTime)
+							if err != nil {
+								_ = c.closeWithError(err)
+								return
+							}
+							for n < min {
+								var nn int
+								nn, err = c.conn.Read(buf[n:])
+								n += nn
+								if err != nil {
+									if n < min {
+										_ = c.closeWithError(err)
+										return
+									}
+									break
+								}
+							}
+							copy(readContent[cp:], buf[:min])
+							index = min
+						} else {
+							copy(readContent, buf[index:index+int(decodedMessage.ContentLength)])
+							index += int(decodedMessage.ContentLength)
+						}
+						err = c.incomingMessages.Push(&protocol.Packet{
+							Message: &decodedMessage,
+							Content: &readContent,
+						})
+						if err != nil {
+							c.Logger().Error().Err(errors.WithContext(err, PUSH)).Msg("error while pushing to incoming message queue")
+							_ = c.closeWithError(err)
+							return
+						}
 					}
+				} else {
 					err = c.incomingMessages.Push(&protocol.Packet{
 						Message: &decodedMessage,
-						Content: &readContent,
+						Content: nil,
 					})
 					if err != nil {
-						c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
+						c.Logger().Error().Err(errors.WithContext(err, PUSH)).Msg("error while pushing to incoming message queue")
 						_ = c.closeWithError(err)
 						return
 					}
 				}
-			} else {
-				err = c.incomingMessages.Push(&protocol.Packet{
-					Message: &decodedMessage,
-					Content: nil,
-				})
-				if err != nil {
-					c.Logger().Debug().Msgf(errors.WithContext(err, PUSH).Error())
-					_ = c.closeWithError(err)
-					return
-				}
 			}
-		READ:
 			if n == index {
 				index = 0
 				buf = buf[:cap(buf)]
@@ -530,10 +579,23 @@ func (c *Async) readLoop() {
 				n = 0
 				for n < protocol.MessageSize {
 					var nn int
+					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+					if err != nil {
+						_ = c.closeWithError(err)
+						return
+					}
 					nn, err = c.conn.Read(buf[n:])
 					n += nn
 					if err != nil {
 						if n < protocol.MessageSize {
+							if os.IsTimeout(err) {
+								err = c.handleTimeout()
+								if err != nil {
+									_ = c.closeWithError(err)
+									return
+								}
+								continue
+							}
 							_ = c.closeWithError(err)
 							return
 						}
@@ -554,10 +616,23 @@ func (c *Async) readLoop() {
 				n = 0
 				for n < min {
 					var nn int
+					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+					if err != nil {
+						_ = c.closeWithError(err)
+						return
+					}
 					nn, err = c.conn.Read(buf[index+n:])
 					n += nn
 					if err != nil {
 						if n < min {
+							if os.IsTimeout(err) {
+								err = c.handleTimeout()
+								if err != nil {
+									_ = c.closeWithError(err)
+									return
+								}
+								continue
+							}
 							_ = c.closeWithError(err)
 							return
 						}
