@@ -493,25 +493,17 @@ func (c *Async) readLoop() {
 								return
 							}
 							n = 0
+							err = c.SetReadDeadline(emptyTime)
+							if err != nil {
+								_ = c.closeWithError(err)
+								return
+							}
 							for n < min {
 								var nn int
-								err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
-								if err != nil {
-									_ = c.closeWithError(err)
-									return
-								}
 								nn, err = c.conn.Read(buf[n:])
 								n += nn
 								if err != nil {
 									if n < min {
-										if os.IsTimeout(err) {
-											err = c.handleTimeout()
-											if err != nil {
-												_ = c.closeWithError(err)
-												return
-											}
-											continue
-										}
 										_ = c.closeWithError(err)
 										return
 									}
