@@ -439,10 +439,13 @@ func (c *Async) readLoop() {
 				}
 			case PONG:
 				c.Logger().Debug().Msg("PONG Message received by read loop")
+				timer := time.NewTimer(defaultDeadline)
 				select {
+				case <-timer.C:
+					c.Logger().Debug().Msg("Dropping PONG Message because it was not received successfully")
 				case c.pongCh <- struct{}{}:
-				default:
 				}
+				timer.Stop()
 			case STREAMCLOSE:
 				c.streamConnMutex.RLock()
 				streamConn := c.streamConns[decodedMessage.Id]
