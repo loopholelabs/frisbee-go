@@ -339,9 +339,20 @@ func (c *Async) flushLoop() {
 	}
 }
 
-func (c *Async) waitForPONG() {
+func (c *Async) writePONG() {
+	defer func() { c.wg.Done() }()
 	timer := time.NewTimer(defaultDeadline)
-	defer func() { timer.Stop(); c.wg.Done() }()
+	select {
+	case <-timer.C:
+		c.Logger().Debug().Msg("Dropping PONG Message because it was not received successfully")
+	case c.pongCh <- struct{}{}:
+	}
+	timer.Stop()
+}
+
+func (c *Async) waitForPONG() {
+	defer func() { c.wg.Done() }()
+	timer := time.NewTimer(defaultDeadline)
 	select {
 	case <-timer.C:
 		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
@@ -349,6 +360,7 @@ func (c *Async) waitForPONG() {
 	case <-c.pongCh:
 		c.Logger().Debug().Msg("PONG message received on time, connection is alive")
 	}
+	timer.Stop()
 }
 
 func (c *Async) handleTimeout() error {
@@ -439,13 +451,8 @@ func (c *Async) readLoop() {
 				}
 			case PONG:
 				c.Logger().Debug().Msg("PONG Message received by read loop")
-				timer := time.NewTimer(defaultDeadline)
-				select {
-				case <-timer.C:
-					c.Logger().Debug().Msg("Dropping PONG Message because it was not received successfully")
-				case c.pongCh <- struct{}{}:
-				}
-				timer.Stop()
+				c.wg.Add(1)
+				go c.writePONG()
 			case STREAMCLOSE:
 				c.streamConnMutex.RLock()
 				streamConn := c.streamConns[decodedMessage.Id]
