@@ -85,7 +85,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		flusher:          make(chan struct{}, 1024),
 		logger:           logger,
 		error:            atomic.NewError(nil),
-		pongCh:           make(chan struct{}),
+		pongCh:           make(chan struct{}, 1),
 		errorCh:          make(chan error, 1),
 	}
 
@@ -439,7 +439,13 @@ func (c *Async) readLoop() {
 				}
 			case PONG:
 				c.Logger().Debug().Msg("PONG Message received by read loop")
-				c.pongCh <- struct{}{}
+				timer := time.NewTimer(defaultDeadline)
+				select {
+				case <-timer.C:
+					c.Logger().Debug().Msg("Dropping PONG Message because it was not received successfully")
+				case c.pongCh <- struct{}{}:
+				}
+				timer.Stop()
 			case STREAMCLOSE:
 				c.streamConnMutex.RLock()
 				streamConn := c.streamConns[decodedMessage.Id]
