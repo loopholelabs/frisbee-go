@@ -21,13 +21,17 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io"
 	"io/ioutil"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 )
 
 func TestNewAsync(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
+
 	const messageSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -69,9 +73,12 @@ func TestNewAsync(t *testing.T) {
 	assert.NoError(t, err)
 	err = writerConn.Close()
 	assert.NoError(t, err)
+
+	assert.Equal(t, startGoroutines, runtime.NumGoroutine())
 }
 
 func TestAsyncLargeWrite(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
 	const testSize = 100000
 	const messageSize = 512
 
@@ -110,9 +117,11 @@ func TestAsyncLargeWrite(t *testing.T) {
 	assert.NoError(t, err)
 	err = writerConn.Close()
 	assert.NoError(t, err)
+	assert.Equal(t, startGoroutines, runtime.NumGoroutine())
 }
 
 func TestAsyncRawConn(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
 	const testSize = 100000
 	const messageSize = 32
 
@@ -187,6 +196,7 @@ func TestAsyncRawConn(t *testing.T) {
 
 	err = l.Close()
 	assert.NoError(t, err)
+	assert.Equal(t, startGoroutines, runtime.NumGoroutine())
 }
 
 func TestAsyncReadClose(t *testing.T) {
@@ -226,7 +236,7 @@ func TestAsyncReadClose(t *testing.T) {
 		err = writerConn.Flush()
 		assert.Error(t, err)
 	}
-	assert.ErrorIs(t, writerConn.Error(), ConnectionClosed)
+	assert.ErrorIs(t, writerConn.Error(), io.ErrClosedPipe)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
@@ -269,7 +279,7 @@ func TestAsyncWriteClose(t *testing.T) {
 
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionClosed)
-	assert.ErrorIs(t, readerConn.Error(), ConnectionClosed)
+	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
@@ -330,7 +340,7 @@ func TestAsyncTimeout(t *testing.T) {
 
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionClosed)
-	assert.ErrorIs(t, readerConn.Error(), ConnectionClosed)
+	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
