@@ -301,10 +301,7 @@ func (c *Async) killGoroutines() {
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
-	err := c.conn.SetDeadline(pastTime)
-	if err != nil {
-		panic(err)
-	}
+	_ = c.conn.SetDeadline(pastTime)
 	c.Logger().Error().Msgf("incoming messages closed, waiting on goroutines")
 	c.wg.Wait()
 	_ = c.conn.SetDeadline(emptyTime)
@@ -329,12 +326,10 @@ func (c *Async) close() error {
 	return ConnectionClosed
 }
 
-func (c *Async) closeWithError(err error) error {
-	c.Logger().Error().Err(err).Msg("attempting to close connection because of error")
+func (c *Async) goClose(err error) {
 	closeError := c.close()
 	if closeError != nil {
 		c.Logger().Error().Err(closeError).Msgf("attempted to close connection with error `%s`, but got error while closing", err)
-		return closeError
 	}
 	c.error.Store(err)
 	select {
@@ -342,6 +337,15 @@ func (c *Async) closeWithError(err error) error {
 	default:
 	}
 	_ = c.conn.Close()
+}
+
+func (c *Async) closeWithError(err error) error {
+	c.Lock()
+	if c.state.Load() == CLOSED {
+		return ConnectionClosed
+	}
+	c.Unlock()
+	go c.goClose(err)
 	return err
 }
 
