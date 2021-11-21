@@ -227,6 +227,10 @@ func (c *Async) ReadMessage() (*Message, *[]byte, error) {
 // Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
 func (c *Async) Flush() error {
 	c.Lock()
+	if c.state.Load() == CLOSED {
+		c.Unlock()
+		return ConnectionClosed
+	}
 	if c.writer.Buffered() > 0 {
 		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
 		if err != nil {
@@ -288,8 +292,8 @@ func (c *Async) killGoroutines() {
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
+	_ = c.SetDeadline(pastTime)
 	c.Logger().Error().Msg("incoming messages closed, waiting on goroutines")
-	_ = c.SetDeadline(time.Now())
 	c.wg.Wait()
 	_ = c.SetDeadline(emptyTime)
 	c.Logger().Error().Msg("closing error channel")
@@ -357,6 +361,10 @@ func (c *Async) waitForPONG() {
 }
 
 func (c *Async) handleTimeout() error {
+	if c.state.Load() == CLOSED {
+		return ConnectionClosed
+	}
+
 	c.Logger().Debug().Msg("Handling Timeout Using PING Message")
 	err := c.WriteMessage(PINGMessage, nil)
 	if err != nil {
