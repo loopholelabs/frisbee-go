@@ -43,6 +43,7 @@ var (
 	defaultLogger   = zerolog.New(os.Stdout)
 	defaultDeadline = time.Second
 	emptyTime       = time.Time{}
+	pastTime        = time.Unix(1, 0)
 )
 
 var (
