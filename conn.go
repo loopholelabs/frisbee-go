@@ -30,15 +30,6 @@ import (
 // DefaultBufferSize is the size of the default buffer
 const DefaultBufferSize = 1 << 19
 
-// These are states that frisbee connections can be in:
-const (
-	// CONNECTED is used to specify that the connection is functioning normally
-	CONNECTED = int32(iota)
-
-	// CLOSED is used to specify that the connection has been closed (possibly due to an error)
-	CLOSED
-)
-
 var (
 	defaultLogger   = zerolog.New(os.Stdout)
 	defaultDeadline = time.Second

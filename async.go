@@ -39,7 +39,7 @@ import (
 type Async struct {
 	sync.Mutex
 	conn             net.Conn
-	state            *atomic.Int32
+	closed           *atomic.Bool
 	writer           *bufio.Writer
 	flusher          chan struct{}
 	incomingMessages *ringbuffer.RingBuffer
@@ -77,7 +77,7 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 	conn = &Async{
 		conn:             c,
-		state:            atomic.NewInt32(CONNECTED),
+		closed:           atomic.NewBool(false),
 		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
 		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
 		streamConns:      make(map[uint64]*Stream),
@@ -102,7 +102,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 
 // SetDeadline sets the read and write deadline on the underlying net.Conn
 func (c *Async) SetDeadline(t time.Time) error {
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		return ConnectionClosed
 	}
 	return c.conn.SetDeadline(t)
@@ -110,7 +110,7 @@ func (c *Async) SetDeadline(t time.Time) error {
 
 // SetReadDeadline sets the read deadline on the underlying net.Conn
 func (c *Async) SetReadDeadline(t time.Time) error {
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		return ConnectionClosed
 	}
 	return c.conn.SetReadDeadline(t)
@@ -118,7 +118,7 @@ func (c *Async) SetReadDeadline(t time.Time) error {
 
 // SetWriteDeadline sets the write deadline on the underlying net.Conn
 func (c *Async) SetWriteDeadline(t time.Time) error {
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		return ConnectionClosed
 	}
 	return c.conn.SetWriteDeadline(t)
@@ -170,7 +170,7 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], message.ContentLength)
 
 	c.Lock()
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		c.Unlock()
 		return ConnectionClosed
 	}
@@ -178,7 +178,7 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 	_, err := c.writer.Write(encodedMessage[:])
 	if err != nil {
 		c.Unlock()
-		if c.state.Load() == CLOSED {
+		if c.closed.Load() {
 			c.Logger().Error().Err(errors.WithContext(ConnectionClosed, WRITE)).Msg("error while writing encoded message")
 			return errors.WithContext(ConnectionClosed, WRITE)
 		}
@@ -189,7 +189,7 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 		_, err = c.writer.Write(*content)
 		if err != nil {
 			c.Unlock()
-			if c.state.Load() == CLOSED {
+			if c.closed.Load() {
 				c.Logger().Error().Err(errors.WithContext(ConnectionClosed, WRITE)).Msg("error while writing message content")
 				return errors.WithContext(ConnectionClosed, WRITE)
 			}
@@ -213,13 +213,13 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 // ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
 func (c *Async) ReadMessage() (*Message, *[]byte, error) {
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		return nil, nil, ConnectionClosed
 	}
 
 	readPacket, err := c.incomingMessages.Pop()
 	if err != nil {
-		if c.state.Load() == CLOSED {
+		if c.closed.Load() {
 			c.Logger().Error().Err(errors.WithContext(ConnectionClosed, POP)).Msg("error while popping from message queue")
 			return nil, nil, errors.WithContext(ConnectionClosed, POP)
 		}
@@ -233,7 +233,7 @@ func (c *Async) ReadMessage() (*Message, *[]byte, error) {
 // Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
 func (c *Async) Flush() error {
 	c.Lock()
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		c.Unlock()
 		return ConnectionClosed
 	}
@@ -257,7 +257,7 @@ func (c *Async) Flush() error {
 // WriteBufferSize returns the size of the underlying message buffer (used for internal message handling and for heartbeat logic)
 func (c *Async) WriteBufferSize() int {
 	c.Lock()
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		c.Unlock()
 		return 0
 	}
@@ -271,9 +271,14 @@ func (c *Async) Logger() *zerolog.Logger {
 	return c.logger
 }
 
-// Error returns the error that caused the frisbee.Async to close
+// Error returns the error that caused the frisbee.Async connection to close
 func (c *Async) Error() error {
 	return c.error.Load()
+}
+
+// Closed returns whether the frisbee.Async connection is closed
+func (c *Async) Closed() bool {
+	return c.closed.Load()
 }
 
 // Raw shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)
@@ -305,7 +310,7 @@ func (c *Async) killGoroutines() {
 }
 
 func (c *Async) close() error {
-	if c.state.CAS(CONNECTED, CLOSED) {
+	if c.closed.CAS(false, true) {
 		c.Logger().Error().Msg("connection close called, killing goroutines")
 		c.killGoroutines()
 		c.Lock()
@@ -360,7 +365,7 @@ func (c *Async) waitForPONG() {
 }
 
 func (c *Async) handleTimeout() error {
-	if c.state.Load() == CLOSED {
+	if c.closed.Load() {
 		return ConnectionClosed
 	}
 
