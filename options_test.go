@@ -26,6 +26,8 @@ import (
 )
 
 func TestWithoutOptions(t *testing.T) {
+	t.Parallel()
+
 	options := loadOptions()
 
 	assert.Equal(t, time.Minute*3, options.KeepAlive)
@@ -35,6 +37,8 @@ func TestWithoutOptions(t *testing.T) {
 }
 
 func TestWithOptions(t *testing.T) {
+	t.Parallel()
+
 	option := WithOptions(Options{
 		KeepAlive: time.Minute * 6,
 		Heartbeat: time.Second * 60,
@@ -51,6 +55,8 @@ func TestWithOptions(t *testing.T) {
 }
 
 func TestDisableOptions(t *testing.T) {
+	t.Parallel()
+
 	option := WithOptions(Options{
 		KeepAlive: -1,
 		Heartbeat: -1,
@@ -65,6 +71,8 @@ func TestDisableOptions(t *testing.T) {
 }
 
 func TestIndividualOptions(t *testing.T) {
+	t.Parallel()
+
 	logger := zerolog.New(ioutil.Discard)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
