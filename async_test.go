@@ -23,11 +23,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 )
 
 func TestNewAsync(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
+
 	const messageSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -69,9 +72,12 @@ func TestNewAsync(t *testing.T) {
 	assert.NoError(t, err)
 	err = writerConn.Close()
 	assert.NoError(t, err)
+
+	assert.Equal(t, startGoroutines, runtime.NumGoroutine())
 }
 
 func TestAsyncLargeWrite(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
 	const testSize = 100000
 	const messageSize = 512
 
@@ -110,9 +116,11 @@ func TestAsyncLargeWrite(t *testing.T) {
 	assert.NoError(t, err)
 	err = writerConn.Close()
 	assert.NoError(t, err)
+	assert.Equal(t, startGoroutines, runtime.NumGoroutine())
 }
 
 func TestAsyncRawConn(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
 	const testSize = 100000
 	const messageSize = 32
 
@@ -187,6 +195,7 @@ func TestAsyncRawConn(t *testing.T) {
 
 	err = l.Close()
 	assert.NoError(t, err)
+	assert.Equal(t, startGoroutines, runtime.NumGoroutine())
 }
 
 func TestAsyncReadClose(t *testing.T) {
