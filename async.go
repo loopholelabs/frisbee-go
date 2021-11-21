@@ -327,12 +327,11 @@ func (c *Async) close() error {
 }
 
 func (c *Async) closeWithError(err error) error {
+	c.Logger().Error().Err(err).Msg("attempting to close connection because of error")
 	closeError := c.close()
-	if errors.Is(closeError, ConnectionClosed) {
-		c.Logger().Error().Err(err).Msg("attempted to close connection with error, but connection already closed")
-		return ConnectionClosed
-	} else {
-		c.Logger().Error().Err(err).Msgf("closing connection with error")
+	if closeError != nil {
+		c.Logger().Error().Err(closeError).Msgf("attempted to close connection with error `%s`, but got error while closing", err)
+		return closeError
 	}
 	c.error.Store(err)
 	select {
