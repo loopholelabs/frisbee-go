@@ -22,6 +22,8 @@ import (
 )
 
 func TestNewIncomingBuffer(t *testing.T) {
+	t.Parallel()
+
 	newBuffer := newIncomingBuffer()
 	assert.Equal(t, DefaultBufferSize, newBuffer.buffer.Cap())
 }

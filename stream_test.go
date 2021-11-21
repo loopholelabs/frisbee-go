@@ -27,6 +27,8 @@ import (
 )
 
 func TestStreamMessages(t *testing.T) {
+	t.Parallel()
+
 	reader, writer := net.Pipe()
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -62,6 +64,8 @@ func TestStreamMessages(t *testing.T) {
 }
 
 func TestStreamReadFrom(t *testing.T) {
+	t.Parallel()
+
 	readerOne, writerOne := net.Pipe()
 	readerTwo, writerTwo := net.Pipe()
 
@@ -113,6 +117,8 @@ func TestStreamReadFrom(t *testing.T) {
 }
 
 func TestStreamWriteTo(t *testing.T) {
+	t.Parallel()
+
 	readerOne, writerOne := net.Pipe()
 	readerTwo, writerTwo := net.Pipe()
 
@@ -255,6 +261,8 @@ func TestStreamIOCopy(t *testing.T) {
 }
 
 func TestNewStream(t *testing.T) {
+	t.Parallel()
+
 	readerOne, writerOne := net.Pipe()
 
 	emptyLogger := zerolog.New(ioutil.Discard)

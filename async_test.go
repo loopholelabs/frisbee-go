@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io"
 	"io/ioutil"
 	"net"
 	"testing"
@@ -28,6 +29,8 @@ import (
 )
 
 func TestNewAsync(t *testing.T) {
+	t.Parallel()
+
 	const messageSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -72,6 +75,8 @@ func TestNewAsync(t *testing.T) {
 }
 
 func TestAsyncLargeWrite(t *testing.T) {
+	t.Parallel()
+
 	const testSize = 100000
 	const messageSize = 512
 
@@ -113,6 +118,8 @@ func TestAsyncLargeWrite(t *testing.T) {
 }
 
 func TestAsyncRawConn(t *testing.T) {
+	t.Parallel()
+
 	const testSize = 100000
 	const messageSize = 32
 
@@ -121,7 +128,7 @@ func TestAsyncRawConn(t *testing.T) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, err := net.Listen("tcp", ":3000")
+	l, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
 
 	go func() {
@@ -131,7 +138,7 @@ func TestAsyncRawConn(t *testing.T) {
 		start <- struct{}{}
 	}()
 
-	writer, err = net.Dial("tcp", ":3000")
+	writer, err = net.Dial("tcp", l.Addr().String())
 	require.NoError(t, err)
 	<-start
 
@@ -190,6 +197,8 @@ func TestAsyncRawConn(t *testing.T) {
 }
 
 func TestAsyncReadClose(t *testing.T) {
+	t.Parallel()
+
 	reader, writer := net.Pipe()
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -226,7 +235,7 @@ func TestAsyncReadClose(t *testing.T) {
 		err = writerConn.Flush()
 		assert.Error(t, err)
 	}
-	assert.ErrorIs(t, writerConn.Error(), ConnectionClosed)
+	assert.Error(t, writerConn.Error())
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
@@ -235,6 +244,8 @@ func TestAsyncReadClose(t *testing.T) {
 }
 
 func TestAsyncWriteClose(t *testing.T) {
+	t.Parallel()
+
 	reader, writer := net.Pipe()
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -267,9 +278,11 @@ func TestAsyncWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
+	time.Sleep(time.Millisecond * 50)
+
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionClosed)
-	assert.ErrorIs(t, readerConn.Error(), ConnectionClosed)
+	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
@@ -278,19 +291,21 @@ func TestAsyncWriteClose(t *testing.T) {
 }
 
 func TestAsyncTimeout(t *testing.T) {
+	t.Parallel()
+
 	emptyLogger := zerolog.New(ioutil.Discard)
 
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewAsync(reader, &emptyLogger)
@@ -315,7 +330,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, *message, *readMessage)
 	assert.Nil(t, content)
 
-	time.Sleep(defaultDeadline * 10)
+	time.Sleep(defaultDeadline * 5)
 
 	err = writerConn.Error()
 	assert.NoError(t, err)
@@ -330,7 +345,7 @@ func TestAsyncTimeout(t *testing.T) {
 
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionClosed)
-	assert.ErrorIs(t, readerConn.Error(), ConnectionClosed)
+	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
@@ -435,14 +450,14 @@ func BenchmarkAsyncThroughputNetwork32(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewAsync(reader, &emptyLogger)
@@ -491,14 +506,14 @@ func BenchmarkAsyncThroughputNetwork512(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewAsync(reader, &emptyLogger)
@@ -547,14 +562,14 @@ func BenchmarkAsyncThroughputNetwork1024(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewAsync(reader, &emptyLogger)
@@ -603,14 +618,14 @@ func BenchmarkAsyncThroughputNetwork2048(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewAsync(reader, &emptyLogger)
@@ -659,14 +674,14 @@ func BenchmarkAsyncThroughputNetwork4096(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewAsync(reader, &emptyLogger)
@@ -715,14 +730,14 @@ func BenchmarkAsyncThroughputNetwork1mb(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewAsync(reader, &emptyLogger)
