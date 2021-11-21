@@ -133,6 +133,11 @@ func (c *Client) WriteMessage(message *Message, content *[]byte) error {
 	return c.conn.WriteMessage(message, content)
 }
 
+// Flush flushes any queued frisbee Messages from the client to the server
+func (c *Client) Flush() error {
+	return c.conn.Flush()
+}
+
 // ErrorChannel returns an error channel that can be listened to see if this client has an error
 func (c *Client) ErrorChannel() <-chan error {
 	return c.conn.ErrorChannel()
