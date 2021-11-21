@@ -40,6 +40,7 @@ type Async struct {
 	sync.Mutex
 	conn             net.Conn
 	state            *atomic.Int32
+	counter          *atomic.Int32
 	writer           *bufio.Writer
 	flusher          chan struct{}
 	incomingMessages *ringbuffer.RingBuffer
@@ -78,6 +79,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 	conn = &Async{
 		conn:             c,
 		state:            atomic.NewInt32(CONNECTED),
+		counter:          atomic.NewInt32(0),
 		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
 		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
 		streamConns:      make(map[uint64]*Stream),
@@ -93,6 +95,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		conn.logger = &defaultLogger
 	}
 
+	conn.counter.Add(2)
 	conn.wg.Add(2)
 	go conn.flushLoop()
 	go conn.readLoop()
@@ -227,6 +230,10 @@ func (c *Async) ReadMessage() (*Message, *[]byte, error) {
 // Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
 func (c *Async) Flush() error {
 	c.Lock()
+	if c.state.Load() == CLOSED {
+		c.Unlock()
+		return ConnectionClosed
+	}
 	if c.writer.Buffered() > 0 {
 		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
 		if err != nil {
@@ -283,13 +290,18 @@ func (c *Async) Close() error {
 }
 
 func (c *Async) killGoroutines() {
+	c.Logger().Error().Msg("starting to kill goroutines")
 	c.Lock()
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
-	_ = c.SetDeadline(time.Now())
+	_ = c.SetDeadline(pastTime)
+	c.Logger().Error().Msgf("incoming messages closed, waiting on goroutines: %d", c.counter.Load())
 	c.wg.Wait()
 	_ = c.SetDeadline(emptyTime)
+	c.Logger().Error().Msg("closing error channel")
+	close(c.errorCh)
+	c.Logger().Error().Msg("error channel closed, goroutines killed")
 }
 
 func (c *Async) close() error {
@@ -326,7 +338,7 @@ func (c *Async) closeWithError(err error) error {
 }
 
 func (c *Async) flushLoop() {
-	defer c.wg.Done()
+	defer func() { c.wg.Done(); c.counter.Add(-1) }()
 	for {
 		if _, ok := <-c.flusher; !ok {
 			return
@@ -341,7 +353,7 @@ func (c *Async) flushLoop() {
 
 func (c *Async) waitForPONG() {
 	timer := time.NewTimer(defaultDeadline)
-	defer func() { timer.Stop(); c.wg.Done() }()
+	defer func() { timer.Stop(); c.wg.Done(); c.counter.Add(-1) }()
 	select {
 	case <-timer.C:
 		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
@@ -352,6 +364,10 @@ func (c *Async) waitForPONG() {
 }
 
 func (c *Async) handleTimeout() error {
+	if c.state.Load() == CLOSED {
+		return ConnectionClosed
+	}
+
 	c.Logger().Debug().Msg("Handling Timeout Using PING Message")
 	err := c.WriteMessage(PINGMessage, nil)
 	if err != nil {
@@ -364,6 +380,7 @@ func (c *Async) handleTimeout() error {
 	}
 
 	c.Logger().Debug().Msg("PING Message sent successfully, will wait for PONG in a separate thread")
+	c.counter.Add(1)
 	c.wg.Add(1)
 	go c.waitForPONG()
 
@@ -371,7 +388,7 @@ func (c *Async) handleTimeout() error {
 }
 
 func (c *Async) readLoop() {
-	defer c.wg.Done()
+	defer func() { c.wg.Done(); c.counter.Add(-1) }()
 	buf := make([]byte, DefaultBufferSize)
 	var index int
 	for {
