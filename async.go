@@ -290,6 +290,7 @@ func (c *Async) killGoroutines() {
 	_ = c.SetDeadline(time.Now())
 	c.wg.Wait()
 	_ = c.SetDeadline(emptyTime)
+	close(c.errorCh)
 }
 
 func (c *Async) close() error {
