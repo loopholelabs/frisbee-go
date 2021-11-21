@@ -32,7 +32,6 @@ import (
 func TestServerRaw(t *testing.T) {
 	const testSize = 100
 	const messageSize = 512
-	addr := ":8192"
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
@@ -54,13 +53,13 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -123,7 +122,6 @@ func TestServerRaw(t *testing.T) {
 func BenchmarkThroughput(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 512
-	addr := ":8192"
 	router := make(ServerRouter)
 
 	router[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
@@ -131,7 +129,7 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(addr, router, WithLogger(&emptyLogger))
+	server, err := NewServer(":0", router, WithLogger(&emptyLogger))
 	if err != nil {
 		log.Printf("Could not start server")
 		panic(err)
@@ -143,7 +141,7 @@ func BenchmarkThroughput(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(addr, time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
@@ -186,7 +184,6 @@ func BenchmarkThroughput(b *testing.B) {
 func BenchmarkThroughputWithResponse(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 512
-	addr := ":8192"
 	router := make(ServerRouter)
 
 	router[protocol.MessagePing] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
@@ -203,7 +200,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(addr, router, WithLogger(&emptyLogger))
+	server, err := NewServer(":0", router, WithLogger(&emptyLogger))
 	if err != nil {
 		log.Printf("Could not start server")
 		panic(err)
@@ -215,7 +212,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		panic(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(addr, time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
 	if err != nil {
 		log.Printf("Could not connect to server")
 		panic(err)
