@@ -295,17 +295,15 @@ func (c *Async) Close() error {
 	return err
 }
 
-func (c *Async) killGoroutines() {
-	c.Logger().Error().Msg("starting to kill goroutines")
+func (c *Async) killGoroutines(flushClose chan struct{}) {
 	c.Lock()
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
+	flushClose <- struct{}{}
 	_ = c.conn.SetDeadline(pastTime)
-	c.Logger().Error().Msgf("incoming messages closed, waiting on goroutines")
 	c.wg.Wait()
 	_ = c.conn.SetDeadline(emptyTime)
-	c.Logger().Error().Msg("closing error channel")
 	close(c.errorCh)
 	c.Logger().Error().Msg("error channel closed, goroutines killed")
 }
@@ -314,7 +312,9 @@ func (c *Async) close() error {
 	if c.state.CAS(CONNECTED, CLOSED) {
 		c.error.Store(ConnectionClosed)
 		c.Logger().Error().Msg("connection close called, killing goroutines")
-		c.killGoroutines()
+		flushClose := make(chan struct{}, 1)
+		go c.killGoroutines(flushClose)
+		<-flushClose
 		c.Lock()
 		if c.writer.Buffered() > 0 {
 			_ = c.conn.SetWriteDeadline(emptyTime)
@@ -326,10 +326,12 @@ func (c *Async) close() error {
 	return ConnectionClosed
 }
 
-func (c *Async) goClose(err error) {
+func (c *Async) closeWithError(err error) error {
+	c.Logger().Error().Err(err).Msg("attempting to close connection because of error")
 	closeError := c.close()
 	if closeError != nil {
 		c.Logger().Error().Err(closeError).Msgf("attempted to close connection with error `%s`, but got error while closing", err)
+		return closeError
 	}
 	c.error.Store(err)
 	select {
@@ -337,15 +339,6 @@ func (c *Async) goClose(err error) {
 	default:
 	}
 	_ = c.conn.Close()
-}
-
-func (c *Async) closeWithError(err error) error {
-	c.Lock()
-	if c.state.Load() == CLOSED {
-		return ConnectionClosed
-	}
-	c.Unlock()
-	go c.goClose(err)
 	return err
 }
 
