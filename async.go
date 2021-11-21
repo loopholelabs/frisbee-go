@@ -317,7 +317,7 @@ func (c *Async) close() error {
 		c.killGoroutines()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
-			_ = c.SetWriteDeadline(emptyTime)
+			_ = c.conn.SetWriteDeadline(emptyTime)
 			_ = c.writer.Flush()
 		}
 		c.Unlock()
