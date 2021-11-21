@@ -301,7 +301,10 @@ func (c *Async) killGoroutines() {
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
-	_ = c.conn.SetDeadline(pastTime)
+	err := c.conn.SetDeadline(pastTime)
+	if err != nil {
+		panic(err)
+	}
 	c.Logger().Error().Msgf("incoming messages closed, waiting on goroutines")
 	c.wg.Wait()
 	_ = c.conn.SetDeadline(emptyTime)
