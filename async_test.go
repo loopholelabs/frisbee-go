@@ -278,6 +278,8 @@ func TestAsyncWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
+	time.Sleep(time.Millisecond * 50)
+
 	_, _, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionClosed)
 	assert.ErrorIs(t, readerConn.Error(), io.EOF)
