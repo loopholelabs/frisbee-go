@@ -138,9 +138,9 @@ func (c *Client) Flush() error {
 	return c.conn.Flush()
 }
 
-// ErrorChannel returns an error channel that can be listened to see if this client has an error
-func (c *Client) ErrorChannel() <-chan error {
-	return c.conn.ErrorChannel()
+// CloseChannel returns an channel that can be listened to see if this client has been closed
+func (c *Client) CloseChannel() <-chan struct{} {
+	return c.conn.CloseChannel()
 }
 
 // Raw converts the frisbee client into a normal net.Conn object, and returns it.
