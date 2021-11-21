@@ -235,7 +235,7 @@ func TestAsyncReadClose(t *testing.T) {
 		err = writerConn.Flush()
 		assert.Error(t, err)
 	}
-	assert.ErrorIs(t, writerConn.Error(), io.ErrClosedPipe)
+	assert.Error(t, writerConn.Error())
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
