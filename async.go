@@ -39,7 +39,7 @@ import (
 type Async struct {
 	sync.Mutex
 	conn             net.Conn
-	state            *atomic.Int32
+	closed           *atomic.Bool
 	writer           *bufio.Writer
 	flusher          chan struct{}
 	incomingMessages *ringbuffer.RingBuffer
@@ -50,7 +50,7 @@ type Async struct {
 	wg               sync.WaitGroup
 	error            *atomic.Error
 	pongCh           chan struct{}
-	errorCh          chan error
+	closeCh          chan struct{}
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -77,7 +77,7 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 	conn = &Async{
 		conn:             c,
-		state:            atomic.NewInt32(CONNECTED),
+		closed:           atomic.NewBool(false),
 		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
 		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
 		streamConns:      make(map[uint64]*Stream),
@@ -86,7 +86,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		logger:           logger,
 		error:            atomic.NewError(nil),
 		pongCh:           make(chan struct{}, 1),
-		errorCh:          make(chan error, 1),
+		closeCh:          make(chan struct{}, 1),
 	}
 
 	if logger == nil {
@@ -102,16 +102,25 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 
 // SetDeadline sets the read and write deadline on the underlying net.Conn
 func (c *Async) SetDeadline(t time.Time) error {
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
 	return c.conn.SetDeadline(t)
 }
 
 // SetReadDeadline sets the read deadline on the underlying net.Conn
 func (c *Async) SetReadDeadline(t time.Time) error {
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
 	return c.conn.SetReadDeadline(t)
 }
 
 // SetWriteDeadline sets the write deadline on the underlying net.Conn
 func (c *Async) SetWriteDeadline(t time.Time) error {
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
 	return c.conn.SetWriteDeadline(t)
 }
 
@@ -139,9 +148,9 @@ func (c *Async) StreamChannel() <-chan *Stream {
 	return c.streamConnCh
 }
 
-// ErrorChannel returns a channel that can be listened to for errors on the Frisbee connection
-func (c *Async) ErrorChannel() <-chan error {
-	return c.errorCh
+// CloseChannel returns a channel that can be listened to for a close event on a frisbee connection
+func (c *Async) CloseChannel() <-chan struct{} {
+	return c.closeCh
 }
 
 // WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
@@ -161,18 +170,17 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], message.ContentLength)
 
 	c.Lock()
-	if c.state.Load() != CONNECTED {
+	if c.closed.Load() {
 		c.Unlock()
-		return c.Error()
+		return ConnectionClosed
 	}
 
 	_, err := c.writer.Write(encodedMessage[:])
 	if err != nil {
 		c.Unlock()
-		if c.state.Load() != CONNECTED {
-			err = c.Error()
-			c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing encoded message")
-			return errors.WithContext(err, WRITE)
+		if c.closed.Load() {
+			c.Logger().Error().Err(errors.WithContext(ConnectionClosed, WRITE)).Msg("error while writing encoded message")
+			return errors.WithContext(ConnectionClosed, WRITE)
 		}
 		c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing encoded message")
 		return c.closeWithError(err)
@@ -181,10 +189,9 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 		_, err = c.writer.Write(*content)
 		if err != nil {
 			c.Unlock()
-			if c.state.Load() != CONNECTED {
-				err = c.Error()
-				c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing message content")
-				return errors.WithContext(err, WRITE)
+			if c.closed.Load() {
+				c.Logger().Error().Err(errors.WithContext(ConnectionClosed, WRITE)).Msg("error while writing message content")
+				return errors.WithContext(ConnectionClosed, WRITE)
 			}
 			c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing message content")
 			return c.closeWithError(err)
@@ -206,16 +213,15 @@ func (c *Async) WriteMessage(message *Message, content *[]byte) error {
 // ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
 func (c *Async) ReadMessage() (*Message, *[]byte, error) {
-	if c.state.Load() != CONNECTED {
-		return nil, nil, c.Error()
+	if c.closed.Load() {
+		return nil, nil, ConnectionClosed
 	}
 
 	readPacket, err := c.incomingMessages.Pop()
 	if err != nil {
-		if c.state.Load() != CONNECTED {
-			err = c.Error()
-			c.Logger().Error().Err(errors.WithContext(err, POP)).Msg("error while popping from message queue")
-			return nil, nil, errors.WithContext(err, POP)
+		if c.closed.Load() {
+			c.Logger().Error().Err(errors.WithContext(ConnectionClosed, POP)).Msg("error while popping from message queue")
+			return nil, nil, errors.WithContext(ConnectionClosed, POP)
 		}
 		c.Logger().Error().Err(errors.WithContext(err, POP)).Msg("error while popping from message queue")
 		return nil, nil, errors.WithContext(c.closeWithError(err), POP)
@@ -227,6 +233,10 @@ func (c *Async) ReadMessage() (*Message, *[]byte, error) {
 // Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
 func (c *Async) Flush() error {
 	c.Lock()
+	if c.closed.Load() {
+		c.Unlock()
+		return ConnectionClosed
+	}
 	if c.writer.Buffered() > 0 {
 		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
 		if err != nil {
@@ -247,7 +257,7 @@ func (c *Async) Flush() error {
 // WriteBufferSize returns the size of the underlying message buffer (used for internal message handling and for heartbeat logic)
 func (c *Async) WriteBufferSize() int {
 	c.Lock()
-	if c.state.Load() != CONNECTED {
+	if c.closed.Load() {
 		c.Unlock()
 		return 0
 	}
@@ -261,9 +271,14 @@ func (c *Async) Logger() *zerolog.Logger {
 	return c.logger
 }
 
-// Error returns the error that caused the frisbee.Async to close
+// Error returns the error that caused the frisbee.Async connection to close
 func (c *Async) Error() error {
 	return c.error.Load()
+}
+
+// Closed returns whether the frisbee.Async connection is closed
+func (c *Async) Closed() bool {
+	return c.closed.Load()
 }
 
 // Raw shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)
@@ -287,19 +302,20 @@ func (c *Async) killGoroutines() {
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
-	_ = c.SetDeadline(time.Now())
+	_ = c.conn.SetDeadline(pastTime)
 	c.wg.Wait()
-	_ = c.SetDeadline(emptyTime)
+	_ = c.conn.SetDeadline(emptyTime)
+	close(c.closeCh)
+	c.Logger().Error().Msg("error channel closed, goroutines killed")
 }
 
 func (c *Async) close() error {
-	if c.state.CAS(CONNECTED, CLOSED) {
-		c.error.Store(ConnectionClosed)
+	if c.closed.CAS(false, true) {
 		c.Logger().Error().Msg("connection close called, killing goroutines")
 		c.killGoroutines()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
-			_ = c.SetWriteDeadline(emptyTime)
+			_ = c.conn.SetWriteDeadline(emptyTime)
 			_ = c.writer.Flush()
 		}
 		c.Unlock()
@@ -310,29 +326,24 @@ func (c *Async) close() error {
 
 func (c *Async) closeWithError(err error) error {
 	closeError := c.close()
-	if errors.Is(closeError, ConnectionClosed) {
-		c.Logger().Error().Err(err).Msg("attempted to close connection with error, but connection already closed")
-		return ConnectionClosed
-	} else {
-		c.Logger().Error().Err(err).Msgf("closing connection with error")
+	if closeError != nil {
+		c.Logger().Error().Err(closeError).Msgf("attempted to close connection with error `%s`, but got error while closing", err)
+		return closeError
 	}
 	c.error.Store(err)
-	select {
-	case c.errorCh <- err:
-	default:
-	}
 	_ = c.conn.Close()
 	return err
 }
 
 func (c *Async) flushLoop() {
-	defer c.wg.Done()
 	for {
 		if _, ok := <-c.flusher; !ok {
+			c.wg.Done()
 			return
 		}
 		err := c.Flush()
 		if err != nil {
+			c.wg.Done()
 			_ = c.closeWithError(err)
 			return
 		}
@@ -341,17 +352,23 @@ func (c *Async) flushLoop() {
 
 func (c *Async) waitForPONG() {
 	timer := time.NewTimer(defaultDeadline)
-	defer func() { timer.Stop(); c.wg.Done() }()
+	defer timer.Stop()
 	select {
 	case <-timer.C:
 		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
+		c.wg.Done()
 		_ = c.closeWithError(os.ErrDeadlineExceeded)
 	case <-c.pongCh:
+		c.wg.Done()
 		c.Logger().Debug().Msg("PONG message received on time, connection is alive")
 	}
 }
 
 func (c *Async) handleTimeout() error {
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
+
 	c.Logger().Debug().Msg("Handling Timeout Using PING Message")
 	err := c.WriteMessage(PINGMessage, nil)
 	if err != nil {
@@ -371,13 +388,13 @@ func (c *Async) handleTimeout() error {
 }
 
 func (c *Async) readLoop() {
-	defer c.wg.Done()
 	buf := make([]byte, DefaultBufferSize)
 	var index int
 	for {
 		buf = buf[:cap(buf)]
 		if len(buf) < protocol.MessageSize {
 			c.Logger().Debug().Err(InvalidBufferLength).Msg("error during read loop, calling closeWithError")
+			c.wg.Done()
 			_ = c.closeWithError(InvalidBufferLength)
 			return
 		}
@@ -389,6 +406,7 @@ func (c *Async) readLoop() {
 			err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 			if err != nil {
 				c.Logger().Debug().Err(err).Msg("error setting read deadline during read loop, calling closeWithError")
+				c.wg.Done()
 				_ = c.closeWithError(err)
 				return
 			}
@@ -396,14 +414,16 @@ func (c *Async) readLoop() {
 			n += nn
 			if err != nil {
 				if n < protocol.MessageSize {
-					if os.IsTimeout(err) {
+					if errors.Is(err, os.ErrDeadlineExceeded) {
 						err = c.handleTimeout()
 						if err != nil {
+							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
 						continue
 					}
+					c.wg.Done()
 					_ = c.closeWithError(err)
 					return
 				}
@@ -434,6 +454,7 @@ func (c *Async) readLoop() {
 				c.Logger().Debug().Msg("PING Message received by read loop, sending back PONG message")
 				err = c.WriteMessage(PONGMessage, nil)
 				if err != nil {
+					c.wg.Done()
 					_ = c.closeWithError(err)
 					return
 				}
@@ -478,6 +499,7 @@ func (c *Async) readLoop() {
 							cp, err := streamConn.incomingBuffer.buffer.Write(buf[index:n])
 							if err != nil {
 								c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error reading to streamConn incoming Buffer")
+								c.wg.Done()
 								_ = c.closeWithError(err)
 								return
 							}
@@ -485,12 +507,14 @@ func (c *Async) readLoop() {
 							index = n
 							err = c.SetReadDeadline(emptyTime)
 							if err != nil {
+								c.wg.Done()
 								_ = c.closeWithError(err)
 								return
 							}
 							_, err = io.CopyN(streamConn.incomingBuffer.buffer, c.conn, min)
 							if err != nil {
 								c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while copying to streamConn incoming buffer")
+								c.wg.Done()
 								_ = c.closeWithError(err)
 								return
 							}
@@ -503,6 +527,7 @@ func (c *Async) readLoop() {
 							cp, err := streamConn.incomingBuffer.buffer.Write(buf[index : index+int(decodedMessage.ContentLength)])
 							if err != nil {
 								c.Logger().Error().Err(errors.WithContext(err, WRITE)).Msg("error while writing to streamConn buffer")
+								c.wg.Done()
 								_ = c.closeWithError(err)
 								return
 							}
@@ -520,12 +545,14 @@ func (c *Async) readLoop() {
 							buf = buf[:cap(buf)]
 							min := int(decodedMessage.ContentLength) - cp
 							if len(buf) < min {
+								c.wg.Done()
 								_ = c.closeWithError(InvalidBufferLength)
 								return
 							}
 							n = 0
 							err = c.SetReadDeadline(emptyTime)
 							if err != nil {
+								c.wg.Done()
 								_ = c.closeWithError(err)
 								return
 							}
@@ -535,6 +562,7 @@ func (c *Async) readLoop() {
 								n += nn
 								if err != nil {
 									if n < min {
+										c.wg.Done()
 										_ = c.closeWithError(err)
 										return
 									}
@@ -553,6 +581,7 @@ func (c *Async) readLoop() {
 						})
 						if err != nil {
 							c.Logger().Error().Err(errors.WithContext(err, PUSH)).Msg("error while pushing to incoming message queue")
+							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
@@ -564,6 +593,7 @@ func (c *Async) readLoop() {
 					})
 					if err != nil {
 						c.Logger().Error().Err(errors.WithContext(err, PUSH)).Msg("error while pushing to incoming message queue")
+						c.wg.Done()
 						_ = c.closeWithError(err)
 						return
 					}
@@ -573,14 +603,16 @@ func (c *Async) readLoop() {
 				index = 0
 				buf = buf[:cap(buf)]
 				if len(buf) < protocol.MessageSize {
+					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)
-					break
+					return
 				}
 				n = 0
 				for n < protocol.MessageSize {
 					var nn int
 					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 					if err != nil {
+						c.wg.Done()
 						_ = c.closeWithError(err)
 						return
 					}
@@ -588,14 +620,16 @@ func (c *Async) readLoop() {
 					n += nn
 					if err != nil {
 						if n < protocol.MessageSize {
-							if os.IsTimeout(err) {
+							if errors.Is(err, os.ErrDeadlineExceeded) {
 								err = c.handleTimeout()
 								if err != nil {
+									c.wg.Done()
 									_ = c.closeWithError(err)
 									return
 								}
 								continue
 							}
+							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
@@ -610,14 +644,16 @@ func (c *Async) readLoop() {
 				buf = buf[:cap(buf)]
 				min := protocol.MessageSize - index
 				if len(buf) < min {
+					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)
-					break
+					return
 				}
 				n = 0
 				for n < min {
 					var nn int
 					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 					if err != nil {
+						c.wg.Done()
 						_ = c.closeWithError(err)
 						return
 					}
@@ -625,14 +661,16 @@ func (c *Async) readLoop() {
 					n += nn
 					if err != nil {
 						if n < min {
-							if os.IsTimeout(err) {
+							if errors.Is(err, os.ErrDeadlineExceeded) {
 								err = c.handleTimeout()
 								if err != nil {
+									c.wg.Done()
 									_ = c.closeWithError(err)
 									return
 								}
 								continue
 							}
+							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
 						}
