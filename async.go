@@ -283,15 +283,18 @@ func (c *Async) Close() error {
 }
 
 func (c *Async) killGoroutines() {
+	c.Logger().Error().Msg("starting to kill goroutines")
 	c.Lock()
 	c.incomingMessages.Close()
 	close(c.flusher)
 	c.Unlock()
+	c.Logger().Error().Msg("incoming messages closed, waiting on goroutines")
 	_ = c.SetDeadline(time.Now())
 	c.wg.Wait()
 	_ = c.SetDeadline(emptyTime)
+	c.Logger().Error().Msg("closing error channel")
 	close(c.errorCh)
-	c.Logger().Info().Msg("error channel closed, goroutines killed")
+	c.Logger().Error().Msg("error channel closed, goroutines killed")
 }
 
 func (c *Async) close() error {
