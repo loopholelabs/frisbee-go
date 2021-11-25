@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.6] - 2021-11-27
+### Fixes
+- Closing an async connection no longer leaves a goroutine running waiting for a waitgroup to finish
+- All connection read and writes now have strict deadlines set 
+
+### Changes
+- Test cases now run in parallel and don't require port `3000` to be free
+- Frisbee no longer uses a uint32 for keeping track of state, uses an atomic bool instead
+- Client now has a new `Flush` function that can be called to guarantee that the async connection is flushed
+- Client no longer has the `ErrorChannel` function and instead has the `CloseChannel` function that will signal when a connection is closed
+- Now require Golang `1.16` 
+
 ## [v0.1.5] - 2021-11-16
 ### Fixes
 - Frisbee `Server` and `Client` now properly use timeouts for `Async` connections everywhere
@@ -59,7 +71,8 @@ functions
 ## [v0.1.0] - 2021-06-03
 Initial Release of Frisbee
 
-[Unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.1.6...HEAD
+[v0.1.6]: https://github.com/loopholelabs/frisbee/compare/v0.1.5...v0.1.6
 [v0.1.5]: https://github.com/loopholelabs/frisbee/compare/v0.1.4...v0.1.5
 [v0.1.4]: https://github.com/loopholelabs/frisbee/compare/v0.1.3...v0.1.4
 [v0.1.3]: https://github.com/loopholelabs/frisbee/compare/v0.1.2...v0.1.3
