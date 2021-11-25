@@ -28,9 +28,10 @@ import (
 )
 
 func TestClientRaw(t *testing.T) {
+	t.Parallel()
+
 	const testSize = 100
 	const messageSize = 512
-	addr := ":8192"
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
@@ -52,13 +53,13 @@ func TestClientRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -121,7 +122,7 @@ func TestClientRaw(t *testing.T) {
 func BenchmarkClientThroughput(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 512
-	addr := ":8192"
+
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
@@ -134,7 +135,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
 	if err != nil {
 		panic(err)
 	}
@@ -144,7 +145,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 		panic(err)
 	}
 
-	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
 	if err != nil {
 		panic(err)
 	}
@@ -187,7 +188,6 @@ func BenchmarkClientThroughput(b *testing.B) {
 func BenchmarkClientThroughputResponse(b *testing.B) {
 	const testSize = 100000
 	const messageSize = 512
-	addr := ":8192"
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
@@ -214,7 +214,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(addr, serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
 	if err != nil {
 		panic(err)
 	}
@@ -224,7 +224,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		panic(err)
 	}
 
-	c, err := NewClient(addr, clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
 	if err != nil {
 		panic(err)
 	}
