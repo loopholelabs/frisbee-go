@@ -9,7 +9,7 @@
 This is the [Go](http://golang.org) library for
 [Frisbee](https://loopholelabs.io/docs/frisbee), a bring-your-own protocol messaging framework designed for performance and stability.
 
-**This library requires Go1.15 or later.**
+**This library requires Go1.16 or later.**
 
 ## Important note about releases and stability
 
