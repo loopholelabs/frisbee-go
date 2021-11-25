@@ -331,10 +331,6 @@ func (c *Async) closeWithError(err error) error {
 		return closeError
 	}
 	c.error.Store(err)
-	select {
-	case c.errorCh <- err:
-	default:
-	}
 	_ = c.conn.Close()
 	return err
 }
