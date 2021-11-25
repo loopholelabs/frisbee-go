@@ -562,7 +562,7 @@ func BenchmarkAsyncThroughputNetwork1024(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()

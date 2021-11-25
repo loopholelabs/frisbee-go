@@ -138,7 +138,7 @@ func (c *Client) Flush() error {
 	return c.conn.Flush()
 }
 
-// CloseChannel returns an channel that can be listened to see if this client has been closed
+// CloseChannel returns a channel that can be listened to see if this client has been closed
 func (c *Client) CloseChannel() <-chan struct{} {
 	return c.conn.CloseChannel()
 }
