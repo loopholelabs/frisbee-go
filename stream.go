@@ -72,9 +72,9 @@ func (s *Stream) Write(p []byte) (int, error) {
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], uint64(len(p)))
 
 	s.Lock()
-	if s.state.Load() != CONNECTED {
+	if s.Async.Closed() {
 		s.Unlock()
-		return 0, s.Error()
+		return 0, ConnectionClosed
 	}
 
 	if s.Closed() {
@@ -85,10 +85,9 @@ func (s *Stream) Write(p []byte) (int, error) {
 	_, err := s.writer.Write(encodedMessage[:])
 	if err != nil {
 		s.Unlock()
-		if s.state.Load() != CONNECTED {
-			err = s.Error()
-			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-			return 0, errors.WithContext(err, WRITE)
+		if s.Async.Closed() {
+			s.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
+			return 0, errors.WithContext(ConnectionClosed, WRITE)
 		}
 		s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 		return 0, s.closeWithError(err)
@@ -97,10 +96,9 @@ func (s *Stream) Write(p []byte) (int, error) {
 	_, err = s.writer.Write(p)
 	if err != nil {
 		s.Unlock()
-		if s.state.Load() != CONNECTED {
-			err = s.Error()
-			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-			return 0, errors.WithContext(err, WRITE)
+		if s.Async.Closed() {
+			s.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
+			return 0, errors.WithContext(ConnectionClosed, WRITE)
 		}
 		s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 		return 0, s.closeWithError(err)
@@ -128,8 +126,8 @@ func (s *Stream) ReadFrom(r io.Reader) (n int64, err error) {
 
 	for {
 		var nn int
-		if s.state.Load() != CONNECTED {
-			return n, err
+		if s.Async.Closed() {
+			return n, ConnectionClosed
 		}
 
 		if s.Closed() {
@@ -146,13 +144,12 @@ func (s *Stream) ReadFrom(r io.Reader) (n int64, err error) {
 
 		s.Lock()
 
-		_, err := s.writer.Write(encodedMessage[:])
+		_, err = s.writer.Write(encodedMessage[:])
 		if err != nil {
 			s.Unlock()
-			if s.state.Load() != CONNECTED {
-				err = s.Error()
-				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-				return n, errors.WithContext(err, WRITE)
+			if s.Async.Closed() {
+				s.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
+				return n, errors.WithContext(ConnectionClosed, WRITE)
 			}
 			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 			return n, s.closeWithError(err)
@@ -161,10 +158,9 @@ func (s *Stream) ReadFrom(r io.Reader) (n int64, err error) {
 		_, err = s.writer.Write(buf[:nn])
 		if err != nil {
 			s.Unlock()
-			if s.state.Load() != CONNECTED {
-				err = s.Error()
-				s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-				return n, errors.WithContext(err, WRITE)
+			if s.Async.Closed() {
+				s.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
+				return n, errors.WithContext(ConnectionClosed, WRITE)
 			}
 			s.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 			return n, s.closeWithError(err)
@@ -191,7 +187,7 @@ func (s *Stream) ReadFrom(r io.Reader) (n int64, err error) {
 func (s *Stream) Read(p []byte) (int, error) {
 LOOP:
 	s.incomingBuffer.Lock()
-	if s.state.Load() != CONNECTED {
+	if s.Async.Closed() {
 		s.incomingBuffer.Unlock()
 		return 0, ConnectionClosed
 	}
@@ -213,7 +209,7 @@ func (s *Stream) WriteTo(w io.Writer) (n int64, err error) {
 	for err == nil {
 		s.incomingBuffer.Lock()
 		var nn int
-		if s.state.Load() != CONNECTED {
+		if s.Async.Closed() {
 			s.incomingBuffer.Unlock()
 			return n, ConnectionClosed
 		}

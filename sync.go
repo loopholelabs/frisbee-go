@@ -36,7 +36,7 @@ import (
 type Sync struct {
 	sync.Mutex
 	conn   net.Conn
-	state  *atomic.Int32
+	closed *atomic.Bool
 	logger *zerolog.Logger
 	error  *atomic.Error
 }
@@ -65,7 +65,7 @@ func ConnectSync(addr string, keepAlive time.Duration, logger *zerolog.Logger, T
 func NewSync(c net.Conn, logger *zerolog.Logger) (conn *Sync) {
 	conn = &Sync{
 		conn:   c,
-		state:  atomic.NewInt32(CONNECTED),
+		closed: atomic.NewBool(false),
 		logger: logger,
 		error:  atomic.NewError(nil),
 	}
@@ -127,18 +127,17 @@ func (c *Sync) WriteMessage(message *Message, content *[]byte) error {
 	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], message.ContentLength)
 
 	c.Lock()
-	if c.state.Load() != CONNECTED {
+	if c.closed.Load() {
 		c.Unlock()
-		return c.Error()
+		return ConnectionClosed
 	}
 
 	_, err := c.conn.Write(encodedMessage[:])
 	if err != nil {
 		c.Unlock()
-		if c.state.Load() != CONNECTED {
-			err = c.Error()
-			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-			return errors.WithContext(err, WRITE)
+		if c.closed.Load() {
+			c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
+			return errors.WithContext(ConnectionClosed, WRITE)
 		}
 		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 		return c.closeWithError(err)
@@ -147,10 +146,9 @@ func (c *Sync) WriteMessage(message *Message, content *[]byte) error {
 		_, err = c.conn.Write(*content)
 		if err != nil {
 			c.Unlock()
-			if c.state.Load() != CONNECTED {
-				err = c.Error()
-				c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
-				return errors.WithContext(err, WRITE)
+			if c.closed.Load() {
+				c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
+				return errors.WithContext(ConnectionClosed, WRITE)
 			}
 			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
 			return c.closeWithError(err)
@@ -164,17 +162,16 @@ func (c *Sync) WriteMessage(message *Message, content *[]byte) error {
 // ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
 func (c *Sync) ReadMessage() (*Message, *[]byte, error) {
-	if c.state.Load() != CONNECTED {
-		return nil, nil, c.Error()
+	if c.closed.Load() {
+		return nil, nil, ConnectionClosed
 	}
 	var encodedMessage [protocol.MessageSize]byte
 
 	_, err := io.ReadAtLeast(c.conn, encodedMessage[:], protocol.MessageSize)
 	if err != nil {
-		if c.state.Load() != CONNECTED {
-			err = c.Error()
-			c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
-			return nil, nil, errors.WithContext(err, POP)
+		if c.closed.Load() {
+			c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, POP).Error())
+			return nil, nil, errors.WithContext(ConnectionClosed, POP)
 		}
 		c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
 		return nil, nil, errors.WithContext(c.closeWithError(err), POP)
@@ -183,10 +180,9 @@ func (c *Sync) ReadMessage() (*Message, *[]byte, error) {
 	message := new(Message)
 
 	if !bytes.Equal(encodedMessage[protocol.ReservedOffset:protocol.ReservedOffset+protocol.ReservedSize], protocol.ReservedBytes) {
-		if c.state.Load() != CONNECTED {
-			err = c.Error()
-			c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
-			return nil, nil, errors.WithContext(err, POP)
+		if c.closed.Load() {
+			c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, POP).Error())
+			return nil, nil, errors.WithContext(ConnectionClosed, POP)
 		}
 		c.logger.Error().Msgf(errors.WithContext(protocol.InvalidMessageVersion, POP).Error())
 		return nil, nil, errors.WithContext(c.closeWithError(protocol.InvalidMessageVersion), POP)
@@ -202,10 +198,9 @@ func (c *Sync) ReadMessage() (*Message, *[]byte, error) {
 		content := make([]byte, message.ContentLength)
 		_, err = io.ReadAtLeast(c.conn, content, int(message.ContentLength))
 		if err != nil {
-			if c.state.Load() != CONNECTED {
-				err = c.Error()
-				c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
-				return nil, nil, errors.WithContext(err, POP)
+			if c.closed.Load() {
+				c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, POP).Error())
+				return nil, nil, errors.WithContext(ConnectionClosed, POP)
 			}
 			c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
 			return nil, nil, errors.WithContext(c.closeWithError(err), POP)
@@ -243,8 +238,7 @@ func (c *Sync) Close() error {
 }
 
 func (c *Sync) close() error {
-	if c.state.CAS(CONNECTED, CLOSED) {
-		c.error.Store(ConnectionClosed)
+	if c.closed.CAS(false, true) {
 		return nil
 	}
 	return ConnectionClosed
