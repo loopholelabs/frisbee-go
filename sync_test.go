@@ -28,6 +28,8 @@ import (
 )
 
 func TestNewSync(t *testing.T) {
+	t.Parallel()
+
 	const messageSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -89,6 +91,8 @@ func TestNewSync(t *testing.T) {
 }
 
 func TestSyncLargeWrite(t *testing.T) {
+	t.Parallel()
+
 	const testSize = 100000
 	const messageSize = 512
 
@@ -139,6 +143,8 @@ func TestSyncLargeWrite(t *testing.T) {
 }
 
 func TestSyncRawConn(t *testing.T) {
+	t.Parallel()
+
 	const testSize = 100000
 	const messageSize = 32
 
@@ -148,7 +154,7 @@ func TestSyncRawConn(t *testing.T) {
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
 
-	l, err := net.Listen("tcp", ":3000")
+	l, err := net.Listen("tcp", ":0")
 	require.NoError(t, err)
 
 	go func() {
@@ -158,7 +164,7 @@ func TestSyncRawConn(t *testing.T) {
 		start <- struct{}{}
 	}()
 
-	writer, err = net.Dial("tcp", ":3000")
+	writer, err = net.Dial("tcp", l.Addr().String())
 	require.NoError(t, err)
 	<-start
 
@@ -223,6 +229,8 @@ func TestSyncRawConn(t *testing.T) {
 }
 
 func TestSyncReadClose(t *testing.T) {
+	t.Parallel()
+
 	reader, writer := net.Pipe()
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -270,6 +278,8 @@ func TestSyncReadClose(t *testing.T) {
 }
 
 func TestSyncWriteClose(t *testing.T) {
+	t.Parallel()
+
 	reader, writer := net.Pipe()
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -413,14 +423,14 @@ func BenchmarkSyncThroughputNetwork32(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewSync(reader, &emptyLogger)
@@ -469,14 +479,14 @@ func BenchmarkSyncThroughputNetwork512(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewSync(reader, &emptyLogger)
@@ -525,14 +535,14 @@ func BenchmarkSyncThroughputNetwork1024(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewSync(reader, &emptyLogger)
@@ -581,14 +591,14 @@ func BenchmarkSyncThroughputNetwork2048(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewSync(reader, &emptyLogger)
@@ -637,14 +647,14 @@ func BenchmarkSyncThroughputNetwork4096(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewSync(reader, &emptyLogger)
@@ -693,14 +703,14 @@ func BenchmarkSyncThroughputNetwork1mb(b *testing.B) {
 	var reader, writer net.Conn
 	start := make(chan struct{}, 1)
 
-	l, _ := net.Listen("tcp", ":3000")
+	l, _ := net.Listen("tcp", ":0")
 
 	go func() {
 		reader, _ = l.Accept()
 		start <- struct{}{}
 	}()
 
-	writer, _ = net.Dial("tcp", ":3000")
+	writer, _ = net.Dial("tcp", l.Addr().String())
 	<-start
 
 	readerConn := NewSync(reader, &emptyLogger)
