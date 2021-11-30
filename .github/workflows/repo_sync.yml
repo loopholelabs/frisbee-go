@@ -1,0 +1,93 @@
+name: Repo Sync
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+      - closed
+  pull_request:
+    types:
+      - opened
+      - ready_for_review
+      - reopened
+      - review_requested
+      - closed
+jobs:
+  issue_opened:
+    name: issue_opened
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    steps:
+      - name: 'Move issue to "Todo"'
+        uses: leonsteinhaeuser/project-beta-automations@v1.0.2
+        with:
+          gh_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          organization: loopholelabs
+          project_id: 4
+          resource_node_id: ${{ github.event.issue.node_id }}
+          status_value: "Todo"
+  issue_reopened:
+    name: issue_reopened
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'reopened'
+    steps:
+      - name: 'Move issue to "In Progress"'
+        uses: leonsteinhaeuser/project-beta-automations@v1.0.2
+        with:
+          gh_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          organization: loopholelabs
+          project_id: 4
+          resource_node_id: ${{ github.event.issue.node_id }}
+          status_value: "In Progress"
+  issue_closed:
+    name: issue_closed
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'closed'
+    steps:
+      - name: 'Moved issue to "Done"'
+        uses: leonsteinhaeuser/project-beta-automations@v1.0.2
+        with:
+          gh_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          organization: loopholelabs
+          project_id: 4
+          resource_node_id: ${{ github.event.issue.node_id }}
+          status_value: "Done"
+  pr_opened_reopened:
+    name: pr_opened_reopened
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')
+    steps:
+      - name: 'Move PR to "In Progress"'
+        uses: leonsteinhaeuser/project-beta-automations@v1.0.2
+        with:
+          gh_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          organization: loopholelabs
+          project_id: 4
+          resource_node_id: ${{ github.event.pull_request.node_id }}
+          status_value: "In Progress"
+  pr_ready_for_review_review_requested:
+    name: pr_ready_for_review_review_requested
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && (github.event.action == 'ready_for_review' || github.event.action == 'review_requested')
+    steps:
+      - name: 'Move PR to "In Review"'
+        uses: leonsteinhaeuser/project-beta-automations@v1.0.2
+        with:
+          gh_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          organization: loopholelabs
+          project_id: 4
+          resource_node_id: ${{ github.event.pull_request.node_id }}
+          status_value: "In Review"
+  pr_closed:
+    name: pr_closed
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    steps:
+      - name: 'Move PR to "Closed"'
+        uses: leonsteinhaeuser/project-beta-automations@v1.0.2
+        with:
+          gh_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          organization: loopholelabs
+          project_id: 4
+          resource_node_id: ${{ github.event.pull_request.node_id }}
+          status_value: "Done"
