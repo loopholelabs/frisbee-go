@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 package ringbuffer
 
 import (
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -50,12 +50,12 @@ func TestHelpers(t *testing.T) {
 }
 
 func TestRingBuffer(t *testing.T) {
-	testPacket := func() *protocol.Packet {
-		return &protocol.Packet{}
+	testPacket := func() *packet.Packet {
+		return &packet.Packet{}
 	}
-	testPacket2 := func() *protocol.Packet {
-		return &protocol.Packet{
-			Content: &[]byte{1},
+	testPacket2 := func() *packet.Packet {
+		return &packet.Packet{
+			Content: []byte{1},
 		}
 	}
 

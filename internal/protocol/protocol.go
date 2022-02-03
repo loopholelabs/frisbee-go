@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -17,65 +17,41 @@
 package protocol
 
 import (
-	"bytes"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/pkg/errors"
 	"unsafe"
 )
 
-const (
-	ENCODE errors.ErrorContext = "error while encoding message"
-	DECODE errors.ErrorContext = "error while decoding message"
-)
-
 var (
-	InvalidMessageVersion = errors.New("invalid message version")
-	InvalidBufferLength   = errors.New("invalid buffer length")
-)
-
-var (
-	ReservedBytes = []byte{byte(0xF >> 24), byte(0xB >> 16), byte(0xE >> 8), byte(0xE)}
+	Encoding            = errors.New("error while encoding message")
+	Decoding            = errors.New("error while decoding message")
+	InvalidBufferLength = errors.New("invalid buffer length")
 )
 
 const (
-	MessagePing   = uint32(10) // PING
-	MessagePong   = uint32(11) // PONG
-	MessagePacket = uint32(12) // PACKET
+	MessagePing   = uint16(10) // PING
+	MessagePong   = uint16(11) // PONG
+	MessagePacket = uint16(12) // PACKET
 )
 
 const (
-	ReservedOffset = 0 // 0
-	ReservedSize   = 4
+	IdOffset = 0 // 0
+	IdSize   = 2
 
-	FromOffset = ReservedOffset + ReservedSize // 4
-	FromSize   = 4
+	OperationOffset = IdOffset + IdSize // 2
+	OperationSize   = 2
 
-	ToOffset = FromOffset + FromSize // 8
-	ToSize   = 4
+	ContentLengthOffset = OperationOffset + OperationSize // 4
+	ContentLengthSize   = 4
 
-	IdOffset = ToOffset + ToSize // 12
-	IdSize   = 8
-
-	OperationOffset = IdOffset + IdSize // 20
-	OperationSize   = 4
-
-	ContentLengthOffset = OperationOffset + OperationSize // 24
-	ContentLengthSize   = 8
-
-	MessageSize = ContentLengthOffset + ContentLengthSize // 32
+	MessageSize = ContentLengthOffset + ContentLengthSize // 8
 )
 
+// Message is 8 bytes in length
 type Message struct {
-	From          uint32 // 4 Bytes
-	To            uint32 // 4 Bytes
-	Id            uint64 // 8 Bytes
-	Operation     uint32 // 4 Bytes
-	ContentLength uint64 // 8 Bytes
-}
-
-type Packet struct {
-	Message *Message
-	Content *[]byte
+	Id            uint16 // 2 Bytes
+	Operation     uint16 // 2 Bytes
+	ContentLength uint32 // 4 Bytes
 }
 
 type Handler struct{}
@@ -88,8 +64,8 @@ func NewHandler() Handler {
 	return Handler{}
 }
 
-func (handler *Handler) Encode(from uint32, to uint32, id uint64, operation uint32, contentLength uint64) ([MessageSize]byte, error) {
-	return Encode(from, to, id, operation, contentLength)
+func (handler *Handler) Encode(id uint16, operation uint16, contentLength uint32) ([MessageSize]byte, error) {
+	return Encode(id, operation, contentLength)
 }
 
 func (handler *Handler) Decode(buf []byte) (message Message, err error) {
@@ -100,16 +76,13 @@ func (handler *Handler) Decode(buf []byte) (message Message, err error) {
 func (fm *Message) Encode() (result [MessageSize]byte, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
-			err = errors.WithContext(recoveredErr.(error), ENCODE)
+			err = errors.Wrap(recoveredErr.(error), Encoding.Error())
 		}
 	}()
-	copy(result[ReservedOffset:ReservedOffset+ReservedSize], ReservedBytes)
 
-	binary.BigEndian.PutUint32(result[FromOffset:FromOffset+FromSize], fm.From)
-	binary.BigEndian.PutUint32(result[ToOffset:ToOffset+ToSize], fm.To)
-	binary.BigEndian.PutUint64(result[IdOffset:IdOffset+IdSize], fm.Id)
-	binary.BigEndian.PutUint32(result[OperationOffset:OperationOffset+OperationSize], fm.Operation)
-	binary.BigEndian.PutUint64(result[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], fm.ContentLength)
+	binary.BigEndian.PutUint16(result[IdOffset:IdOffset+IdSize], fm.Id)
+	binary.BigEndian.PutUint16(result[OperationOffset:OperationOffset+OperationSize], fm.Operation)
+	binary.BigEndian.PutUint32(result[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], fm.ContentLength)
 
 	return
 }
@@ -118,28 +91,20 @@ func (fm *Message) Encode() (result [MessageSize]byte, err error) {
 func (fm *Message) Decode(buf [MessageSize]byte) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
-			err = errors.WithContext(recoveredErr.(error), DECODE)
+			err = errors.Wrap(recoveredErr.(error), Decoding.Error())
 		}
 	}()
 
-	if !bytes.Equal(buf[ReservedOffset:ReservedOffset+ReservedSize], ReservedBytes) {
-		return InvalidMessageVersion
-	}
-
-	fm.From = binary.BigEndian.Uint32(buf[FromOffset : FromOffset+FromSize])
-	fm.To = binary.BigEndian.Uint32(buf[ToOffset : ToOffset+ToSize])
-	fm.Id = binary.BigEndian.Uint64(buf[IdOffset : IdOffset+IdSize])
-	fm.Operation = binary.BigEndian.Uint32(buf[OperationOffset : OperationOffset+OperationSize])
-	fm.ContentLength = binary.BigEndian.Uint64(buf[ContentLengthOffset : ContentLengthOffset+ContentLengthSize])
+	fm.Id = binary.BigEndian.Uint16(buf[IdOffset : IdOffset+IdSize])
+	fm.Operation = binary.BigEndian.Uint16(buf[OperationOffset : OperationOffset+OperationSize])
+	fm.ContentLength = binary.BigEndian.Uint32(buf[ContentLengthOffset : ContentLengthOffset+ContentLengthSize])
 
 	return nil
 }
 
 // Encode without a Handler
-func Encode(from uint32, to uint32, id uint64, operation uint32, contentLength uint64) ([MessageSize]byte, error) {
+func Encode(id uint16, operation uint16, contentLength uint32) ([MessageSize]byte, error) {
 	message := Message{
-		From:          from,
-		To:            to,
 		Id:            id,
 		Operation:     operation,
 		ContentLength: contentLength,
