@@ -399,7 +399,6 @@ func BenchmarkAsyncThroughputPipe(b *testing.B) {
 	b.Run("1024 Bytes", throughputRunner(1024))
 	b.Run("2048 Bytes", throughputRunner(2048))
 	b.Run("4096 Bytes", throughputRunner(4096))
-	b.Run("1mb", throughputRunner(1<<20))
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
