@@ -410,21 +410,33 @@ func BenchmarkSyncThroughputNetwork(b *testing.B) {
 			p.Write(randomData)
 			p.Message.ContentLength = messageSize
 
-			done := make(chan struct{}, 1)
-
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
+				done := make(chan struct{}, 1)
+				errCh := make(chan error, 1)
 				go func() {
 					for i := 0; i < testSize; i++ {
-						p, _ := readerConn.ReadMessage()
+						p, err := readerConn.ReadMessage()
+						if err != nil {
+							errCh <- err
+							return
+						}
 						packet.Put(p)
 					}
 					done <- struct{}{}
 				}()
 				for i := 0; i < testSize; i++ {
-					_ = writerConn.WriteMessage(p)
+					err = writerConn.WriteMessage(p)
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
-				<-done
+				select {
+				case <-done:
+					continue
+				case err := <-errCh:
+					b.Fatal(err)
+				}
 			}
 			b.StopTimer()
 

@@ -173,6 +173,18 @@ func (c *Async) WriteMessage(p *packet.Packet) error {
 		return c.closeWithError(err)
 	}
 	if p.Message.ContentLength != 0 {
+		if int(p.Message.ContentLength) > c.writer.Size() {
+			err = c.SetWriteDeadline(time.Now().Add(defaultDeadline))
+			if err != nil {
+				c.Unlock()
+				if c.closed.Load() {
+					c.Logger().Error().Err(ConnectionClosed).Msg("error while writing message content")
+					return ConnectionClosed
+				}
+				c.Logger().Error().Err(err).Msg("error while writing message content")
+				return c.closeWithError(err)
+			}
+		}
 		_, err = c.writer.Write(p.Content[:p.Message.ContentLength])
 		if err != nil {
 			c.Unlock()
@@ -236,7 +248,6 @@ func (c *Async) Flush() error {
 			c.Logger().Err(err).Msg("error while flushing data")
 			return c.closeWithError(err)
 		}
-
 	}
 	c.Unlock()
 	return nil

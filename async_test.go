@@ -409,7 +409,10 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	reader, writer, _ := pair.New()
+	reader, writer, err := pair.New()
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
@@ -426,25 +429,33 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 			p.Message.Operation = 32
 			p.Write(randomData)
 			p.Message.ContentLength = messageSize
-
-			done := make(chan struct{}, 1)
-			sum := 0
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
+				done := make(chan struct{}, 1)
+				errCh := make(chan error, 1)
 				go func() {
 					for i := 0; i < testSize; i++ {
-						p, _ := readerConn.ReadMessage()
-						if p != nil {
-							sum += int(p.Message.Id)
+						p, err := readerConn.ReadMessage()
+						if err != nil {
+							errCh <- err
+							return
 						}
 						packet.Put(p)
 					}
 					done <- struct{}{}
 				}()
 				for i := 0; i < testSize; i++ {
-					_ = writerConn.WriteMessage(p)
+					err = writerConn.WriteMessage(p)
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
-				<-done
+				select {
+				case <-done:
+					continue
+				case err := <-errCh:
+					b.Fatal(err)
+				}
 			}
 			b.StopTimer()
 
