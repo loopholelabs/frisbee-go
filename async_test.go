@@ -341,7 +341,7 @@ func TestAsyncTimeout(t *testing.T) {
 
 	_, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, ConnectionClosed)
-	assert.ErrorIs(t, readerConn.Error(), io.EOF)
+	assert.Error(t, readerConn.Error(), io.EOF)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
