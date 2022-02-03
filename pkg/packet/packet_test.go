@@ -39,15 +39,17 @@ func TestNew(t *testing.T) {
 func TestRecycle(t *testing.T) {
 	t.Parallel()
 
-	p := Get()
+	pool := NewPool()
+
+	p := pool.Get()
 
 	p.Message.Id = 32
 	p.Message.Operation = 64
 	p.Message.ContentLength = 128
 
-	Put(p)
+	pool.Put(p)
 
-	p = Get()
+	p = pool.Get()
 	assert.NotNil(t, p.Message)
 	assert.Equal(t, uint16(0), p.Message.Id)
 	assert.Equal(t, uint16(0), p.Message.Operation)
@@ -57,8 +59,8 @@ func TestRecycle(t *testing.T) {
 	p.Content = make([]byte, 32)
 	assert.Equal(t, 32, len(p.Content))
 
-	Put(p)
-	p = Get()
+	pool.Put(p)
+	p = pool.Get()
 
 	assert.NotNil(t, p.Message)
 	assert.Equal(t, uint16(0), p.Message.Id)
@@ -69,5 +71,5 @@ func TestRecycle(t *testing.T) {
 	assert.Equal(t, 0, len(p.Content))
 	assert.Equal(t, 32, cap(p.Content))
 
-	Put(p)
+	pool.Put(p)
 }

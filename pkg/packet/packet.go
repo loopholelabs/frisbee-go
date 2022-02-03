@@ -56,10 +56,16 @@ func (p *Packet) Reset() {
 	p.Content = p.Content[:0]
 }
 
-var pool sync.Pool
+type Pool struct {
+	pool sync.Pool
+}
 
-func Get() (s *Packet) {
-	v := pool.Get()
+func NewPool() *Pool {
+	return new(Pool)
+}
+
+func (p *Pool) Get() (s *Packet) {
+	v := p.pool.Get()
 	if v == nil {
 		v = new(Packet)
 	}
@@ -71,9 +77,21 @@ func Get() (s *Packet) {
 	return
 }
 
-func Put(p *Packet) {
-	if p != nil {
-		p.Reset()
-		pool.Put(p)
+func (p *Pool) Put(packet *Packet) {
+	if packet != nil {
+		packet.Reset()
+		p.pool.Put(packet)
 	}
+}
+
+var (
+	pool = NewPool()
+)
+
+func Get() (s *Packet) {
+	return pool.Get()
+}
+
+func Put(p *Packet) {
+	pool.Put(p)
 }
