@@ -39,3 +39,4 @@ jobs:
 
       - name: Test with Race Conditions
         run: go test -race -v ./...
+        timeout-minutes: 15

@@ -39,3 +39,4 @@ jobs:
 
       - name: Benchmark with Race Conditions
         run: go test -bench=. -race -v ./...
+        timeout-minutes: 30
