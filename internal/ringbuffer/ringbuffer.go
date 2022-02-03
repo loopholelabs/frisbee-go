@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 package ringbuffer
 
 import (
-	"github.com/loopholelabs/frisbee/internal/errors"
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/pkg/errors"
 	"runtime"
 	"sync/atomic"
 	"unsafe"
@@ -67,7 +67,7 @@ func (rb *RingBuffer) init(size uint64) {
 	rb.mask = size - 1
 }
 
-func (rb *RingBuffer) Push(item *protocol.Packet) error {
+func (rb *RingBuffer) Push(item *packet.Packet) error {
 	var newNode *node
 	position := atomic.LoadUint64(&rb.head)
 	tail := atomic.LoadUint64(&rb.tail)
@@ -99,7 +99,7 @@ RETRY:
 	return nil
 }
 
-func (rb *RingBuffer) Pop() (*protocol.Packet, error) {
+func (rb *RingBuffer) Pop() (*packet.Packet, error) {
 	var oldNode *node
 	var oldPosition = atomic.LoadUint64(&rb.tail)
 RETRY:
@@ -122,7 +122,7 @@ RETRY:
 	data := oldNode.data
 	oldNode.data = nil
 	atomic.StoreUint64(&oldNode.position, oldPosition+rb.mask+1)
-	return (*protocol.Packet)(data), nil
+	return (*packet.Packet)(data), nil
 }
 
 func (rb *RingBuffer) Length() uint64 {
