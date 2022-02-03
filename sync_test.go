@@ -18,6 +18,8 @@ package frisbee
 
 import (
 	"crypto/rand"
+	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +31,6 @@ import (
 
 func TestNewSync(t *testing.T) {
 	t.Parallel()
-
 	const messageSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
@@ -42,46 +43,53 @@ func TestNewSync(t *testing.T) {
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
 
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: 0,
-	}
+	p := packet.Get()
+	p.Message.Id = 64
+	p.Message.Operation = 32
 
 	go func() {
 		start <- struct{}{}
-		readMessage, content, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadMessage()
 		assert.NoError(t, err)
-		assert.NotNil(t, readMessage)
-		assert.Equal(t, *message, *readMessage)
-		assert.Nil(t, content)
+		assert.NotNil(t, p.Message)
+		assert.Equal(t, uint16(64), p.Message.Id)
+		assert.Equal(t, uint16(32), p.Message.Operation)
+		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.Equal(t, 0, len(p.Content))
 		end <- struct{}{}
+		packet.Put(p)
 	}()
 
 	<-start
-	err := writerConn.WriteMessage(message, nil)
+	err := writerConn.WriteMessage(p)
 	assert.NoError(t, err)
 	<-end
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
-	message.ContentLength = messageSize
+	p.Write(data)
+	p.Message.ContentLength = messageSize
 
 	go func() {
 		start <- struct{}{}
-		readMessage, content, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadMessage()
 		assert.NoError(t, err)
-		assert.Equal(t, *message, *readMessage)
-		assert.Equal(t, data, *content)
+		assert.NotNil(t, p.Message)
+		assert.Equal(t, uint16(64), p.Message.Id)
+		assert.Equal(t, uint16(32), p.Message.Operation)
+		assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+		assert.Equal(t, messageSize, len(p.Content))
+		assert.Equal(t, data, p.Content)
 		end <- struct{}{}
+		packet.Put(p)
 	}()
 
 	<-start
-	err = writerConn.WriteMessage(message, &data)
+	err = writerConn.WriteMessage(p)
 	assert.NoError(t, err)
+
+	packet.Put(p)
 	<-end
 
 	err = readerConn.Close()
@@ -105,13 +113,10 @@ func TestSyncLargeWrite(t *testing.T) {
 
 	randomData := make([][]byte, testSize)
 
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
+	p := packet.Get()
+	p.Message.Id = 64
+	p.Message.Operation = 32
+	p.Message.ContentLength = messageSize
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
@@ -119,10 +124,15 @@ func TestSyncLargeWrite(t *testing.T) {
 	go func() {
 		start <- struct{}{}
 		for i := 0; i < testSize; i++ {
-			readMessage, data, err := readerConn.ReadMessage()
+			p, err := readerConn.ReadMessage()
 			assert.NoError(t, err)
-			assert.Equal(t, *message, *readMessage)
-			assert.Equal(t, randomData[i], *data)
+			assert.NotNil(t, p.Message)
+			assert.Equal(t, uint16(64), p.Message.Id)
+			assert.Equal(t, uint16(32), p.Message.Operation)
+			assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+			assert.Equal(t, messageSize, len(p.Content))
+			assert.Equal(t, randomData[i], p.Content)
+			packet.Put(p)
 		}
 		end <- struct{}{}
 	}()
@@ -131,10 +141,13 @@ func TestSyncLargeWrite(t *testing.T) {
 	for i := 0; i < testSize; i++ {
 		randomData[i] = make([]byte, messageSize)
 		_, _ = rand.Read(randomData[i])
-		err := writerConn.WriteMessage(message, &randomData[i])
+		p.Write(randomData[i])
+		err := writerConn.WriteMessage(p)
 		assert.NoError(t, err)
 	}
 	<-end
+
+	packet.Put(p)
 
 	err := readerConn.Close()
 	assert.NoError(t, err)
@@ -150,23 +163,11 @@ func TestSyncRawConn(t *testing.T) {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	var reader, writer net.Conn
+	reader, writer, err := pair.New()
+	require.NoError(t, err)
+
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
-
-	l, err := net.Listen("tcp", ":0")
-	require.NoError(t, err)
-
-	go func() {
-		var err error
-		reader, err = l.Accept()
-		require.NoError(t, err)
-		start <- struct{}{}
-	}()
-
-	writer, err = net.Dial("tcp", l.Addr().String())
-	require.NoError(t, err)
-	<-start
 
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
@@ -174,28 +175,31 @@ func TestSyncRawConn(t *testing.T) {
 	randomData := make([]byte, messageSize)
 	_, _ = rand.Read(randomData)
 
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
+	p := packet.Get()
+	p.Message.Id = 64
+	p.Message.Operation = 32
+	p.Write(randomData)
+	p.Message.ContentLength = messageSize
 
 	go func() {
 		start <- struct{}{}
 		for i := 0; i < testSize; i++ {
-			readMessage, data, err := readerConn.ReadMessage()
+			p, err := readerConn.ReadMessage()
 			assert.NoError(t, err)
-			assert.Equal(t, *message, *readMessage)
-			assert.Equal(t, randomData, *data)
+			assert.NotNil(t, p.Message)
+			assert.Equal(t, uint16(64), p.Message.Id)
+			assert.Equal(t, uint16(32), p.Message.Operation)
+			assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+			assert.Equal(t, messageSize, len(p.Content))
+			assert.Equal(t, randomData, p.Content)
+			packet.Put(p)
 		}
 		end <- struct{}{}
 	}()
 
 	<-start
 	for i := 0; i < testSize; i++ {
-		err := writerConn.WriteMessage(message, &randomData)
+		err := writerConn.WriteMessage(p)
 		assert.NoError(t, err)
 	}
 	<-end
@@ -223,9 +227,6 @@ func TestSyncRawConn(t *testing.T) {
 	assert.NoError(t, err)
 	err = rawWriterConn.Close()
 	assert.NoError(t, err)
-
-	err = l.Close()
-	assert.NoError(t, err)
 }
 
 func TestSyncReadClose(t *testing.T) {
@@ -238,38 +239,39 @@ func TestSyncReadClose(t *testing.T) {
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
 
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: 0,
-	}
+	p := packet.Get()
+	p.Message.Id = 64
+	p.Message.Operation = 32
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
 
 	go func() {
 		start <- struct{}{}
-		readMessage, content, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadMessage()
 		assert.NoError(t, err)
-		assert.NotNil(t, readMessage)
-		assert.Equal(t, *message, *readMessage)
-		assert.Nil(t, content)
+		assert.NotNil(t, p.Message)
+		assert.Equal(t, uint16(64), p.Message.Id)
+		assert.Equal(t, uint16(32), p.Message.Operation)
+		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.Equal(t, 0, len(p.Content))
 		end <- struct{}{}
+		packet.Put(p)
 	}()
 
 	<-start
-	err := writerConn.WriteMessage(message, nil)
+	err := writerConn.WriteMessage(p)
 	assert.NoError(t, err)
 	<-end
 
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
 
-	err = writerConn.WriteMessage(message, nil)
+	err = writerConn.WriteMessage(p)
 	assert.Error(t, err)
 	assert.ErrorIs(t, writerConn.Error(), io.ErrClosedPipe)
+
+	packet.Put(p)
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
@@ -287,36 +289,37 @@ func TestSyncWriteClose(t *testing.T) {
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
 
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: 0,
-	}
+	p := packet.Get()
+	p.Message.Id = 64
+	p.Message.Operation = 32
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
 
 	go func() {
 		start <- struct{}{}
-		readMessage, content, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadMessage()
 		assert.NoError(t, err)
-		assert.NotNil(t, readMessage)
-		assert.Equal(t, *message, *readMessage)
-		assert.Nil(t, content)
+		assert.NotNil(t, p.Message)
+		assert.Equal(t, uint16(64), p.Message.Id)
+		assert.Equal(t, uint16(32), p.Message.Operation)
+		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.Equal(t, 0, len(p.Content))
+		packet.Put(p)
 		end <- struct{}{}
 	}()
 
 	<-start
-	err := writerConn.WriteMessage(message, nil)
+	err := writerConn.WriteMessage(p)
 	assert.NoError(t, err)
 	<-end
+
+	packet.Put(p)
 
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
-	_, _, err = readerConn.ReadMessage()
+	_, err = readerConn.ReadMessage()
 	assert.ErrorIs(t, err, io.EOF)
 	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 
@@ -326,9 +329,8 @@ func TestSyncWriteClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func BenchmarkSyncThroughputPipe32(b *testing.B) {
+func BenchmarkSyncThroughputPipe(b *testing.B) {
 	const testSize = 100000
-	const messageSize = 32
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -337,415 +339,106 @@ func BenchmarkSyncThroughputPipe32(b *testing.B) {
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
 
-	randomData := make([]byte, messageSize)
+	throughputRunner := func(messageSize uint32) func(b *testing.B) {
+		return func(b *testing.B) {
+			b.SetBytes(testSize * int64(messageSize))
+			b.ReportAllocs()
 
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
+			randomData := make([]byte, messageSize)
 
-	done := make(chan struct{}, 1)
+			p := packet.Get()
+			p.Message.Id = 64
+			p.Message.Operation = 32
+			p.Write(randomData)
+			p.Message.ContentLength = messageSize
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
+			done := make(chan struct{}, 1)
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				go func() {
+					for i := 0; i < testSize; i++ {
+						p, _ := readerConn.ReadMessage()
+						packet.Put(p)
+					}
+					done <- struct{}{}
+				}()
+				for i := 0; i < testSize; i++ {
+					_ = writerConn.WriteMessage(p)
+				}
+				<-done
 			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
+			b.StopTimer()
+
+			packet.Put(p)
 		}
-		<-done
 	}
-	b.StopTimer()
+
+	b.Run("32 Bytes", throughputRunner(32))
+	b.Run("512 Bytes", throughputRunner(512))
+	b.Run("1024 Bytes", throughputRunner(1024))
+	b.Run("2048 Bytes", throughputRunner(2048))
+	b.Run("4096 Bytes", throughputRunner(4096))
+	b.Run("1mb", throughputRunner(1<<20))
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
 }
 
-func BenchmarkSyncThroughputPipe512(b *testing.B) {
+func BenchmarkSyncThroughputNetwork(b *testing.B) {
 	const testSize = 100000
-	const messageSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	reader, writer := net.Pipe()
+	reader, writer, err := pair.New()
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
 
-	randomData := make([]byte, messageSize)
+	throughputRunner := func(messageSize uint32) func(b *testing.B) {
+		return func(b *testing.B) {
+			b.SetBytes(testSize * int64(messageSize))
+			b.ReportAllocs()
 
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
+			randomData := make([]byte, messageSize)
 
-	done := make(chan struct{}, 1)
+			p := packet.Get()
+			p.Message.Id = 64
+			p.Message.Operation = 32
+			p.Write(randomData)
+			p.Message.ContentLength = messageSize
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
+			done := make(chan struct{}, 1)
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				go func() {
+					for i := 0; i < testSize; i++ {
+						p, _ := readerConn.ReadMessage()
+						packet.Put(p)
+					}
+					done <- struct{}{}
+				}()
+				for i := 0; i < testSize; i++ {
+					_ = writerConn.WriteMessage(p)
+				}
+				<-done
 			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
+			b.StopTimer()
+
+			packet.Put(p)
 		}
-		<-done
 	}
-	b.StopTimer()
+	b.Run("32 Bytes", throughputRunner(32))
+	b.Run("512 Bytes", throughputRunner(512))
+	b.Run("1024 Bytes", throughputRunner(1024))
+	b.Run("2048 Bytes", throughputRunner(2048))
+	b.Run("4096 Bytes", throughputRunner(4096))
+	b.Run("1mb", throughputRunner(1<<20))
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
-}
-
-func BenchmarkSyncThroughputNetwork32(b *testing.B) {
-	const testSize = 100000
-	const messageSize = 32
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-
-	var reader, writer net.Conn
-	start := make(chan struct{}, 1)
-
-	l, _ := net.Listen("tcp", ":0")
-
-	go func() {
-		reader, _ = l.Accept()
-		start <- struct{}{}
-	}()
-
-	writer, _ = net.Dial("tcp", l.Addr().String())
-	<-start
-
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
-
-	randomData := make([]byte, messageSize)
-
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
-
-	done := make(chan struct{}, 1)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
-			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
-		}
-		<-done
-	}
-	b.StopTimer()
-
-	_ = readerConn.Close()
-	_ = writerConn.Close()
-	_ = l.Close()
-}
-
-func BenchmarkSyncThroughputNetwork512(b *testing.B) {
-	const testSize = 100000
-	const messageSize = 512
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-
-	var reader, writer net.Conn
-	start := make(chan struct{}, 1)
-
-	l, _ := net.Listen("tcp", ":0")
-
-	go func() {
-		reader, _ = l.Accept()
-		start <- struct{}{}
-	}()
-
-	writer, _ = net.Dial("tcp", l.Addr().String())
-	<-start
-
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
-
-	randomData := make([]byte, messageSize)
-
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
-
-	done := make(chan struct{}, 1)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
-			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
-		}
-		<-done
-	}
-	b.StopTimer()
-
-	_ = readerConn.Close()
-	_ = writerConn.Close()
-	_ = l.Close()
-}
-
-func BenchmarkSyncThroughputNetwork1024(b *testing.B) {
-	const testSize = 100000
-	const messageSize = 1024
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-
-	var reader, writer net.Conn
-	start := make(chan struct{}, 1)
-
-	l, _ := net.Listen("tcp", ":0")
-
-	go func() {
-		reader, _ = l.Accept()
-		start <- struct{}{}
-	}()
-
-	writer, _ = net.Dial("tcp", l.Addr().String())
-	<-start
-
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
-
-	randomData := make([]byte, messageSize)
-
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
-
-	done := make(chan struct{}, 1)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
-			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
-		}
-		<-done
-	}
-	b.StopTimer()
-
-	_ = readerConn.Close()
-	_ = writerConn.Close()
-	_ = l.Close()
-}
-
-func BenchmarkSyncThroughputNetwork2048(b *testing.B) {
-	const testSize = 100000
-	const messageSize = 2048
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-
-	var reader, writer net.Conn
-	start := make(chan struct{}, 1)
-
-	l, _ := net.Listen("tcp", ":0")
-
-	go func() {
-		reader, _ = l.Accept()
-		start <- struct{}{}
-	}()
-
-	writer, _ = net.Dial("tcp", l.Addr().String())
-	<-start
-
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
-
-	randomData := make([]byte, messageSize)
-
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
-
-	done := make(chan struct{}, 1)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
-			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
-		}
-		<-done
-	}
-	b.StopTimer()
-
-	_ = readerConn.Close()
-	_ = writerConn.Close()
-	_ = l.Close()
-}
-
-func BenchmarkSyncThroughputNetwork4096(b *testing.B) {
-	const testSize = 100000
-	const messageSize = 4096
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-
-	var reader, writer net.Conn
-	start := make(chan struct{}, 1)
-
-	l, _ := net.Listen("tcp", ":0")
-
-	go func() {
-		reader, _ = l.Accept()
-		start <- struct{}{}
-	}()
-
-	writer, _ = net.Dial("tcp", l.Addr().String())
-	<-start
-
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
-
-	randomData := make([]byte, messageSize)
-
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
-
-	done := make(chan struct{}, 1)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
-			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
-		}
-		<-done
-	}
-	b.StopTimer()
-
-	_ = readerConn.Close()
-	_ = writerConn.Close()
-	_ = l.Close()
-}
-
-func BenchmarkSyncThroughputNetwork1mb(b *testing.B) {
-	const testSize = 10
-	const messageSize = 1 << 20
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-
-	var reader, writer net.Conn
-	start := make(chan struct{}, 1)
-
-	l, _ := net.Listen("tcp", ":0")
-
-	go func() {
-		reader, _ = l.Accept()
-		start <- struct{}{}
-	}()
-
-	writer, _ = net.Dial("tcp", l.Addr().String())
-	<-start
-
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
-
-	randomData := make([]byte, messageSize)
-
-	message := &Message{
-		To:            16,
-		From:          32,
-		Id:            64,
-		Operation:     32,
-		ContentLength: messageSize,
-	}
-
-	done := make(chan struct{}, 1)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			for i := 0; i < testSize; i++ {
-				readMessage, data, _ := readerConn.ReadMessage()
-				_ = data
-				_ = readMessage
-			}
-			done <- struct{}{}
-		}()
-		for i := 0; i < testSize; i++ {
-			_ = writerConn.WriteMessage(message, &randomData)
-		}
-		<-done
-	}
-	b.StopTimer()
-
-	_ = readerConn.Close()
-	_ = writerConn.Close()
-	_ = l.Close()
 }
