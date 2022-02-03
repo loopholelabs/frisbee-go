@@ -339,7 +339,7 @@ func (c *Async) flushLoop() {
 }
 
 func (c *Async) waitForPONG() {
-	timer := time.NewTimer(defaultDeadline * 10)
+	timer := time.NewTimer(defaultDeadline)
 	defer timer.Stop()
 	select {
 	case <-timer.C:
