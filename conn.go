@@ -17,13 +17,12 @@
 package frisbee
 
 import (
-	"bytes"
 	"crypto/tls"
-	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"net"
 	"os"
-	"sync"
 	"time"
 )
 
@@ -41,17 +40,6 @@ var (
 	NotTLSConnectionError = errors.New("connection is not of type *tls.Conn")
 )
 
-type incomingBuffer struct {
-	sync.Mutex
-	buffer *bytes.Buffer
-}
-
-func newIncomingBuffer() *incomingBuffer {
-	return &incomingBuffer{
-		buffer: bytes.NewBuffer(make([]byte, 0, DefaultBufferSize)),
-	}
-}
-
 type Conn interface {
 	Close() error
 	LocalAddr() net.Addr
@@ -60,8 +48,8 @@ type Conn interface {
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
-	WriteMessage(*Message, *[]byte) error
-	ReadMessage() (*Message, *[]byte, error)
+	WriteMessage(*packet.Packet) error
+	ReadMessage() (*packet.Packet, error)
 	Logger() *zerolog.Logger
 	Error() error
 	Raw() net.Conn
