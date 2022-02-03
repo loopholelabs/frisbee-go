@@ -428,12 +428,15 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 			p.Message.ContentLength = messageSize
 
 			done := make(chan struct{}, 1)
-
+			sum := 0
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				go func() {
 					for i := 0; i < testSize; i++ {
 						p, _ := readerConn.ReadMessage()
+						if p != nil {
+							sum += int(p.Message.Id)
+						}
 						packet.Put(p)
 					}
 					done <- struct{}{}

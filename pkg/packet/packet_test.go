@@ -37,8 +37,6 @@ func TestNew(t *testing.T) {
 }
 
 func TestRecycle(t *testing.T) {
-	t.Parallel()
-
 	pool := NewPool()
 
 	p := pool.Get()
