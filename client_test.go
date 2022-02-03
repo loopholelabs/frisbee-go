@@ -19,6 +19,7 @@ package frisbee
 import (
 	"crypto/rand"
 	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,23 +33,24 @@ func TestClientRaw(t *testing.T) {
 
 	const testSize = 100
 	const messageSize = 512
+
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverRouter[protocol.MessagePacket] = func(c *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePacket] = func(c *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		rawServerConn = c.Raw()
 		serverIsRaw <- struct{}{}
 		return
 	}
 
-	clientRouter[protocol.MessagePing] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	clientRouter[protocol.MessagePing] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
@@ -70,24 +72,20 @@ func TestClientRaw(t *testing.T) {
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
+	p := packet.Get()
+	p.Message.Operation = protocol.MessagePing
+	p.Write(data)
+	p.Message.ContentLength = messageSize
+
 	for q := 0; q < testSize; q++ {
-		err := c.WriteMessage(&Message{
-			To:            16,
-			From:          32,
-			Id:            uint64(q),
-			Operation:     protocol.MessagePing,
-			ContentLength: messageSize,
-		}, &data)
+		p.Message.Id = uint16(q)
+		err := c.WriteMessage(p)
 		assert.NoError(t, err)
 	}
+	p.Reset()
+	p.Message.Operation = protocol.MessagePacket
 
-	err = c.WriteMessage(&Message{
-		To:            16,
-		From:          32,
-		Id:            0,
-		Operation:     protocol.MessagePacket,
-		ContentLength: 0,
-	}, nil)
+	err = c.WriteMessage(p)
 	assert.NoError(t, err)
 
 	rawClientConn, err = c.Raw()
@@ -126,88 +124,90 @@ func BenchmarkClientThroughput(b *testing.B) {
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
-	clientRouter[protocol.MessagePing] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	clientRouter[protocol.MessagePing] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
 	err = s.Start()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
 	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 	err = c.Connect()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
+	p := packet.Get()
+
+	p.Message.Operation = protocol.MessagePing
+	p.Write(data)
+	p.Message.ContentLength = messageSize
 
 	b.Run("test", func(b *testing.B) {
+		b.SetBytes(testSize * messageSize)
+		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := c.WriteMessage(&Message{
-					To:            uint32(i),
-					From:          uint32(i),
-					Id:            uint64(q),
-					Operation:     protocol.MessagePing,
-					ContentLength: messageSize,
-				}, &data)
+				p.Message.Id = uint16(q)
+				err = c.WriteMessage(p)
 				if err != nil {
-					panic(err)
+					b.Fatal(err)
 				}
 			}
 		}
 	})
 	b.StopTimer()
+	packet.Put(p)
+
 	err = c.Close()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 	err = s.Shutdown()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 }
 
 func BenchmarkClientThroughputResponse(b *testing.B) {
-	const testSize = 100000
+	const testSize = 1<<16 - 1
 	const messageSize = 512
+
 	clientRouter := make(ClientRouter)
 	serverRouter := make(ServerRouter)
 
 	finished := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
-		if incomingMessage.Id == testSize-1 {
-			outgoingMessage = &Message{
-				To:            16,
-				From:          32,
-				Id:            testSize,
-				Operation:     protocol.MessagePong,
-				ContentLength: 0,
-			}
+	serverRouter[protocol.MessagePing] = func(_ *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		if incoming.Message.Id == testSize-1 {
+			incoming.Reset()
+			incoming.Message.Id = testSize
+			incoming.Message.Operation = protocol.MessagePong
+			outgoing = incoming
 		}
 		return
 	}
 
-	clientRouter[protocol.MessagePong] = func(incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
-		if incomingMessage.Id == testSize {
+	clientRouter[protocol.MessagePong] = func(incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		if incoming.Message.Id == testSize {
 			finished <- struct{}{}
 		}
 		return
@@ -216,51 +216,56 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	emptyLogger := zerolog.New(ioutil.Discard)
 	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
 	err = s.Start()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
 	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 	err = c.Connect()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
+	p := packet.Get()
+	p.Message.Operation = protocol.MessagePing
+
+	p.Write(data)
+	p.Message.ContentLength = messageSize
 
 	b.Run("test", func(b *testing.B) {
+		b.SetBytes(testSize * messageSize)
+		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := c.WriteMessage(&Message{
-					To:            uint32(i),
-					From:          uint32(i),
-					Id:            uint64(q),
-					Operation:     protocol.MessagePing,
-					ContentLength: messageSize,
-				}, &data)
+				p.Message.Id = uint16(q)
+				err = c.WriteMessage(p)
 				if err != nil {
-					panic(err)
+					b.Fatal(err)
 				}
 			}
 			<-finished
 		}
 	})
 	b.StopTimer()
+
+	packet.Put(p)
+
 	err = c.Close()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 	err = s.Shutdown()
 	if err != nil {
-		panic(err)
+		b.Fatal(err)
 	}
 }
