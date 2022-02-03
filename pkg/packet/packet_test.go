@@ -18,6 +18,8 @@ package packet
 
 import (
 	"github.com/stretchr/testify/assert"
+	"runtime"
+	"runtime/debug"
 	"testing"
 )
 
@@ -37,6 +39,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestRecycle(t *testing.T) {
+	debug.SetGCPercent(-1)
+	runtime.GC()
 	pool := NewPool()
 
 	p := pool.Get()
@@ -70,4 +74,6 @@ func TestRecycle(t *testing.T) {
 	assert.Equal(t, 32, cap(p.Content))
 
 	pool.Put(p)
+
+	debug.SetGCPercent(100)
 }
