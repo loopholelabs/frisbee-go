@@ -359,53 +359,18 @@ func BenchmarkAsyncThroughputPipe(b *testing.B) {
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
 
-	throughputRunner := func(messageSize uint32) func(b *testing.B) {
-		return func(b *testing.B) {
-			b.SetBytes(testSize * int64(messageSize))
-			b.ReportAllocs()
-
-			randomData := make([]byte, messageSize)
-
-			p := packet.Get()
-			p.Message.Id = 64
-			p.Message.Operation = 32
-			p.Write(randomData)
-			p.Message.ContentLength = messageSize
-
-			done := make(chan struct{}, 1)
-
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				go func() {
-					for i := 0; i < testSize; i++ {
-						p, _ := readerConn.ReadMessage()
-						packet.Put(p)
-					}
-					done <- struct{}{}
-				}()
-				for i := 0; i < testSize; i++ {
-					_ = writerConn.WriteMessage(p)
-				}
-				<-done
-			}
-			b.StopTimer()
-
-			packet.Put(p)
-		}
-	}
-
-	b.Run("32 Bytes", throughputRunner(32))
-	b.Run("512 Bytes", throughputRunner(512))
-	b.Run("1024 Bytes", throughputRunner(1024))
-	b.Run("2048 Bytes", throughputRunner(2048))
-	b.Run("4096 Bytes", throughputRunner(4096))
+	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
+	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))
+	b.Run("1024 Bytes", throughputRunner(testSize, 1024, readerConn, writerConn))
+	b.Run("2048 Bytes", throughputRunner(testSize, 2048, readerConn, writerConn))
+	b.Run("4096 Bytes", throughputRunner(testSize, 4096, readerConn, writerConn))
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
 }
 
 func BenchmarkAsyncThroughputNetwork(b *testing.B) {
-	const testSize = 100000
+	const testSize = 1<<16 - 1
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -417,57 +382,11 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
 
-	throughputRunner := func(messageSize uint32) func(b *testing.B) {
-		return func(b *testing.B) {
-			b.SetBytes(testSize * int64(messageSize))
-			b.ReportAllocs()
-
-			randomData := make([]byte, messageSize)
-
-			p := packet.Get()
-			p.Message.Id = 64
-			p.Message.Operation = 32
-			p.Write(randomData)
-			p.Message.ContentLength = messageSize
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				done := make(chan struct{}, 1)
-				errCh := make(chan error, 1)
-				go func() {
-					for i := 0; i < testSize; i++ {
-						p, err := readerConn.ReadMessage()
-						if err != nil {
-							errCh <- err
-							return
-						}
-						packet.Put(p)
-					}
-					done <- struct{}{}
-				}()
-				for i := 0; i < testSize; i++ {
-					err = writerConn.WriteMessage(p)
-					if err != nil {
-						b.Fatal(err)
-					}
-				}
-				select {
-				case <-done:
-					continue
-				case err := <-errCh:
-					b.Fatal(err)
-				}
-			}
-			b.StopTimer()
-
-			packet.Put(p)
-		}
-	}
-	b.Run("32 Bytes", throughputRunner(32))
-	b.Run("512 Bytes", throughputRunner(512))
-	b.Run("1024 Bytes", throughputRunner(1024))
-	b.Run("2048 Bytes", throughputRunner(2048))
-	b.Run("4096 Bytes", throughputRunner(4096))
-	b.Run("1mb", throughputRunner(1<<20))
+	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
+	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))
+	b.Run("1024 Bytes", throughputRunner(testSize, 1024, readerConn, writerConn))
+	b.Run("2048 Bytes", throughputRunner(testSize, 2048, readerConn, writerConn))
+	b.Run("4096 Bytes", throughputRunner(testSize, 4096, readerConn, writerConn))
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
