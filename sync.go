@@ -17,11 +17,11 @@
 package frisbee
 
 import (
-	"bytes"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/errors"
 	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"io"
@@ -55,7 +55,7 @@ func ConnectSync(addr string, keepAlive time.Duration, logger *zerolog.Logger, T
 	}
 
 	if err != nil {
-		return nil, errors.WithContext(err, DIAL)
+		return nil, err
 	}
 
 	return NewSync(conn, logger), nil
@@ -113,18 +113,16 @@ func (c *Sync) RemoteAddr() net.Addr {
 // WriteMessage takes a frisbee.Message and some (optional) accompanying content, sends it synchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
-func (c *Sync) WriteMessage(message *Message, content *[]byte) error {
-	if content != nil && int(message.ContentLength) != len(*content) {
+func (c *Sync) WriteMessage(p *packet.Packet) error {
+	if int(p.Message.ContentLength) != len(p.Content) {
 		return InvalidContentLength
 	}
 
-	encodedMessage := [protocol.MessageSize]byte{protocol.ReservedBytes[0], protocol.ReservedBytes[1], protocol.ReservedBytes[2], protocol.ReservedBytes[3]}
+	var encodedMessage [protocol.MessageSize]byte
 
-	binary.BigEndian.PutUint32(encodedMessage[protocol.FromOffset:protocol.FromOffset+protocol.FromSize], message.From)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ToOffset:protocol.ToOffset+protocol.ToSize], message.To)
-	binary.BigEndian.PutUint64(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], message.Id)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], message.Operation)
-	binary.BigEndian.PutUint64(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], message.ContentLength)
+	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Message.Id)
+	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Message.Operation)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Message.ContentLength)
 
 	c.Lock()
 	if c.closed.Load() {
@@ -136,21 +134,21 @@ func (c *Sync) WriteMessage(message *Message, content *[]byte) error {
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
-			c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
-			return errors.WithContext(ConnectionClosed, WRITE)
+			c.Logger().Error().Err(ConnectionClosed).Msg("error while writing to underlying net.Conn")
+			return ConnectionClosed
 		}
-		c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+		c.Logger().Error().Err(err).Msg("error while writing to underlying net.Conn")
 		return c.closeWithError(err)
 	}
-	if content != nil {
-		_, err = c.conn.Write(*content)
+	if p.Message.ContentLength != 0 {
+		_, err = c.conn.Write(p.Content[:p.Message.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
-				c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, WRITE).Error())
-				return errors.WithContext(ConnectionClosed, WRITE)
+				c.Logger().Error().Err(ConnectionClosed).Msg("error while writing to underlying net.Conn")
+				return ConnectionClosed
 			}
-			c.logger.Error().Msgf(errors.WithContext(err, WRITE).Error())
+			c.Logger().Error().Err(err).Msg("error while writing to underlying net.Conn")
 			return c.closeWithError(err)
 		}
 	}
@@ -161,54 +159,44 @@ func (c *Sync) WriteMessage(message *Message, content *[]byte) error {
 
 // ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
-func (c *Sync) ReadMessage() (*Message, *[]byte, error) {
+func (c *Sync) ReadMessage() (*packet.Packet, error) {
 	if c.closed.Load() {
-		return nil, nil, ConnectionClosed
+		return nil, ConnectionClosed
 	}
 	var encodedMessage [protocol.MessageSize]byte
 
 	_, err := io.ReadAtLeast(c.conn, encodedMessage[:], protocol.MessageSize)
 	if err != nil {
 		if c.closed.Load() {
-			c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, POP).Error())
-			return nil, nil, errors.WithContext(ConnectionClosed, POP)
+			c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
+			return nil, ConnectionClosed
 		}
-		c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
-		return nil, nil, errors.WithContext(c.closeWithError(err), POP)
+		c.Logger().Error().Err(err).Msg("error while reading from underlying net.Conn")
+		return nil, c.closeWithError(err)
 	}
+	p := packet.Get()
 
-	message := new(Message)
+	p.Message.Id = binary.BigEndian.Uint16(encodedMessage[protocol.IdOffset : protocol.IdOffset+protocol.IdSize])
+	p.Message.Operation = binary.BigEndian.Uint16(encodedMessage[protocol.OperationOffset : protocol.OperationOffset+protocol.OperationSize])
+	p.Message.ContentLength = binary.BigEndian.Uint32(encodedMessage[protocol.ContentLengthOffset : protocol.ContentLengthOffset+protocol.ContentLengthSize])
 
-	if !bytes.Equal(encodedMessage[protocol.ReservedOffset:protocol.ReservedOffset+protocol.ReservedSize], protocol.ReservedBytes) {
-		if c.closed.Load() {
-			c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, POP).Error())
-			return nil, nil, errors.WithContext(ConnectionClosed, POP)
+	if p.Message.ContentLength > 0 {
+		for cap(p.Content) < int(p.Message.ContentLength) {
+			p.Content = append(p.Content[:cap(p.Content)], 0)
 		}
-		c.logger.Error().Msgf(errors.WithContext(protocol.InvalidMessageVersion, POP).Error())
-		return nil, nil, errors.WithContext(c.closeWithError(protocol.InvalidMessageVersion), POP)
-	}
-
-	message.From = binary.BigEndian.Uint32(encodedMessage[protocol.FromOffset : protocol.FromOffset+protocol.FromSize])
-	message.To = binary.BigEndian.Uint32(encodedMessage[protocol.ToOffset : protocol.ToOffset+protocol.ToSize])
-	message.Id = binary.BigEndian.Uint64(encodedMessage[protocol.IdOffset : protocol.IdOffset+protocol.IdSize])
-	message.Operation = binary.BigEndian.Uint32(encodedMessage[protocol.OperationOffset : protocol.OperationOffset+protocol.OperationSize])
-	message.ContentLength = binary.BigEndian.Uint64(encodedMessage[protocol.ContentLengthOffset : protocol.ContentLengthOffset+protocol.ContentLengthSize])
-
-	if message.ContentLength > 0 {
-		content := make([]byte, message.ContentLength)
-		_, err = io.ReadAtLeast(c.conn, content, int(message.ContentLength))
+		p.Content = p.Content[:p.Message.ContentLength]
+		_, err = io.ReadAtLeast(c.conn, p.Content[0:], int(p.Message.ContentLength))
 		if err != nil {
 			if c.closed.Load() {
-				c.logger.Error().Msgf(errors.WithContext(ConnectionClosed, POP).Error())
-				return nil, nil, errors.WithContext(ConnectionClosed, POP)
+				c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
+				return nil, ConnectionClosed
 			}
-			c.logger.Error().Msgf(errors.WithContext(err, POP).Error())
-			return nil, nil, errors.WithContext(c.closeWithError(err), POP)
+			c.Logger().Error().Err(err).Msg("error while reading from underlying net.Conn")
+			return nil, c.closeWithError(err)
 		}
-		return message, &content, nil
 	}
 
-	return message, nil, nil
+	return p, nil
 }
 
 // Logger returns the underlying logger of the frisbee connection
