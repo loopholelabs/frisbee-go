@@ -18,8 +18,6 @@ package packet
 
 import (
 	"github.com/stretchr/testify/assert"
-	"runtime"
-	"runtime/debug"
 	"testing"
 )
 
@@ -39,8 +37,6 @@ func TestNew(t *testing.T) {
 }
 
 func TestRecycle(t *testing.T) {
-	debug.SetGCPercent(-1)
-	runtime.GC()
 	pool := NewPool()
 
 	p := pool.Get()
@@ -50,30 +46,32 @@ func TestRecycle(t *testing.T) {
 	p.Message.ContentLength = 128
 
 	pool.Put(p)
-
 	p = pool.Get()
-	assert.NotNil(t, p.Message)
-	assert.Equal(t, uint16(0), p.Message.Id)
-	assert.Equal(t, uint16(0), p.Message.Operation)
-	assert.Equal(t, uint32(0), p.Message.ContentLength)
-	assert.Nil(t, p.Content)
+	for {
+		assert.NotNil(t, p.Message)
+		assert.Equal(t, uint16(0), p.Message.Id)
+		assert.Equal(t, uint16(0), p.Message.Operation)
+		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.Nil(t, p.Content)
 
-	p.Content = make([]byte, 32)
-	assert.Equal(t, 32, len(p.Content))
+		p.Content = make([]byte, 32)
+		assert.Equal(t, 32, len(p.Content))
+
+		pool.Put(p)
+		p = pool.Get()
+		assert.NotNil(t, p.Message)
+		assert.Equal(t, uint16(0), p.Message.Id)
+		assert.Equal(t, uint16(0), p.Message.Operation)
+		assert.Equal(t, uint32(0), p.Message.ContentLength)
+
+		if p.Content == nil {
+			continue
+		} else {
+			assert.Equal(t, 0, len(p.Content))
+			assert.Equal(t, 32, cap(p.Content))
+			break
+		}
+	}
 
 	pool.Put(p)
-	p = pool.Get()
-
-	assert.NotNil(t, p.Message)
-	assert.Equal(t, uint16(0), p.Message.Id)
-	assert.Equal(t, uint16(0), p.Message.Operation)
-	assert.Equal(t, uint32(0), p.Message.ContentLength)
-
-	assert.NotNil(t, p.Content)
-	assert.Equal(t, 0, len(p.Content))
-	assert.Equal(t, 32, cap(p.Content))
-
-	pool.Put(p)
-
-	debug.SetGCPercent(100)
 }
