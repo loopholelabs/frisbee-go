@@ -2,7 +2,8 @@
 
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-brightgreen.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![Build Status](https://loopholelabs.semaphoreci.com/badges/frisbee/branches/master.svg?style=shields&key=0ac9069a-bd8c-4d06-8790-97ba3f70d528)](https://loopholelabs.semaphoreci.com/projects/frisbee)
+[![Tests](https://github.com/loopholelabs/frisbee/actions/workflows/tests.yml/badge.svg)](https://github.com/loopholelabs/frisbee/actions/workflows/tests.yml)
+[![Benchmarks](https://github.com/loopholelabs/frisbee/actions/workflows/benchmarks.yaml/badge.svg)](https://github.com/loopholelabs/frisbee/actions/workflows/benchmarks.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/loopholelabs/frisbee)](https://goreportcard.com/report/github.com/loopholelabs/frisbee)
 [![go-doc](https://godoc.org/github.com/loopholelabs/frisbee?status.svg)](https://godoc.org/github.com/loopholelabs/frisbee)
 
