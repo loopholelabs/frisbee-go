@@ -142,7 +142,7 @@ func (c *Async) CloseChannel() <-chan struct{} {
 	return c.closeCh
 }
 
-// WriteMessage takes a packet.Packet and queues it up to send asynchronously.
+// WritePacket takes a packet.Packet and queues it up to send asynchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
@@ -209,7 +209,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	return nil
 }
 
-// ReadMessage is a blocking function that will wait until a Frisbee message is available and then return it (and its content).
+// ReadPacket is a blocking function that will wait until a Frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
 func (c *Async) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {

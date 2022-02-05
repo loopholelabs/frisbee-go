@@ -350,7 +350,7 @@ func BenchmarkSyncThroughputPipe(b *testing.B) {
 }
 
 func BenchmarkSyncThroughputNetwork(b *testing.B) {
-	const testSize = 100000
+	const testSize = 1<<16 - 1
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 

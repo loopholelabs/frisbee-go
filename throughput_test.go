@@ -20,14 +20,18 @@
 package frisbee
 
 import (
+	"bufio"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
+	"io"
 	"io/ioutil"
+	"net"
 	"testing"
+	"time"
 )
 
 func BenchmarkAsyncThroughputLarge(b *testing.B) {
-	const testSize = 100
+	const testSize = 1<<16 - 1
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -50,7 +54,7 @@ func BenchmarkAsyncThroughputLarge(b *testing.B) {
 }
 
 func BenchmarkSyncThroughputLarge(b *testing.B) {
-	const testSize = 100
+	const testSize = 1<<16 - 1
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -70,4 +74,90 @@ func BenchmarkSyncThroughputLarge(b *testing.B) {
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
+}
+
+func BenchmarkTCPThroughput(b *testing.B) {
+	const testSize = 1<<16 - 1
+
+	reader, writer, err := pair.New()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	TCPThroughputRunner := func(testSize uint32, messageSize uint32, readerConn net.Conn, writerConn net.Conn) func(*testing.B) {
+		bufWriter := bufio.NewWriter(writerConn)
+		bufReader := bufio.NewReader(readerConn)
+		return func(b *testing.B) {
+			b.SetBytes(int64(testSize * messageSize))
+			b.ReportAllocs()
+			var err error
+
+			randomData := make([]byte, messageSize)
+			readData := make([]byte, messageSize)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				done := make(chan struct{}, 1)
+				errCh := make(chan error, 1)
+				go func() {
+					for i := uint32(0); i < testSize; i++ {
+						err := readerConn.SetReadDeadline(time.Now().Add(defaultDeadline))
+						if err != nil {
+							errCh <- err
+							return
+						}
+						_, err = io.ReadAtLeast(bufReader, readData[0:], int(messageSize))
+						if err != nil {
+							errCh <- err
+							return
+						}
+					}
+					done <- struct{}{}
+				}()
+				for i := uint32(0); i < testSize; i++ {
+					select {
+					case err = <-errCh:
+						b.Fatal(err)
+					default:
+						err = writerConn.SetWriteDeadline(time.Now().Add(defaultDeadline))
+						if err != nil {
+							b.Fatal(err)
+						}
+						_, err = bufWriter.Write(randomData)
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+				err = writerConn.SetWriteDeadline(time.Now().Add(defaultDeadline))
+				if err != nil {
+					b.Fatal(err)
+				}
+				err = bufWriter.Flush()
+				if err != nil {
+					b.Fatal(err)
+				}
+				select {
+				case <-done:
+					continue
+				case err := <-errCh:
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+		}
+	}
+
+	b.Run("32 Bytes", TCPThroughputRunner(testSize, 32, reader, writer))
+	b.Run("512 Bytes", TCPThroughputRunner(testSize, 512, reader, writer))
+	b.Run("1024 Bytes", TCPThroughputRunner(testSize, 1024, reader, writer))
+	b.Run("2048 Bytes", TCPThroughputRunner(testSize, 2048, reader, writer))
+	b.Run("4096 Bytes", TCPThroughputRunner(testSize, 4096, reader, writer))
+	b.Run("1MB", TCPThroughputRunner(testSize, 1<<20, reader, writer))
+	b.Run("2MB", TCPThroughputRunner(testSize, 1<<21, reader, writer))
+	b.Run("4MB", TCPThroughputRunner(testSize, 1<<22, reader, writer))
+	b.Run("8MB", TCPThroughputRunner(testSize, 1<<23, reader, writer))
+	b.Run("16MB", TCPThroughputRunner(testSize, 1<<24, reader, writer))
+
+	_ = reader.Close()
+	_ = writer.Close()
 }

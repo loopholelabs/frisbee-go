@@ -110,7 +110,7 @@ func (c *Sync) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-// WriteMessage takes a packet.Packet and sends it synchronously.
+// WritePacket takes a packet.Packet and sends it synchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
 func (c *Sync) WritePacket(p *packet.Packet) error {
@@ -157,7 +157,7 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 	return nil
 }
 
-// ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
+// ReadPacket is a blocking function that will wait until a frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
 func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
