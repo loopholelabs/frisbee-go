@@ -19,8 +19,8 @@ package frisbee
 import (
 	"crypto/rand"
 	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
@@ -30,6 +30,8 @@ import (
 )
 
 func TestServerRaw(t *testing.T) {
+	t.Parallel()
+
 	const testSize = 100
 	const messageSize = 512
 	clientRouter := make(ClientRouter)
@@ -37,18 +39,18 @@ func TestServerRaw(t *testing.T) {
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverRouter[protocol.MessagePacket] = func(c *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	serverRouter[protocol.MessagePacket] = func(c *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		rawServerConn = c.Raw()
 		serverIsRaw <- struct{}{}
 		return
 	}
 
-	clientRouter[protocol.MessagePing] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	clientRouter[protocol.MessagePing] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
@@ -69,26 +71,24 @@ func TestServerRaw(t *testing.T) {
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
+	p := packet.Get()
+	p.Write(data)
+	p.Metadata.ContentLength = messageSize
+	p.Metadata.Operation = protocol.MessagePing
 
 	for q := 0; q < testSize; q++ {
-		err := c.WriteMessage(&Message{
-			To:            16,
-			From:          32,
-			Id:            uint64(q),
-			Operation:     protocol.MessagePing,
-			ContentLength: messageSize,
-		}, &data)
+		p.Metadata.Id = uint16(q)
+		err = c.WriteMessage(p)
 		assert.NoError(t, err)
 	}
 
-	err = c.WriteMessage(&Message{
-		To:            16,
-		From:          32,
-		Id:            0,
-		Operation:     protocol.MessagePacket,
-		ContentLength: 0,
-	}, nil)
-	assert.NoError(t, err)
+	p.Reset()
+	p.Metadata.Operation = protocol.MessagePacket
+
+	err = c.WriteMessage(p)
+	require.NoError(t, err)
+
+	packet.Put(p)
 
 	rawClientConn, err = c.Raw()
 	require.NoError(t, err)
@@ -120,81 +120,79 @@ func TestServerRaw(t *testing.T) {
 }
 
 func BenchmarkThroughput(b *testing.B) {
-	const testSize = 100000
+	const testSize = 1<<16 - 1
 	const messageSize = 512
+
 	router := make(ServerRouter)
 
-	router[protocol.MessagePing] = func(_ *Async, _ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+	router[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 	server, err := NewServer(":0", router, WithLogger(&emptyLogger))
 	if err != nil {
-		log.Printf("Could not start server")
-		panic(err)
+		b.Fatal(err)
 	}
 
 	err = server.Start()
 	if err != nil {
-		log.Printf("Could not start server")
-		panic(err)
+		b.Fatal(err)
 	}
 
 	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
 	if err != nil {
-		log.Printf("Could not connect to server")
-		panic(err)
+		b.Fatal(err)
 	}
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
+	p := packet.Get()
+	p.Metadata.Operation = protocol.MessagePing
+
+	p.Write(data)
+	p.Metadata.ContentLength = messageSize
 
 	b.Run("test", func(b *testing.B) {
+		b.SetBytes(testSize * messageSize)
+		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := frisbeeConn.WriteMessage(&Message{
-					To:            uint32(i),
-					From:          uint32(i),
-					Id:            uint64(q),
-					Operation:     protocol.MessagePing,
-					ContentLength: messageSize,
-				}, &data)
+				p.Metadata.Id = uint16(q)
+				err = frisbeeConn.WritePacket(p)
 				if err != nil {
-					log.Printf("Could not write to server")
-					panic(err)
+					b.Fatal(err)
 				}
 			}
 		}
 	})
 	b.StopTimer()
+
+	packet.Put(p)
+
 	err = frisbeeConn.Close()
 	if err != nil {
-		log.Printf("Could not disconnect from server")
-		panic(err)
+		b.Fatal(err)
 	}
 	err = server.Shutdown()
 	if err != nil {
-		log.Printf("Could not shut down server")
-		panic(err)
+		b.Fatal(err)
 	}
 }
 
 func BenchmarkThroughputWithResponse(b *testing.B) {
-	const testSize = 100000
+	const testSize = 1<<16 - 1
 	const messageSize = 512
+
 	router := make(ServerRouter)
 
-	router[protocol.MessagePing] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
-		if incomingMessage.Id == testSize-1 {
-			outgoingMessage = &Message{
-				To:            16,
-				From:          32,
-				Id:            testSize,
-				Operation:     protocol.MessagePong,
-				ContentLength: 0,
-			}
+	router[protocol.MessagePing] = func(_ *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		if incoming.Metadata.Id == testSize-1 {
+			incoming.Reset()
+			incoming.Metadata.Id = testSize
+			incoming.Metadata.Operation = protocol.MessagePong
+			outgoing = incoming
 		}
 		return
 	}
@@ -202,63 +200,62 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	emptyLogger := zerolog.New(ioutil.Discard)
 	server, err := NewServer(":0", router, WithLogger(&emptyLogger))
 	if err != nil {
-		log.Printf("Could not start server")
-		panic(err)
+		b.Fatal(err)
 	}
 
 	err = server.Start()
 	if err != nil {
-		log.Printf("Could not start server")
-		panic(err)
+		b.Fatal(err)
 	}
 
 	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
 	if err != nil {
-		log.Printf("Could not connect to server")
-		panic(err)
+		b.Fatal(err)
 	}
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
-	b.Run("test", func(b *testing.B) {
-		b.ResetTimer()
+	p := packet.Get()
+	p.Metadata.Operation = protocol.MessagePing
 
+	p.Write(data)
+	p.Metadata.ContentLength = messageSize
+
+	b.Run("test", func(b *testing.B) {
+		b.SetBytes(testSize * messageSize)
+		b.ReportAllocs()
+		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				err := frisbeeConn.WriteMessage(&Message{
-					To:            uint32(i),
-					From:          uint32(i),
-					Id:            uint64(q),
-					Operation:     protocol.MessagePing,
-					ContentLength: messageSize,
-				}, &data)
+				p.Metadata.Id = uint16(q)
+				err = frisbeeConn.WritePacket(p)
 				if err != nil {
-					log.Printf("Could not write to server")
-					panic(err)
+					b.Fatal(err)
 				}
 			}
-			message, _, err := frisbeeConn.ReadMessage()
+			readPacket, err := frisbeeConn.ReadPacket()
 			if err != nil {
-				panic(err)
+				b.Fatal(err)
 			}
 
-			if message.Id != testSize {
-				log.Printf("Could retrieve data from server")
-				panic("invalid decoded message id")
+			if readPacket.Metadata.Id != testSize {
+				b.Fatal("invalid decoded message id")
 			}
+			packet.Put(readPacket)
 		}
 
 	})
 	b.StopTimer()
+
+	packet.Put(p)
+
 	err = frisbeeConn.Close()
 	if err != nil {
-		log.Printf("Could not disconnect from server")
-		panic(err)
+		b.Fatal(err)
 	}
 	err = server.Shutdown()
 	if err != nil {
-		log.Printf("Could not shut down server")
-		panic(err)
+		b.Fatal(err)
 	}
 }

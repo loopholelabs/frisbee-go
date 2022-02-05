@@ -17,7 +17,7 @@
 package frisbee
 
 import (
-	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -26,10 +26,10 @@ import (
 )
 
 // ClientRouterFunc defines a message handler for a specific frisbee message
-type ClientRouterFunc func(incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+type ClientRouterFunc func(incoming *packet.Packet) (outgoing *packet.Packet, action Action)
 
 // ClientRouter maps frisbee message types to specific handler functions (of type ClientRouterFunc)
-type ClientRouter map[uint32]ClientRouterFunc
+type ClientRouter map[uint16]ClientRouterFunc
 
 // Client connects to a frisbee Server and can send and receive frisbee messages
 type Client struct {
@@ -46,7 +46,7 @@ type Client struct {
 // The ConnectAsync method must then be called to dial the server and initialize the connection
 func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error) {
 
-	for i := uint32(0); i < RESERVED9; i++ {
+	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := router[i]; ok {
 			return nil, InvalidRouter
 		}
@@ -56,7 +56,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 	var heartbeatChannel chan struct{}
 	if options.Heartbeat > time.Duration(0) {
 		heartbeatChannel = make(chan struct{}, 1)
-		router[HEARTBEAT] = func(_ Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
+		router[HEARTBEAT] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
 			heartbeatChannel <- struct{}{}
 			return
 		}
@@ -95,16 +95,6 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-// StreamChannel returns a channel that can be listened on to retrieve stream connections as they're created
-func (c *Client) StreamChannel() <-chan *Stream {
-	return c.conn.StreamChannel()
-}
-
-// NewStreamConn creates a new Stream from the underlying frisbee.Async
-func (c *Client) NewStreamConn(id uint64) *Stream {
-	return c.conn.NewStream(id)
-}
-
 // Closed checks whether this client has been closed
 func (c *Client) Closed() bool {
 	return c.closed.Load()
@@ -128,9 +118,9 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// WriteMessage sends a frisbee Message from the client to the server
-func (c *Client) WriteMessage(message *Message, content *[]byte) error {
-	return c.conn.WriteMessage(message, content)
+// WriteMessage sends a frisbee packet.Packet from the client to the server
+func (c *Client) WriteMessage(p *packet.Packet) error {
+	return c.conn.WritePacket(p)
 }
 
 // Flush flushes any queued frisbee Messages from the client to the server
@@ -168,32 +158,31 @@ func (c *Client) reactor() {
 		if c.closed.Load() {
 			return
 		}
-		incomingMessage, incomingContent, err := c.conn.ReadMessage()
+		p, err := c.conn.ReadPacket()
 		if err != nil {
-			c.Logger().Error().Msgf(errors.WithContext(err, READCONN).Error())
+			c.Logger().Error().Err(err).Msg("error while reading from frisbee connection")
 			_ = c.Close()
 			return
 		}
 
-		routerFunc := c.router[incomingMessage.Operation]
+		routerFunc := c.router[p.Metadata.Operation]
 		if routerFunc != nil {
-			var outgoingMessage *Message
-			var outgoingContent []byte
 			var action Action
-			if incomingMessage.ContentLength == 0 || incomingContent == nil {
-				outgoingMessage, outgoingContent, action = routerFunc(*incomingMessage, nil)
-			} else {
-				outgoingMessage, outgoingContent, action = routerFunc(*incomingMessage, *incomingContent)
-			}
+			var outgoing *packet.Packet
+			outgoing, action = routerFunc(p)
 
-			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
-				err = c.conn.WriteMessage(outgoingMessage, &outgoingContent)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+				err = c.conn.WritePacket(p)
 				if err != nil {
-					c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())
+					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
 					_ = c.Close()
 					return
 				}
 			}
+			if outgoing != p {
+				packet.Put(outgoing)
+			}
+			packet.Put(p)
 
 			switch action {
 			case CLOSE:
@@ -218,9 +207,9 @@ func (c *Client) heartbeat() {
 			return
 		}
 		if c.conn.WriteBufferSize() == 0 {
-			err := c.WriteMessage(HEARTBEATMessage, nil)
+			err := c.WriteMessage(HEARTBEATPacket)
 			if err != nil {
-				c.Logger().Error().Msgf(errors.WithContext(err, WRITECONN).Error())
+				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
 				_ = c.Close()
 				return
 			}

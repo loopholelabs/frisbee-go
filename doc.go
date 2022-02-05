@@ -24,8 +24,6 @@
 //
 // In depth documentation and examples can be found at https://loopholelabs.io/docs/frisbee
 //
-// All exported functions and methods are safe to be used concurrently unless
-// specified otherwise.
 //
 // An Echo Example
 //
@@ -35,25 +33,20 @@
 //
 //	import (
 //		"github.com/loopholelabs/frisbee"
+//      "github.com/loopholelabs/frisbee/pkg/packet"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"
 //	)
 //
-//	const PING = uint32(1)
-//	const PONG = uint32(2)
+//	const PING = uint16(10)
+//	const PONG = uint16(11)
 //
-//	func handlePing(_ *frisbee.Async, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+//	func handlePing(_ *frisbee.Async, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
 //		if incomingMessage.ContentLength > 0 {
-//			log.Printf("Server Received Message: %s", incomingContent)
-//			outgoingMessage = &frisbee.Message{
-//				From:          incomingMessage.From,
-//				To:            incomingMessage.To,
-//				Id:            incomingMessage.Id,
-//				Operation:     PONG,
-//				ContentLength: incomingMessage.ContentLength,
-//			}
-//			outgoingContent = incomingContent
+//			log.Printf("Server Received Metadata: %s\n", incoming.Content)
+//          incoming.Metadata.Operation = PONG
+//			outgoing = incoming
 //		}
 //
 //		return
@@ -84,18 +77,19 @@
 //	import (
 //		"fmt"
 //		"github.com/loopholelabs/frisbee"
+//		"github.com/loopholelabs/frisbee/pkg/packet"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"
 //		"time"
 //	)
 //
-//	const PING = uint32(1)
-//	const PONG = uint32(2)
+//	const PING = uint16(10)
+//	const PONG = uint16(11)
 //
-//	func handlePong(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+//	func handlePong(incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
 //		if incomingMessage.ContentLength > 0 {
-//			log.Printf("Client Received Message: %s", string(incomingContent))
+//			log.Printf("Client Received Metadata: %s\n", incoming.Content)
 //		}
 //		return
 //	}
@@ -117,15 +111,12 @@
 //
 //		go func() {
 //			i := 0
+//			p := packet.Get()
+//			p.Metadata.Operation = PING
 //			for {
-//				message := []byte(fmt.Sprintf("ECHO MESSAGE: %d", i))
-//				err := c.WriteMessage(&frisbee.Message{
-//					To:            0,
-//					From:          0,
-//					Id:            uint32(i),
-//					Operation:     PING,
-//					ContentLength: uint64(len(message)),
-//				}, &message)
+//				p.Write([]byte(fmt.Sprintf("ECHO MESSAGE: %d", i)))
+//				p.Metadata.ContentLength = uint32(len(p.Content))
+//				err := c.WritePacket(p)
 //				if err != nil {
 //					panic(err)
 //				}
