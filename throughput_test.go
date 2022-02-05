@@ -31,7 +31,7 @@ import (
 )
 
 func BenchmarkAsyncThroughputLarge(b *testing.B) {
-	const testSize = 1<<16 - 1
+	const testSize = 100
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -77,7 +77,7 @@ func BenchmarkSyncThroughputLarge(b *testing.B) {
 }
 
 func BenchmarkTCPThroughput(b *testing.B) {
-	const testSize = 1<<16 - 1
+	const testSize = 100
 
 	reader, writer, err := pair.New()
 	if err != nil {
