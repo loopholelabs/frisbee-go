@@ -73,21 +73,21 @@ const (
 var (
 	// HEARTBEATPacket is a pre-allocated Frisbee Packet for HEARTBEAT Messages
 	HEARTBEATPacket = &packet.Packet{
-		Message: &protocol.Message{
+		Metadata: &protocol.Message{
 			Operation: HEARTBEAT,
 		},
 	}
 
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Messages
 	PINGPacket = &packet.Packet{
-		Message: &protocol.Message{
+		Metadata: &protocol.Message{
 			Operation: PING,
 		},
 	}
 
 	// PONGPacket is a pre-allocated Frisbee Packet for PONG Messages
 	PONGPacket = &packet.Packet{
-		Message: &protocol.Message{
+		Metadata: &protocol.Message{
 			Operation: PONG,
 		},
 	}

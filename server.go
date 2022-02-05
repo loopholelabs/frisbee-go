@@ -175,22 +175,22 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 
 	for {
-		p, err := frisbeeConn.ReadMessage()
+		p, err := frisbeeConn.ReadPacket()
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.onClosed(frisbeeConn, err)
 			return
 		}
 
-		routerFunc := s.router[p.Message.Operation]
+		routerFunc := s.router[p.Metadata.Operation]
 		if routerFunc != nil {
 			var action Action
 			var outgoing *packet.Packet
 			outgoing, action = routerFunc(frisbeeConn, p)
 
-			if outgoing != nil && outgoing.Message.ContentLength == uint32(len(outgoing.Content)) {
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
 				s.preWrite()
-				err = frisbeeConn.WriteMessage(p)
+				err = frisbeeConn.WritePacket(p)
 				if err != nil {
 					_ = frisbeeConn.Close()
 					s.onClosed(frisbeeConn, err)

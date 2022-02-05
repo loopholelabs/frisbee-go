@@ -48,8 +48,8 @@ type Conn interface {
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
-	WriteMessage(*packet.Packet) error
-	ReadMessage() (*packet.Packet, error)
+	WritePacket(*packet.Packet) error
+	ReadPacket() (*packet.Packet, error)
 	Logger() *zerolog.Logger
 	Error() error
 	Raw() net.Conn

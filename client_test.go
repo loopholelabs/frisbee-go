@@ -73,17 +73,17 @@ func TestClientRaw(t *testing.T) {
 	_, _ = rand.Read(data)
 
 	p := packet.Get()
-	p.Message.Operation = protocol.MessagePing
+	p.Metadata.Operation = protocol.MessagePing
 	p.Write(data)
-	p.Message.ContentLength = messageSize
+	p.Metadata.ContentLength = messageSize
 
 	for q := 0; q < testSize; q++ {
-		p.Message.Id = uint16(q)
+		p.Metadata.Id = uint16(q)
 		err := c.WriteMessage(p)
 		assert.NoError(t, err)
 	}
 	p.Reset()
-	p.Message.Operation = protocol.MessagePacket
+	p.Metadata.Operation = protocol.MessagePacket
 
 	err = c.WriteMessage(p)
 	assert.NoError(t, err)
@@ -156,9 +156,9 @@ func BenchmarkClientThroughput(b *testing.B) {
 	_, _ = rand.Read(data)
 	p := packet.Get()
 
-	p.Message.Operation = protocol.MessagePing
+	p.Metadata.Operation = protocol.MessagePing
 	p.Write(data)
-	p.Message.ContentLength = messageSize
+	p.Metadata.ContentLength = messageSize
 
 	b.Run("test", func(b *testing.B) {
 		b.SetBytes(testSize * messageSize)
@@ -166,7 +166,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				p.Message.Id = uint16(q)
+				p.Metadata.Id = uint16(q)
 				err = c.WriteMessage(p)
 				if err != nil {
 					b.Fatal(err)
@@ -197,17 +197,17 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	finished := make(chan struct{}, 1)
 
 	serverRouter[protocol.MessagePing] = func(_ *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if incoming.Message.Id == testSize-1 {
+		if incoming.Metadata.Id == testSize-1 {
 			incoming.Reset()
-			incoming.Message.Id = testSize
-			incoming.Message.Operation = protocol.MessagePong
+			incoming.Metadata.Id = testSize
+			incoming.Metadata.Operation = protocol.MessagePong
 			outgoing = incoming
 		}
 		return
 	}
 
 	clientRouter[protocol.MessagePong] = func(incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if incoming.Message.Id == testSize {
+		if incoming.Metadata.Id == testSize {
 			finished <- struct{}{}
 		}
 		return
@@ -236,10 +236,10 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
-	p.Message.Operation = protocol.MessagePing
+	p.Metadata.Operation = protocol.MessagePing
 
 	p.Write(data)
-	p.Message.ContentLength = messageSize
+	p.Metadata.ContentLength = messageSize
 
 	b.Run("test", func(b *testing.B) {
 		b.SetBytes(testSize * messageSize)
@@ -247,7 +247,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
-				p.Message.Id = uint16(q)
+				p.Metadata.Id = uint16(q)
 				err = c.WriteMessage(p)
 				if err != nil {
 					b.Fatal(err)

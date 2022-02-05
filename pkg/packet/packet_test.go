@@ -27,10 +27,10 @@ func TestNew(t *testing.T) {
 	p := Get()
 
 	assert.IsType(t, new(Packet), p)
-	assert.NotNil(t, p.Message)
-	assert.Equal(t, uint16(0), p.Message.Id)
-	assert.Equal(t, uint16(0), p.Message.Operation)
-	assert.Equal(t, uint32(0), p.Message.ContentLength)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(0), p.Metadata.Id)
+	assert.Equal(t, uint16(0), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Nil(t, p.Content)
 
 	Put(p)
@@ -41,17 +41,17 @@ func TestRecycle(t *testing.T) {
 
 	p := pool.Get()
 
-	p.Message.Id = 32
-	p.Message.Operation = 64
-	p.Message.ContentLength = 128
+	p.Metadata.Id = 32
+	p.Metadata.Operation = 64
+	p.Metadata.ContentLength = 128
 
 	pool.Put(p)
 	p = pool.Get()
 	for {
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(0), p.Message.Id)
-		assert.Equal(t, uint16(0), p.Message.Operation)
-		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(0), p.Metadata.Id)
+		assert.Equal(t, uint16(0), p.Metadata.Operation)
+		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 		assert.Nil(t, p.Content)
 
 		p.Content = make([]byte, 32)
@@ -59,10 +59,10 @@ func TestRecycle(t *testing.T) {
 
 		pool.Put(p)
 		p = pool.Get()
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(0), p.Message.Id)
-		assert.Equal(t, uint16(0), p.Message.Operation)
-		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(0), p.Metadata.Id)
+		assert.Equal(t, uint16(0), p.Metadata.Operation)
+		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 
 		if p.Content == nil {
 			continue

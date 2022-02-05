@@ -24,7 +24,7 @@ import (
 // Packet is the structured frisbee data packet, and contains the following:
 //
 //	type Packet struct {
-//		Message struct {
+//		Metadata struct {
 //			Id            uint16 // 2 Bytes
 //			Operation     uint16 // 2 Bytes
 //			ContentLength uint32 // 4 Bytes
@@ -33,10 +33,10 @@ import (
 //	}
 //
 // The ID field can be used however the user sees fit, however ContentLength must match the length of the content being
-// delivered with the frisbee message (see the Async.WriteMessage function for more details), and the Operation field must be greater than uint16(9).
+// delivered with the frisbee message (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
 type Packet struct {
-	Message *protocol.Message
-	Content []byte
+	Metadata *protocol.Message
+	Content  []byte
 }
 
 // Write efficiently copies the byte slice b into the packet, however it
@@ -50,9 +50,9 @@ func (p *Packet) Write(b []byte) {
 }
 
 func (p *Packet) Reset() {
-	p.Message.Id = 0
-	p.Message.Operation = 0
-	p.Message.ContentLength = 0
+	p.Metadata.Id = 0
+	p.Metadata.Operation = 0
+	p.Metadata.ContentLength = 0
 	p.Content = p.Content[:0]
 }
 
@@ -71,8 +71,8 @@ func (p *Pool) Get() (s *Packet) {
 	}
 
 	s = v.(*Packet)
-	if s.Message == nil {
-		s.Message = new(protocol.Message)
+	if s.Metadata == nil {
+		s.Metadata = new(protocol.Message)
 	}
 	return
 }

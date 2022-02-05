@@ -43,38 +43,38 @@ func TestNewAsync(t *testing.T) {
 	writerConn := NewAsync(writer, &emptyLogger)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 
-	err := writerConn.WriteMessage(p)
+	err := writerConn.WritePacket(p)
 	require.NoError(t, err)
 	packet.Put(p)
 
-	p, err = readerConn.ReadMessage()
+	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
-	require.NotNil(t, p.Message)
-	assert.Equal(t, uint16(64), p.Message.Id)
-	assert.Equal(t, uint16(32), p.Message.Operation)
-	assert.Equal(t, uint32(0), p.Message.ContentLength)
+	require.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(p.Content))
 
 	data := make([]byte, messageSize)
 	_, _ = rand.Read(data)
 
 	p.Write(data)
-	p.Message.ContentLength = messageSize
+	p.Metadata.ContentLength = messageSize
 
-	err = writerConn.WriteMessage(p)
+	err = writerConn.WritePacket(p)
 	require.NoError(t, err)
 
 	packet.Put(p)
 
-	p, err = readerConn.ReadMessage()
+	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
-	assert.NotNil(t, p.Message)
-	assert.Equal(t, uint16(64), p.Message.Id)
-	assert.Equal(t, uint16(32), p.Message.Operation)
-	assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
 	assert.Equal(t, len(data), len(p.Content))
 	assert.Equal(t, data, p.Content)
 
@@ -101,26 +101,26 @@ func TestAsyncLargeWrite(t *testing.T) {
 
 	randomData := make([][]byte, testSize)
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
-	p.Message.ContentLength = messageSize
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
+	p.Metadata.ContentLength = messageSize
 
 	for i := 0; i < testSize; i++ {
 		randomData[i] = make([]byte, messageSize)
 		_, _ = rand.Read(randomData[i])
 		p.Write(randomData[i])
-		err := writerConn.WriteMessage(p)
+		err := writerConn.WritePacket(p)
 		assert.NoError(t, err)
 	}
 	packet.Put(p)
 
 	for i := 0; i < testSize; i++ {
-		p, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadPacket()
 		assert.NoError(t, err)
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(64), p.Message.Id)
-		assert.Equal(t, uint16(32), p.Message.Operation)
-		assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(64), p.Metadata.Id)
+		assert.Equal(t, uint16(32), p.Metadata.Operation)
+		assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
 		assert.Equal(t, len(randomData[i]), len(p.Content))
 		assert.Equal(t, randomData[i], p.Content)
 		packet.Put(p)
@@ -150,25 +150,25 @@ func TestAsyncRawConn(t *testing.T) {
 	_, _ = rand.Read(randomData)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 	p.Write(randomData)
-	p.Message.ContentLength = messageSize
+	p.Metadata.ContentLength = messageSize
 
 	for i := 0; i < testSize; i++ {
-		err := writerConn.WriteMessage(p)
+		err := writerConn.WritePacket(p)
 		assert.NoError(t, err)
 	}
 
 	packet.Put(p)
 
 	for i := 0; i < testSize; i++ {
-		p, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadPacket()
 		assert.NoError(t, err)
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(64), p.Message.Id)
-		assert.Equal(t, uint16(32), p.Message.Operation)
-		assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(64), p.Metadata.Id)
+		assert.Equal(t, uint16(32), p.Metadata.Operation)
+		assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
 		assert.Equal(t, len(randomData), len(p.Content))
 		assert.Equal(t, randomData, p.Content)
 	}
@@ -206,10 +206,10 @@ func TestAsyncReadClose(t *testing.T) {
 	writerConn := NewAsync(writer, &emptyLogger)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 
-	err := writerConn.WriteMessage(p)
+	err := writerConn.WritePacket(p)
 	require.NoError(t, err)
 
 	packet.Put(p)
@@ -217,12 +217,12 @@ func TestAsyncReadClose(t *testing.T) {
 	err = writerConn.Flush()
 	require.NoError(t, err)
 
-	p, err = readerConn.ReadMessage()
+	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
-	assert.NotNil(t, p.Message)
-	assert.Equal(t, uint16(64), p.Message.Id)
-	assert.Equal(t, uint16(32), p.Message.Operation)
-	assert.Equal(t, uint32(0), p.Message.ContentLength)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(p.Content))
 
 	err = readerConn.conn.Close()
@@ -230,7 +230,7 @@ func TestAsyncReadClose(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 100)
 
-	err = writerConn.WriteMessage(p)
+	err = writerConn.WritePacket(p)
 	if err == nil {
 		err = writerConn.Flush()
 		assert.Error(t, err)
@@ -254,10 +254,10 @@ func TestAsyncWriteClose(t *testing.T) {
 	writerConn := NewAsync(writer, &emptyLogger)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 
-	err := writerConn.WriteMessage(p)
+	err := writerConn.WritePacket(p)
 	require.NoError(t, err)
 
 	packet.Put(p)
@@ -265,15 +265,15 @@ func TestAsyncWriteClose(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	p, err = readerConn.ReadMessage()
+	p, err = readerConn.ReadPacket()
 	assert.NoError(t, err)
-	assert.NotNil(t, p.Message)
-	assert.Equal(t, uint16(64), p.Message.Id)
-	assert.Equal(t, uint16(32), p.Message.Operation)
-	assert.Equal(t, uint32(0), p.Message.ContentLength)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(p.Content))
 
-	err = writerConn.WriteMessage(p)
+	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
 
 	packet.Put(p)
@@ -283,7 +283,7 @@ func TestAsyncWriteClose(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 50)
 
-	_, err = readerConn.ReadMessage()
+	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
 	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 
@@ -305,10 +305,10 @@ func TestAsyncTimeout(t *testing.T) {
 	writerConn := NewAsync(writer, &emptyLogger)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 
-	err = writerConn.WriteMessage(p)
+	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
 
 	packet.Put(p)
@@ -316,12 +316,12 @@ func TestAsyncTimeout(t *testing.T) {
 	err = writerConn.Flush()
 	assert.NoError(t, err)
 
-	p, err = readerConn.ReadMessage()
+	p, err = readerConn.ReadPacket()
 	assert.NoError(t, err)
-	assert.NotNil(t, p.Message)
-	assert.Equal(t, uint16(64), p.Message.Id)
-	assert.Equal(t, uint16(32), p.Message.Operation)
-	assert.Equal(t, uint32(0), p.Message.ContentLength)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(p.Content))
 
 	time.Sleep(defaultDeadline * 5)
@@ -329,7 +329,7 @@ func TestAsyncTimeout(t *testing.T) {
 	err = writerConn.Error()
 	assert.NoError(t, err)
 
-	err = writerConn.WriteMessage(p)
+	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
 
 	packet.Put(p)
@@ -339,7 +339,7 @@ func TestAsyncTimeout(t *testing.T) {
 
 	time.Sleep(defaultDeadline * 5)
 
-	_, err = readerConn.ReadMessage()
+	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
 	assert.Error(t, readerConn.Error())
 

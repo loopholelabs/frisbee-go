@@ -44,24 +44,24 @@ func TestNewSync(t *testing.T) {
 	end := make(chan struct{}, 1)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 
 	go func() {
 		start <- struct{}{}
-		p, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadPacket()
 		assert.NoError(t, err)
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(64), p.Message.Id)
-		assert.Equal(t, uint16(32), p.Message.Operation)
-		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(64), p.Metadata.Id)
+		assert.Equal(t, uint16(32), p.Metadata.Operation)
+		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 		assert.Equal(t, 0, len(p.Content))
 		end <- struct{}{}
 		packet.Put(p)
 	}()
 
 	<-start
-	err := writerConn.WriteMessage(p)
+	err := writerConn.WritePacket(p)
 	assert.NoError(t, err)
 	<-end
 
@@ -69,16 +69,16 @@ func TestNewSync(t *testing.T) {
 	_, _ = rand.Read(data)
 
 	p.Write(data)
-	p.Message.ContentLength = messageSize
+	p.Metadata.ContentLength = messageSize
 
 	go func() {
 		start <- struct{}{}
-		p, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadPacket()
 		assert.NoError(t, err)
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(64), p.Message.Id)
-		assert.Equal(t, uint16(32), p.Message.Operation)
-		assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(64), p.Metadata.Id)
+		assert.Equal(t, uint16(32), p.Metadata.Operation)
+		assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
 		assert.Equal(t, messageSize, len(p.Content))
 		assert.Equal(t, data, p.Content)
 		end <- struct{}{}
@@ -86,7 +86,7 @@ func TestNewSync(t *testing.T) {
 	}()
 
 	<-start
-	err = writerConn.WriteMessage(p)
+	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
 
 	packet.Put(p)
@@ -114,9 +114,9 @@ func TestSyncLargeWrite(t *testing.T) {
 	randomData := make([][]byte, testSize)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
-	p.Message.ContentLength = messageSize
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
+	p.Metadata.ContentLength = messageSize
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
@@ -124,12 +124,12 @@ func TestSyncLargeWrite(t *testing.T) {
 	go func() {
 		start <- struct{}{}
 		for i := 0; i < testSize; i++ {
-			p, err := readerConn.ReadMessage()
+			p, err := readerConn.ReadPacket()
 			assert.NoError(t, err)
-			assert.NotNil(t, p.Message)
-			assert.Equal(t, uint16(64), p.Message.Id)
-			assert.Equal(t, uint16(32), p.Message.Operation)
-			assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+			assert.NotNil(t, p.Metadata)
+			assert.Equal(t, uint16(64), p.Metadata.Id)
+			assert.Equal(t, uint16(32), p.Metadata.Operation)
+			assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
 			assert.Equal(t, messageSize, len(p.Content))
 			assert.Equal(t, randomData[i], p.Content)
 			packet.Put(p)
@@ -142,7 +142,7 @@ func TestSyncLargeWrite(t *testing.T) {
 		randomData[i] = make([]byte, messageSize)
 		_, _ = rand.Read(randomData[i])
 		p.Write(randomData[i])
-		err := writerConn.WriteMessage(p)
+		err := writerConn.WritePacket(p)
 		assert.NoError(t, err)
 	}
 	<-end
@@ -176,20 +176,20 @@ func TestSyncRawConn(t *testing.T) {
 	_, _ = rand.Read(randomData)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 	p.Write(randomData)
-	p.Message.ContentLength = messageSize
+	p.Metadata.ContentLength = messageSize
 
 	go func() {
 		start <- struct{}{}
 		for i := 0; i < testSize; i++ {
-			p, err := readerConn.ReadMessage()
+			p, err := readerConn.ReadPacket()
 			assert.NoError(t, err)
-			assert.NotNil(t, p.Message)
-			assert.Equal(t, uint16(64), p.Message.Id)
-			assert.Equal(t, uint16(32), p.Message.Operation)
-			assert.Equal(t, uint32(messageSize), p.Message.ContentLength)
+			assert.NotNil(t, p.Metadata)
+			assert.Equal(t, uint16(64), p.Metadata.Id)
+			assert.Equal(t, uint16(32), p.Metadata.Operation)
+			assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
 			assert.Equal(t, messageSize, len(p.Content))
 			assert.Equal(t, randomData, p.Content)
 			packet.Put(p)
@@ -199,7 +199,7 @@ func TestSyncRawConn(t *testing.T) {
 
 	<-start
 	for i := 0; i < testSize; i++ {
-		err := writerConn.WriteMessage(p)
+		err := writerConn.WritePacket(p)
 		assert.NoError(t, err)
 	}
 	<-end
@@ -240,34 +240,34 @@ func TestSyncReadClose(t *testing.T) {
 	writerConn := NewSync(writer, &emptyLogger)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
 
 	go func() {
 		start <- struct{}{}
-		p, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadPacket()
 		assert.NoError(t, err)
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(64), p.Message.Id)
-		assert.Equal(t, uint16(32), p.Message.Operation)
-		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(64), p.Metadata.Id)
+		assert.Equal(t, uint16(32), p.Metadata.Operation)
+		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 		assert.Equal(t, 0, len(p.Content))
 		end <- struct{}{}
 		packet.Put(p)
 	}()
 
 	<-start
-	err := writerConn.WriteMessage(p)
+	err := writerConn.WritePacket(p)
 	assert.NoError(t, err)
 	<-end
 
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
 
-	err = writerConn.WriteMessage(p)
+	err = writerConn.WritePacket(p)
 	assert.Error(t, err)
 	assert.ErrorIs(t, writerConn.Error(), io.ErrClosedPipe)
 
@@ -290,27 +290,27 @@ func TestSyncWriteClose(t *testing.T) {
 	writerConn := NewSync(writer, &emptyLogger)
 
 	p := packet.Get()
-	p.Message.Id = 64
-	p.Message.Operation = 32
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
 
 	go func() {
 		start <- struct{}{}
-		p, err := readerConn.ReadMessage()
+		p, err := readerConn.ReadPacket()
 		assert.NoError(t, err)
-		assert.NotNil(t, p.Message)
-		assert.Equal(t, uint16(64), p.Message.Id)
-		assert.Equal(t, uint16(32), p.Message.Operation)
-		assert.Equal(t, uint32(0), p.Message.ContentLength)
+		assert.NotNil(t, p.Metadata)
+		assert.Equal(t, uint16(64), p.Metadata.Id)
+		assert.Equal(t, uint16(32), p.Metadata.Operation)
+		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 		assert.Equal(t, 0, len(p.Content))
 		packet.Put(p)
 		end <- struct{}{}
 	}()
 
 	<-start
-	err := writerConn.WriteMessage(p)
+	err := writerConn.WritePacket(p)
 	assert.NoError(t, err)
 	<-end
 
@@ -319,7 +319,7 @@ func TestSyncWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
-	_, err = readerConn.ReadMessage()
+	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, io.EOF)
 	assert.ErrorIs(t, readerConn.Error(), io.EOF)
 

@@ -110,19 +110,19 @@ func (c *Sync) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-// WriteMessage takes a frisbee.Message and some (optional) accompanying content, sends it synchronously.
+// WriteMessage takes a packet.Packet and sends it synchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
-func (c *Sync) WriteMessage(p *packet.Packet) error {
-	if int(p.Message.ContentLength) != len(p.Content) {
+func (c *Sync) WritePacket(p *packet.Packet) error {
+	if int(p.Metadata.ContentLength) != len(p.Content) {
 		return InvalidContentLength
 	}
 
 	var encodedMessage [protocol.MessageSize]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Message.Id)
-	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Message.Operation)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Message.ContentLength)
+	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Metadata.ContentLength)
 
 	c.Lock()
 	if c.closed.Load() {
@@ -140,8 +140,8 @@ func (c *Sync) WriteMessage(p *packet.Packet) error {
 		c.Logger().Error().Err(err).Msg("error while writing to underlying net.Conn")
 		return c.closeWithError(err)
 	}
-	if p.Message.ContentLength != 0 {
-		_, err = c.conn.Write(p.Content[:p.Message.ContentLength])
+	if p.Metadata.ContentLength != 0 {
+		_, err = c.conn.Write(p.Content[:p.Metadata.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
@@ -159,7 +159,7 @@ func (c *Sync) WriteMessage(p *packet.Packet) error {
 
 // ReadMessage is a blocking function that will wait until a frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
-func (c *Sync) ReadMessage() (*packet.Packet, error) {
+func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
 		return nil, ConnectionClosed
 	}
@@ -176,16 +176,16 @@ func (c *Sync) ReadMessage() (*packet.Packet, error) {
 	}
 	p := packet.Get()
 
-	p.Message.Id = binary.BigEndian.Uint16(encodedMessage[protocol.IdOffset : protocol.IdOffset+protocol.IdSize])
-	p.Message.Operation = binary.BigEndian.Uint16(encodedMessage[protocol.OperationOffset : protocol.OperationOffset+protocol.OperationSize])
-	p.Message.ContentLength = binary.BigEndian.Uint32(encodedMessage[protocol.ContentLengthOffset : protocol.ContentLengthOffset+protocol.ContentLengthSize])
+	p.Metadata.Id = binary.BigEndian.Uint16(encodedMessage[protocol.IdOffset : protocol.IdOffset+protocol.IdSize])
+	p.Metadata.Operation = binary.BigEndian.Uint16(encodedMessage[protocol.OperationOffset : protocol.OperationOffset+protocol.OperationSize])
+	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedMessage[protocol.ContentLengthOffset : protocol.ContentLengthOffset+protocol.ContentLengthSize])
 
-	if p.Message.ContentLength > 0 {
-		for cap(p.Content) < int(p.Message.ContentLength) {
+	if p.Metadata.ContentLength > 0 {
+		for cap(p.Content) < int(p.Metadata.ContentLength) {
 			p.Content = append(p.Content[:cap(p.Content)], 0)
 		}
-		p.Content = p.Content[:p.Message.ContentLength]
-		_, err = io.ReadAtLeast(c.conn, p.Content[0:], int(p.Message.ContentLength))
+		p.Content = p.Content[:p.Metadata.ContentLength]
+		_, err = io.ReadAtLeast(c.conn, p.Content[0:], int(p.Metadata.ContentLength))
 		if err != nil {
 			if c.closed.Load() {
 				c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
