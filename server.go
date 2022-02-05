@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"crypto/tls"
-	"github.com/loopholelabs/frisbee/internal/errors"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -27,10 +27,10 @@ import (
 )
 
 // ServerRouterFunc defines a message handler for a specific frisbee message
-type ServerRouterFunc func(c *Async, incomingMessage Message, incomingContent []byte) (outgoingMessage *Message, outgoingContent []byte, action Action)
+type ServerRouterFunc func(c *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action)
 
 // ServerRouter maps frisbee message types to specific handler functions (of type ServerRouterFunc)
-type ServerRouter map[uint32]ServerRouterFunc
+type ServerRouter map[uint16]ServerRouterFunc
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
@@ -58,7 +58,7 @@ type Server struct {
 // The Start method must then be called to start the server and listen for connections
 func NewServer(addr string, router ServerRouter, opts ...Option) (*Server, error) {
 
-	for i := uint32(0); i < RESERVED9; i++ {
+	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := router[i]; ok {
 			return nil, InvalidRouter
 		}
@@ -66,8 +66,8 @@ func NewServer(addr string, router ServerRouter, opts ...Option) (*Server, error
 
 	options := loadOptions(opts...)
 	if options.Heartbeat > time.Duration(0) {
-		router[HEARTBEAT] = func(_ *Async, incomingMessage Message, _ []byte) (outgoingMessage *Message, outgoingContent []byte, action Action) {
-			outgoingMessage = &incomingMessage
+		router[HEARTBEAT] = func(_ *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+			outgoing = incoming
 			return
 		}
 	}
@@ -141,7 +141,7 @@ func (s *Server) Start() error {
 				if s.shutdown.Load() {
 					return
 				}
-				s.Logger().Fatal().Msgf(errors.WithContext(err, ACCEPT).Error())
+				s.Logger().Fatal().Err(err).Msg("error while accepting connection")
 				return
 			}
 			go s.handleConn(newConn)
@@ -175,33 +175,32 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 
 	for {
-		incomingMessage, incomingContent, err := frisbeeConn.ReadMessage()
+		p, err := frisbeeConn.ReadPacket()
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.onClosed(frisbeeConn, err)
 			return
 		}
 
-		routerFunc := s.router[incomingMessage.Operation]
+		routerFunc := s.router[p.Metadata.Operation]
 		if routerFunc != nil {
-			var outgoingMessage *Message
-			var outgoingContent []byte
 			var action Action
-			if incomingMessage.ContentLength == 0 || incomingContent == nil {
-				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, *incomingMessage, nil)
-			} else {
-				outgoingMessage, outgoingContent, action = routerFunc(frisbeeConn, *incomingMessage, *incomingContent)
-			}
+			var outgoing *packet.Packet
+			outgoing, action = routerFunc(frisbeeConn, p)
 
-			if outgoingMessage != nil && outgoingMessage.ContentLength == uint64(len(outgoingContent)) {
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
 				s.preWrite()
-				err = frisbeeConn.WriteMessage(outgoingMessage, &outgoingContent)
+				err = frisbeeConn.WritePacket(p)
 				if err != nil {
 					_ = frisbeeConn.Close()
 					s.onClosed(frisbeeConn, err)
 					return
 				}
 			}
+			if outgoing != p {
+				packet.Put(outgoing)
+			}
+			packet.Put(p)
 
 			switch action {
 			case CLOSE:

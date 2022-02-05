@@ -18,6 +18,7 @@ package frisbee_test
 
 import (
 	"github.com/loopholelabs/frisbee"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"os"
 )
@@ -25,7 +26,7 @@ import (
 func ExampleNewClient() {
 	router := make(frisbee.ClientRouter)
 
-	router[0] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	router[0] = func(incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
 		return
 	}
 
@@ -37,7 +38,7 @@ func ExampleNewClient() {
 func ExampleNewServer() {
 	router := make(frisbee.ServerRouter)
 
-	router[0] = func(c *frisbee.Async, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	router[0] = func(c *frisbee.Async, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
 		return
 	}
 
