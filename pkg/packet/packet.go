@@ -41,12 +41,14 @@ type Packet struct {
 
 // Write efficiently copies the byte slice b into the packet, however it
 // does *not* update the content length.
-func (p *Packet) Write(b []byte) {
+func (p *Packet) Write(b []byte) int {
 	if len(p.Content) < len(b) {
 		p.Content = append(p.Content[0:], b...)
+		p.Content = p.Content[:len(b)]
 	} else {
 		p.Content = p.Content[:copy(p.Content[0:], b)]
 	}
+	return len(b)
 }
 
 func (p *Packet) Reset() {
