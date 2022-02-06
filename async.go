@@ -455,11 +455,11 @@ func (c *Async) readLoop() {
 				}
 			default:
 				if p.Metadata.ContentLength > 0 {
-					for cap(p.Content) < int(p.Metadata.ContentLength) {
-						p.Content = append(p.Content[:cap(p.Content)], 0)
-					}
-					p.Content = p.Content[:p.Metadata.ContentLength]
 					if n-index < int(p.Metadata.ContentLength) {
+						for cap(p.Content) < int(p.Metadata.ContentLength) {
+							p.Content = append(p.Content[:cap(p.Content)], 0)
+						}
+						p.Content = p.Content[:p.Metadata.ContentLength]
 						for cap(buf) < int(p.Metadata.ContentLength) {
 							buf = append(buf[:cap(buf)], 0)
 						}
@@ -494,7 +494,9 @@ func (c *Async) readLoop() {
 						copy(p.Content[cp:], buf[:min])
 						index = min
 					} else {
-						index += copy(p.Content[0:], buf[index:index+int(p.Metadata.ContentLength)])
+						p.Write(buf[index : index+int(p.Metadata.ContentLength)])
+						index += len(p.Content)
+						//index += copy(p.Content[0:], buf[index:index+int(p.Metadata.ContentLength)])
 					}
 					err = c.incomingMessages.Push(p)
 					if err != nil {
