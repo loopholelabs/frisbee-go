@@ -455,24 +455,13 @@ func (c *Async) readLoop() {
 				}
 			default:
 				if p.Metadata.ContentLength > 0 {
-					//for cap(p.Content) < int(p.Metadata.ContentLength) {
-					//	p.Content = append(p.Content[:cap(p.Content)], 0)
-					//}
-					//p.Content = p.Content[:p.Metadata.ContentLength]
 					if n-index < int(p.Metadata.ContentLength) {
-						for cap(buf) < int(p.Metadata.ContentLength) {
+						min := int(p.Metadata.ContentLength) - p.Write(buf[index:n])
+						n = 0
+						for cap(buf) < min {
 							buf = append(buf[:cap(buf)], 0)
 						}
 						buf = buf[:cap(buf)]
-						cp := p.Write(buf[index:n])
-						//cp := copy(p.Content[0:], buf[index:n])
-						min := int(p.Metadata.ContentLength) - cp
-						if len(buf) < min {
-							c.wg.Done()
-							_ = c.closeWithError(InvalidBufferLength)
-							return
-						}
-						n = 0
 						err = c.SetReadDeadline(emptyTime)
 						if err != nil {
 							c.wg.Done()
@@ -493,12 +482,9 @@ func (c *Async) readLoop() {
 							}
 						}
 						p.Content = append(p.Content, buf[:min]...)
-						p.Content = p.Content[:p.Metadata.ContentLength]
-						//copy(p.Content[cp:], buf[:min])
 						index = min
 					} else {
 						index += p.Write(buf[index : index+int(p.Metadata.ContentLength)])
-						//index += copy(p.Content[0:], buf[index:index+int(p.Metadata.ContentLength)])
 					}
 					err = c.incomingMessages.Push(p)
 					if err != nil {
