@@ -54,7 +54,7 @@ func BenchmarkAsyncThroughputLarge(b *testing.B) {
 }
 
 func BenchmarkSyncThroughputLarge(b *testing.B) {
-	const testSize = 1<<16 - 1
+	const testSize = 100
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
