@@ -118,9 +118,9 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// WriteMessage sends a frisbee Message from the client to the server
+// WriteMessage sends a frisbee packet.Packet from the client to the server
 func (c *Client) WriteMessage(p *packet.Packet) error {
-	return c.conn.WriteMessage(p)
+	return c.conn.WritePacket(p)
 }
 
 // Flush flushes any queued frisbee Messages from the client to the server
@@ -158,21 +158,21 @@ func (c *Client) reactor() {
 		if c.closed.Load() {
 			return
 		}
-		p, err := c.conn.ReadMessage()
+		p, err := c.conn.ReadPacket()
 		if err != nil {
 			c.Logger().Error().Err(err).Msg("error while reading from frisbee connection")
 			_ = c.Close()
 			return
 		}
 
-		routerFunc := c.router[p.Message.Operation]
+		routerFunc := c.router[p.Metadata.Operation]
 		if routerFunc != nil {
 			var action Action
 			var outgoing *packet.Packet
 			outgoing, action = routerFunc(p)
 
-			if outgoing != nil && outgoing.Message.ContentLength == uint32(len(outgoing.Content)) {
-				err = c.conn.WriteMessage(p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+				err = c.conn.WritePacket(p)
 				if err != nil {
 					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
 					_ = c.Close()

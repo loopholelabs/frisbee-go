@@ -30,17 +30,17 @@ func throughputRunner(testSize uint32, messageSize uint32, readerConn Conn, writ
 		randomData := make([]byte, messageSize)
 
 		p := packet.Get()
-		p.Message.Id = 64
-		p.Message.Operation = 32
+		p.Metadata.Id = 64
+		p.Metadata.Operation = 32
 		p.Write(randomData)
-		p.Message.ContentLength = messageSize
+		p.Metadata.ContentLength = messageSize
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			done := make(chan struct{}, 1)
 			errCh := make(chan error, 1)
 			go func() {
 				for i := uint32(0); i < testSize; i++ {
-					p, err := readerConn.ReadMessage()
+					p, err := readerConn.ReadPacket()
 					if err != nil {
 						errCh <- err
 						return
@@ -50,15 +50,20 @@ func throughputRunner(testSize uint32, messageSize uint32, readerConn Conn, writ
 				done <- struct{}{}
 			}()
 			for i := uint32(0); i < testSize; i++ {
-				err = writerConn.WriteMessage(p)
-				if err != nil {
+				select {
+				case err = <-errCh:
 					b.Fatal(err)
+				default:
+					err = writerConn.WritePacket(p)
+					if err != nil {
+						b.Fatal(err)
+					}
 				}
 			}
 			select {
 			case <-done:
 				continue
-			case err := <-errCh:
+			case err = <-errCh:
 				b.Fatal(err)
 			}
 		}

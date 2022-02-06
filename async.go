@@ -142,19 +142,19 @@ func (c *Async) CloseChannel() <-chan struct{} {
 	return c.closeCh
 }
 
-// WriteMessage takes a frisbee.Message and some (optional) accompanying content, and queues it up to send asynchronously.
+// WritePacket takes a packet.Packet and queues it up to send asynchronously.
 //
 // If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
-func (c *Async) WriteMessage(p *packet.Packet) error {
-	if int(p.Message.ContentLength) != len(p.Content) {
+func (c *Async) WritePacket(p *packet.Packet) error {
+	if int(p.Metadata.ContentLength) != len(p.Content) {
 		return InvalidContentLength
 	}
 
 	var encodedMessage [protocol.MessageSize]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Message.Id)
-	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Message.Operation)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Message.ContentLength)
+	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Metadata.ContentLength)
 
 	c.Lock()
 	if c.closed.Load() {
@@ -172,8 +172,8 @@ func (c *Async) WriteMessage(p *packet.Packet) error {
 		c.Logger().Error().Err(err).Msg("error while writing encoded message")
 		return c.closeWithError(err)
 	}
-	if p.Message.ContentLength != 0 {
-		if int(p.Message.ContentLength) > c.writer.Size() {
+	if p.Metadata.ContentLength != 0 {
+		if int(p.Metadata.ContentLength) > c.writer.Size() {
 			err = c.SetWriteDeadline(time.Now().Add(defaultDeadline))
 			if err != nil {
 				c.Unlock()
@@ -185,7 +185,7 @@ func (c *Async) WriteMessage(p *packet.Packet) error {
 				return c.closeWithError(err)
 			}
 		}
-		_, err = c.writer.Write(p.Content[:p.Message.ContentLength])
+		_, err = c.writer.Write(p.Content[:p.Metadata.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
@@ -209,9 +209,9 @@ func (c *Async) WriteMessage(p *packet.Packet) error {
 	return nil
 }
 
-// ReadMessage is a blocking function that will wait until a Frisbee message is available and then return it (and its content).
+// ReadPacket is a blocking function that will wait until a Frisbee message is available and then return it (and its content).
 // In the event that the connection is closed, ReadMessage will return an error.
-func (c *Async) ReadMessage() (*packet.Packet, error) {
+func (c *Async) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
 		return nil, ConnectionClosed
 	}
@@ -368,8 +368,8 @@ func (c *Async) handleTimeout() error {
 		return ConnectionClosed
 	}
 
-	c.Logger().Debug().Msg("Handling Timeout Using PING Message")
-	err := c.WriteMessage(PINGPacket)
+	c.Logger().Debug().Msg("Handling Timeout Using PING Packet")
+	err := c.WritePacket(PINGPacket)
 	if err != nil {
 		return err
 	}
@@ -379,7 +379,7 @@ func (c *Async) handleTimeout() error {
 		return err
 	}
 
-	c.Logger().Debug().Msg("PING Message sent successfully, will wait for PONG in a separate thread")
+	c.Logger().Debug().Msg("PING Packet sent successfully, will wait for PONG in a separate thread")
 	c.wg.Add(1)
 	go c.waitForPONG()
 
@@ -433,45 +433,35 @@ func (c *Async) readLoop() {
 		index = 0
 		for index < n {
 			p := packet.Get()
-			p.Message.Id = binary.BigEndian.Uint16(buf[index+protocol.IdOffset : index+protocol.IdOffset+protocol.IdSize])
-			p.Message.Operation = binary.BigEndian.Uint16(buf[index+protocol.OperationOffset : index+protocol.OperationOffset+protocol.OperationSize])
-			p.Message.ContentLength = binary.BigEndian.Uint32(buf[index+protocol.ContentLengthOffset : index+protocol.ContentLengthOffset+protocol.ContentLengthSize])
+			p.Metadata.Id = binary.BigEndian.Uint16(buf[index+protocol.IdOffset : index+protocol.IdOffset+protocol.IdSize])
+			p.Metadata.Operation = binary.BigEndian.Uint16(buf[index+protocol.OperationOffset : index+protocol.OperationOffset+protocol.OperationSize])
+			p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[index+protocol.ContentLengthOffset : index+protocol.ContentLengthOffset+protocol.ContentLengthSize])
 			index += protocol.MessageSize
 
-			switch p.Message.Operation {
+			switch p.Metadata.Operation {
 			case PING:
-				c.Logger().Debug().Msg("PING Message received by read loop, sending back PONG message")
-				err = c.WriteMessage(PONGPacket)
+				c.Logger().Debug().Msg("PING Packet received by read loop, sending back PONG message")
+				err = c.WritePacket(PONGPacket)
 				if err != nil {
 					c.wg.Done()
 					_ = c.closeWithError(err)
 					return
 				}
 			case PONG:
-				c.Logger().Debug().Msg("PONG Message received by read loop")
+				c.Logger().Debug().Msg("PONG Packet received by read loop")
 				select {
 				case c.pongCh <- struct{}{}:
 				default:
 				}
 			default:
-				if p.Message.ContentLength > 0 {
-					for cap(p.Content) < int(p.Message.ContentLength) {
-						p.Content = append(p.Content[:cap(p.Content)], 0)
-					}
-					p.Content = p.Content[:p.Message.ContentLength]
-					if n-index < int(p.Message.ContentLength) {
-						for cap(buf) < int(p.Message.ContentLength) {
+				if p.Metadata.ContentLength > 0 {
+					if n-index < int(p.Metadata.ContentLength) {
+						min := int(p.Metadata.ContentLength) - p.Write(buf[index:n])
+						n = 0
+						for cap(buf) < min {
 							buf = append(buf[:cap(buf)], 0)
 						}
 						buf = buf[:cap(buf)]
-						cp := copy(p.Content[0:], buf[index:n])
-						min := int(p.Message.ContentLength) - cp
-						if len(buf) < min {
-							c.wg.Done()
-							_ = c.closeWithError(InvalidBufferLength)
-							return
-						}
-						n = 0
 						err = c.SetReadDeadline(emptyTime)
 						if err != nil {
 							c.wg.Done()
@@ -491,10 +481,10 @@ func (c *Async) readLoop() {
 								break
 							}
 						}
-						copy(p.Content[cp:], buf[:min])
+						p.Content = append(p.Content, buf[:min]...)
 						index = min
 					} else {
-						index += copy(p.Content[0:], buf[index:index+int(p.Message.ContentLength)])
+						index += p.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
 					err = c.incomingMessages.Push(p)
 					if err != nil {
