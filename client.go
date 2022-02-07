@@ -182,6 +182,7 @@ func (c *Client) reactor() {
 			packet.Put(p)
 
 			switch action {
+			case NONE:
 			case CLOSE:
 				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
 				_ = c.Close()

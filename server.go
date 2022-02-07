@@ -176,6 +176,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 			packet.Put(p)
 
 			switch action {
+			case NONE:
 			case CLOSE:
 				_ = frisbeeConn.Close()
 				s.OnClosed(frisbeeConn, nil)
