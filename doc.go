@@ -53,12 +53,12 @@
 //	}
 //
 //	func main() {
-//		router := make(frisbee.ServerRouter)
-//		router[PING] = handlePing
+//		handlerTable := make(frisbee.ServerRouter)
+//		handlerTable[PING] = handlePing
 //		exit := make(chan os.Signal)
 //		signal.Notify(exit, os.Interrupt)
 //
-//		s := frisbee.NewServer(":8192", router)
+//		s := frisbee.NewServer(":8192", handlerTable)
 //		err := s.Start()
 //		if err != nil {
 //			panic(err)
@@ -95,12 +95,12 @@
 //	}
 //
 //	func main() {
-//		router := make(frisbee.ClientRouter)
-//		router[PONG] = handlePong
+//		handlerTable := make(frisbee.ClientRouter)
+//		handlerTable[PONG] = handlePong
 //		exit := make(chan os.Signal)
 //		signal.Notify(exit, os.Interrupt)
 //
-//		c, err := frisbee.NewClient("127.0.0.1:8192", router)
+//		c, err := frisbee.NewClient("127.0.0.1:8192", handlerTable)
 //		if err != nil {
 //			panic(err)
 //		}
