@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/panjf2000/ants/v2"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -45,6 +46,7 @@ type Server struct {
 	shutdown     *atomic.Bool
 	options      *Options
 	wg           sync.WaitGroup
+	pool         *ants.Pool
 
 	// BaseContext is used to define the base context for this Server and all incoming connections
 	BaseContext func() context.Context
@@ -77,11 +79,17 @@ func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server,
 		}
 	}
 
+	pool, err := ants.NewPool(1<<19, ants.WithPreAlloc(true), ants.WithExpiryDuration(time.Millisecond*100))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Server{
 		addr:         addr,
 		handlerTable: handlerTable,
 		options:      options,
 		shutdown:     atomic.NewBool(false),
+		pool:         pool,
 	}, nil
 }
 
@@ -147,46 +155,49 @@ func (s *Server) handleConn(newConn net.Conn) {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
 
+	var err error
 	for {
-		p, err := frisbeeConn.ReadPacket()
+		err = s.pool.Submit(func() {
+			p, err := frisbeeConn.ReadPacket()
+			if err != nil {
+				_ = frisbeeConn.Close()
+				s.OnClosed(frisbeeConn, err)
+				return
+			}
+
+			handlerFunc := s.handlerTable[p.Metadata.Operation]
+			if handlerFunc != nil {
+				outgoing, action := handlerFunc(connCtx, p)
+				if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+					s.PreWrite()
+					err = frisbeeConn.WritePacket(outgoing)
+					if err != nil {
+						_ = frisbeeConn.Close()
+						s.OnClosed(frisbeeConn, err)
+						return
+					}
+				}
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
+
+				switch action {
+				case NONE:
+				case CLOSE:
+					_ = frisbeeConn.Close()
+					s.OnClosed(frisbeeConn, nil)
+				case SHUTDOWN:
+					_ = frisbeeConn.Close()
+					s.OnClosed(frisbeeConn, nil)
+					_ = s.Shutdown()
+				}
+			}
+		})
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.OnClosed(frisbeeConn, err)
 			return
-		}
-
-		handlerFunc := s.handlerTable[p.Metadata.Operation]
-		if handlerFunc != nil {
-			var action Action
-			var outgoing *packet.Packet
-			outgoing, action = handlerFunc(connCtx, p)
-
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-				s.PreWrite()
-				err = frisbeeConn.WritePacket(outgoing)
-				if err != nil {
-					_ = frisbeeConn.Close()
-					s.OnClosed(frisbeeConn, err)
-					return
-				}
-			}
-			if outgoing != p {
-				packet.Put(outgoing)
-			}
-			packet.Put(p)
-
-			switch action {
-			case NONE:
-			case CLOSE:
-				_ = frisbeeConn.Close()
-				s.OnClosed(frisbeeConn, nil)
-				return
-			case SHUTDOWN:
-				_ = frisbeeConn.Close()
-				s.OnClosed(frisbeeConn, nil)
-				_ = s.Shutdown()
-				return
-			}
 		}
 	}
 }
@@ -199,6 +210,7 @@ func (s *Server) Logger() *zerolog.Logger {
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
 	s.shutdown.Store(true)
+	s.pool.Release()
 	defer s.wg.Wait()
 	return s.listener.Close()
 }
