@@ -8,4 +8,5 @@ require (
 	github.com/rs/zerolog v1.20.0
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/atomic v1.7.0
+	go.uber.org/goleak v1.1.12
 )
