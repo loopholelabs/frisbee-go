@@ -79,7 +79,7 @@ func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server,
 		}
 	}
 
-	pool, err := ants.NewPool(1<<19, ants.WithPreAlloc(true), ants.WithExpiryDuration(time.Millisecond*100))
+	pool, err := ants.NewPool(1<<15, ants.WithPreAlloc(true))
 	if err != nil {
 		return nil, err
 	}
