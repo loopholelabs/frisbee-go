@@ -150,14 +150,15 @@ func (c *Client) Logger() *zerolog.Logger {
 }
 
 func (c *Client) reactor() {
-	defer c.wg.Done()
 	for {
 		if c.closed.Load() {
+			c.wg.Done()
 			return
 		}
 		p, err := c.conn.ReadPacket()
 		if err != nil {
 			c.Logger().Error().Err(err).Msg("error while reading from frisbee connection")
+			c.wg.Done()
 			_ = c.Close()
 			return
 		}
@@ -169,9 +170,10 @@ func (c *Client) reactor() {
 			outgoing, action = handlerFunc(c.ctx, p)
 
 			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-				err = c.conn.WritePacket(p)
+				err = c.conn.WritePacket(outgoing)
 				if err != nil {
 					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+					c.wg.Done()
 					_ = c.Close()
 					return
 				}
@@ -185,10 +187,12 @@ func (c *Client) reactor() {
 			case NONE:
 			case CLOSE:
 				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
+				c.wg.Done()
 				_ = c.Close()
 				return
 			case SHUTDOWN:
 				c.Logger().Debug().Msgf("Closing connection %s because of SHUTDOWN action", c.addr)
+				c.wg.Done()
 				_ = c.Close()
 				return
 			default:
@@ -198,23 +202,31 @@ func (c *Client) reactor() {
 }
 
 func (c *Client) heartbeat() {
-	defer c.wg.Done()
 	for {
 		<-time.After(c.options.Heartbeat)
 		if c.closed.Load() {
+			c.wg.Done()
 			return
 		}
 		if c.conn.WriteBufferSize() == 0 {
 			err := c.WriteMessage(HEARTBEATPacket)
 			if err != nil {
 				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+				c.wg.Done()
 				_ = c.Close()
 				return
 			}
 			start := time.Now()
 			c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
-			<-c.heartbeatChannel
-			c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
+			select {
+			case <-c.heartbeatChannel:
+				c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
+			case <-time.After(c.options.Heartbeat):
+				c.Logger().Error().Msg("Heartbeat not received within timeout period")
+				c.wg.Done()
+				_ = c.Close()
+				return
+			}
 		} else {
 			c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
 		}
