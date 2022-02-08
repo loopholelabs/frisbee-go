@@ -163,7 +163,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
 				s.PreWrite()
-				err = frisbeeConn.WritePacket(p)
+				err = frisbeeConn.WritePacket(outgoing)
 				if err != nil {
 					_ = frisbeeConn.Close()
 					s.OnClosed(frisbeeConn, err)
