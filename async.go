@@ -340,12 +340,31 @@ func (c *Async) flushLoop() {
 			c.wg.Done()
 			return
 		}
-		err := c.Flush()
-		if err != nil {
+		c.Lock()
+		if c.closed.Load() {
+			c.Unlock()
 			c.wg.Done()
-			_ = c.closeWithError(err)
+			_ = c.closeWithError(ConnectionClosed)
 			return
 		}
+		if c.writer.Buffered() > 0 {
+			err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
+			if err != nil {
+				c.Unlock()
+				c.wg.Done()
+				_ = c.closeWithError(ConnectionClosed)
+				return
+			}
+			err = c.writer.Flush()
+			if err != nil {
+				c.Unlock()
+				c.Logger().Err(err).Msg("error while flushing data")
+				c.wg.Done()
+				_ = c.closeWithError(ConnectionClosed)
+				return
+			}
+		}
+		c.Unlock()
 	}
 }
 

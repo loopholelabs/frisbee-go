@@ -17,6 +17,7 @@
 package frisbee
 
 import (
+	"context"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -25,17 +26,12 @@ import (
 	"time"
 )
 
-// ClientRouterFunc defines a message handler for a specific frisbee message
-type ClientRouterFunc func(incoming *packet.Packet) (outgoing *packet.Packet, action Action)
-
-// ClientRouter maps frisbee message types to specific handler functions (of type ClientRouterFunc)
-type ClientRouter map[uint16]ClientRouterFunc
-
 // Client connects to a frisbee Server and can send and receive frisbee messages
 type Client struct {
 	addr             string
 	conn             *Async
-	router           ClientRouter
+	handlerTable     HandlerTable
+	ctx              context.Context
 	options          *Options
 	closed           *atomic.Bool
 	wg               sync.WaitGroup
@@ -44,11 +40,11 @@ type Client struct {
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
 // The ConnectAsync method must then be called to dial the server and initialize the connection
-func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error) {
+func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Client, error) {
 
 	for i := uint16(0); i < RESERVED9; i++ {
-		if _, ok := router[i]; ok {
-			return nil, InvalidRouter
+		if _, ok := handlerTable[i]; ok {
+			return nil, InvalidHandlerTable
 		}
 	}
 
@@ -56,7 +52,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 	var heartbeatChannel chan struct{}
 	if options.Heartbeat > time.Duration(0) {
 		heartbeatChannel = make(chan struct{}, 1)
-		router[HEARTBEAT] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		handlerTable[HEARTBEAT] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 			heartbeatChannel <- struct{}{}
 			return
 		}
@@ -64,7 +60,8 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 
 	return &Client{
 		addr:             addr,
-		router:           router,
+		handlerTable:     handlerTable,
+		ctx:              ctx,
 		options:          options,
 		closed:           atomic.NewBool(false),
 		heartbeatChannel: heartbeatChannel,
@@ -165,11 +162,11 @@ func (c *Client) reactor() {
 			return
 		}
 
-		routerFunc := c.router[p.Metadata.Operation]
-		if routerFunc != nil {
+		handlerFunc := c.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
 			var action Action
 			var outgoing *packet.Packet
-			outgoing, action = routerFunc(p)
+			outgoing, action = handlerFunc(c.ctx, p)
 
 			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
 				err = c.conn.WritePacket(p)
@@ -185,6 +182,7 @@ func (c *Client) reactor() {
 			packet.Put(p)
 
 			switch action {
+			case NONE:
 			case CLOSE:
 				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
 				_ = c.Close()
