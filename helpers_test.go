@@ -18,8 +18,13 @@ package frisbee
 
 import (
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"go.uber.org/goleak"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m, goleak.IgnoreTopFunction("github.com/panjf2000/ants/v2.(*Pool).purgePeriodically"))
+}
 
 func throughputRunner(testSize uint32, messageSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
 	return func(b *testing.B) {

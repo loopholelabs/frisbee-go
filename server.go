@@ -17,8 +17,10 @@
 package frisbee
 
 import (
+	"context"
 	"crypto/tls"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/panjf2000/ants/v2"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -26,99 +28,87 @@ import (
 	"time"
 )
 
-// ServerRouterFunc defines a message handler for a specific frisbee message
-type ServerRouterFunc func(c *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action)
+var (
+	defaultBaseContext = func() context.Context {
+		return context.Background()
+	}
 
-// ServerRouter maps frisbee message types to specific handler functions (of type ServerRouterFunc)
-type ServerRouter map[uint16]ServerRouterFunc
+	defaultOnClosed = func(_ *Async, _ error) {}
+
+	defaultPreWrite = func() {}
+)
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee messages
 type Server struct {
-	listener net.Listener
-	addr     string
-	router   ServerRouter
-	shutdown *atomic.Bool
-	options  *Options
-	wg       sync.WaitGroup
+	listener     net.Listener
+	addr         string
+	handlerTable HandlerTable
+	shutdown     *atomic.Bool
+	options      *Options
+	wg           sync.WaitGroup
+	pool         *ants.Pool
 
-	// OnOpened is a function run by the server whenever a connection is opened
-	OnOpened func(server *Server, c *Async) Action
+	// BaseContext is used to define the base context for this Server and all incoming connections
+	BaseContext func() context.Context
+
+	// ConnContext is used to define a connection-specific context based on the incoming connection
+	// and is run whenever a new connection is opened
+	ConnContext func(context.Context, *Async) context.Context
 
 	// OnClosed is a function run by the server whenever a connection is closed
-	OnClosed func(server *Server, c *Async, err error) Action
+	OnClosed func(*Async, error)
 
-	// OnShutdown is run by the server before it shuts down
-	OnShutdown func(server *Server)
-
-	// PreWrite is run by the server before a write is done (useful for metrics)
-	PreWrite func(server *Server)
+	// PreWrite is run by the server before a write happens
+	PreWrite func()
 }
 
-// NewServer returns an uninitialized frisbee Server with the registered ServerRouter.
+// NewServer returns an uninitialized frisbee Server with the registered HandlerTable.
 // The Start method must then be called to start the server and listen for connections
-func NewServer(addr string, router ServerRouter, opts ...Option) (*Server, error) {
-
+func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server, error) {
 	for i := uint16(0); i < RESERVED9; i++ {
-		if _, ok := router[i]; ok {
-			return nil, InvalidRouter
+		if _, ok := handlerTable[i]; ok {
+			return nil, InvalidHandlerTable
 		}
 	}
 
 	options := loadOptions(opts...)
 	if options.Heartbeat > time.Duration(0) {
-		router[HEARTBEAT] = func(_ *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		handlerTable[HEARTBEAT] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 			outgoing = incoming
 			return
 		}
 	}
 
+	pool, err := ants.NewPool(1<<15, ants.WithPreAlloc(true))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Server{
-		addr:     addr,
-		router:   router,
-		options:  options,
-		shutdown: atomic.NewBool(false),
+		addr:         addr,
+		handlerTable: handlerTable,
+		options:      options,
+		shutdown:     atomic.NewBool(false),
+		pool:         pool,
 	}, nil
 }
 
-func (s *Server) onOpened(c *Async) Action {
-	return s.OnOpened(s, c)
-}
-
-func (s *Server) onClosed(c *Async, err error) Action {
-	return s.OnClosed(s, c, err)
-}
-
-func (s *Server) onShutdown() {
-	s.OnShutdown(s)
-}
-
-func (s *Server) preWrite() {
-	s.PreWrite(s)
-}
-
 // Start will start the frisbee server and its reactor goroutines
-// to receive and handle incoming connections. If the OnClosed, OnOpened, OnShutdown, or PreWrite functions
-// have not been defined, it will use default null functions for these.
+// to receive and handle incoming connections. If the BaseContext, ConnContext,
+// OnClosed, OnShutdown, or PreWrite functions have not been defined, it will
+// use the default functions for these.
 func (s *Server) Start() error {
 
+	if s.BaseContext == nil {
+		s.BaseContext = defaultBaseContext
+	}
+
 	if s.OnClosed == nil {
-		s.OnClosed = func(_ *Server, _ *Async, err error) Action {
-			return NONE
-		}
-	}
-
-	if s.OnOpened == nil {
-		s.OnOpened = func(_ *Server, _ *Async) Action {
-			return NONE
-		}
-	}
-
-	if s.OnShutdown == nil {
-		s.OnShutdown = func(_ *Server) {}
+		s.OnClosed = defaultOnClosed
 	}
 
 	if s.PreWrite == nil {
-		s.PreWrite = func(_ *Server) {}
+		s.PreWrite = defaultPreWrite
 	}
 
 	var err error
@@ -159,61 +149,55 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 
 	frisbeeConn := NewAsync(newConn, s.Logger())
-	openedAction := s.onOpened(frisbeeConn)
+	connCtx := s.BaseContext()
 
-	switch openedAction {
-	case CLOSE:
-		_ = frisbeeConn.Close()
-		s.onClosed(frisbeeConn, nil)
-		return
-	case SHUTDOWN:
-		_ = frisbeeConn.Close()
-		s.onClosed(frisbeeConn, nil)
-		_ = s.Shutdown()
-		s.onShutdown()
-		return
+	if s.ConnContext != nil {
+		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
 
+	var err error
 	for {
-		p, err := frisbeeConn.ReadPacket()
-		if err != nil {
-			_ = frisbeeConn.Close()
-			s.onClosed(frisbeeConn, err)
-			return
-		}
+		err = s.pool.Submit(func() {
+			p, err := frisbeeConn.ReadPacket()
+			if err != nil {
+				_ = frisbeeConn.Close()
+				s.OnClosed(frisbeeConn, err)
+				return
+			}
 
-		routerFunc := s.router[p.Metadata.Operation]
-		if routerFunc != nil {
-			var action Action
-			var outgoing *packet.Packet
-			outgoing, action = routerFunc(frisbeeConn, p)
+			handlerFunc := s.handlerTable[p.Metadata.Operation]
+			if handlerFunc != nil {
+				outgoing, action := handlerFunc(connCtx, p)
+				if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+					s.PreWrite()
+					err = frisbeeConn.WritePacket(outgoing)
+					if err != nil {
+						_ = frisbeeConn.Close()
+						s.OnClosed(frisbeeConn, err)
+						return
+					}
+				}
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
 
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-				s.preWrite()
-				err = frisbeeConn.WritePacket(p)
-				if err != nil {
+				switch action {
+				case NONE:
+				case CLOSE:
 					_ = frisbeeConn.Close()
-					s.onClosed(frisbeeConn, err)
-					return
+					s.OnClosed(frisbeeConn, nil)
+				case SHUTDOWN:
+					_ = frisbeeConn.Close()
+					s.OnClosed(frisbeeConn, nil)
+					_ = s.Shutdown()
 				}
 			}
-			if outgoing != p {
-				packet.Put(outgoing)
-			}
-			packet.Put(p)
-
-			switch action {
-			case CLOSE:
-				_ = frisbeeConn.Close()
-				s.onClosed(frisbeeConn, nil)
-				return
-			case SHUTDOWN:
-				_ = frisbeeConn.Close()
-				s.OnClosed(s, frisbeeConn, nil)
-				_ = s.Shutdown()
-				s.OnShutdown(s)
-				return
-			}
+		})
+		if err != nil {
+			_ = frisbeeConn.Close()
+			s.OnClosed(frisbeeConn, err)
+			return
 		}
 	}
 }
@@ -226,6 +210,7 @@ func (s *Server) Logger() *zerolog.Logger {
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
 	s.shutdown.Store(true)
+	s.pool.Release()
 	defer s.wg.Wait()
 	return s.listener.Close()
 }

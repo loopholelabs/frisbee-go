@@ -231,6 +231,17 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 
 // Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
 func (c *Async) Flush() error {
+	err := c.flush()
+	if err != nil {
+		return c.closeWithError(err)
+	}
+	return nil
+}
+
+// flush is an internal function for flushing data from the write buffer, however
+// it is unique in that it does not call closeWithError (and so does not try and close the underlying connection)
+// when it encounters an error, and instead leaves that responsibility to its parent caller
+func (c *Async) flush() error {
 	c.Lock()
 	if c.closed.Load() {
 		c.Unlock()
@@ -240,13 +251,13 @@ func (c *Async) Flush() error {
 		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
 		if err != nil {
 			c.Unlock()
-			return c.closeWithError(err)
+			return err
 		}
 		err = c.writer.Flush()
 		if err != nil {
 			c.Unlock()
 			c.Logger().Err(err).Msg("error while flushing data")
-			return c.closeWithError(err)
+			return err
 		}
 	}
 	c.Unlock()
@@ -335,15 +346,16 @@ func (c *Async) closeWithError(err error) error {
 }
 
 func (c *Async) flushLoop() {
+	var err error
 	for {
 		if _, ok := <-c.flusher; !ok {
 			c.wg.Done()
 			return
 		}
-		err := c.Flush()
+		err = c.flush()
 		if err != nil {
 			c.wg.Done()
-			_ = c.closeWithError(err)
+			_ = c.closeWithError(ConnectionClosed)
 			return
 		}
 	}
@@ -374,7 +386,7 @@ func (c *Async) handleTimeout() error {
 		return err
 	}
 
-	err = c.Flush()
+	err = c.flush()
 	if err != nil {
 		return err
 	}
