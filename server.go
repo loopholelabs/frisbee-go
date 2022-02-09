@@ -157,24 +157,19 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 		handlerFunc := s.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
-			var action Action
-			var outgoing *packet.Packet
-			outgoing, action = handlerFunc(connCtx, p)
-
+			outgoing, action := handlerFunc(connCtx, p)
 			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
 				s.PreWrite()
 				err = frisbeeConn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
 				if err != nil {
 					_ = frisbeeConn.Close()
 					s.OnClosed(frisbeeConn, err)
 					return
 				}
 			}
-			if outgoing != p {
-				packet.Put(outgoing)
-			}
-			packet.Put(p)
-
 			switch action {
 			case NONE:
 			case CLOSE:
@@ -188,6 +183,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 				return
 			}
 		}
+		packet.Put(p)
 	}
 }
 
