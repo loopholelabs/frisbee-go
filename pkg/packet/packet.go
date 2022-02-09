@@ -17,7 +17,7 @@
 package packet
 
 import (
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/metadata"
 	"sync"
 )
 
@@ -33,9 +33,9 @@ import (
 //	}
 //
 // The ID field can be used however the user sees fit, however ContentLength must match the length of the content being
-// delivered with the frisbee message (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
+// delivered with the frisbee packet (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
 type Packet struct {
-	Metadata *protocol.Message
+	Metadata *metadata.Metadata
 	Content  []byte
 }
 
@@ -74,7 +74,7 @@ func (p *Pool) Get() (s *Packet) {
 
 	s = v.(*Packet)
 	if s.Metadata == nil {
-		s.Metadata = new(protocol.Message)
+		s.Metadata = new(metadata.Metadata)
 	}
 	return
 }
