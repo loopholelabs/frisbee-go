@@ -19,7 +19,7 @@ package frisbee
 import (
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -118,11 +118,11 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 		return InvalidContentLength
 	}
 
-	var encodedMessage [protocol.MessageSize]byte
+	var encodedMessage [metadata.Size]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Metadata.Id)
-	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Metadata.Operation)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Metadata.ContentLength)
+	binary.BigEndian.PutUint16(encodedMessage[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMessage[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMessage[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
 
 	c.Lock()
 	if c.closed.Load() {
@@ -163,9 +163,9 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
 		return nil, ConnectionClosed
 	}
-	var encodedMessage [protocol.MessageSize]byte
+	var encodedMessage [metadata.Size]byte
 
-	_, err := io.ReadAtLeast(c.conn, encodedMessage[:], protocol.MessageSize)
+	_, err := io.ReadAtLeast(c.conn, encodedMessage[:], metadata.Size)
 	if err != nil {
 		if c.closed.Load() {
 			c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
@@ -176,9 +176,9 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	}
 	p := packet.Get()
 
-	p.Metadata.Id = binary.BigEndian.Uint16(encodedMessage[protocol.IdOffset : protocol.IdOffset+protocol.IdSize])
-	p.Metadata.Operation = binary.BigEndian.Uint16(encodedMessage[protocol.OperationOffset : protocol.OperationOffset+protocol.OperationSize])
-	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedMessage[protocol.ContentLengthOffset : protocol.ContentLengthOffset+protocol.ContentLengthSize])
+	p.Metadata.Id = binary.BigEndian.Uint16(encodedMessage[metadata.IdOffset : metadata.IdOffset+metadata.IdSize])
+	p.Metadata.Operation = binary.BigEndian.Uint16(encodedMessage[metadata.OperationOffset : metadata.OperationOffset+metadata.OperationSize])
+	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedMessage[metadata.ContentLengthOffset : metadata.ContentLengthOffset+metadata.ContentLengthSize])
 
 	if p.Metadata.ContentLength > 0 {
 		for cap(p.Content) < int(p.Metadata.ContentLength) {

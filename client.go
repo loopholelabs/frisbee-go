@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-// Client connects to a frisbee Server and can send and receive frisbee messages
+// Client connects to a frisbee Server and can send and receive frisbee packets
 type Client struct {
 	addr             string
 	conn             *Async
@@ -69,7 +69,7 @@ func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts
 }
 
 // Connect actually connects to the given frisbee server, and starts the reactor goroutines
-// to receive and handle incoming messages.
+// to receive and handle incoming packets.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
 	frisbeeConn, err := ConnectAsync(c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
@@ -115,8 +115,8 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// WriteMessage sends a frisbee packet.Packet from the client to the server
-func (c *Client) WriteMessage(p *packet.Packet) error {
+// WritePacket sends a frisbee packet.Packet from the client to the server
+func (c *Client) WritePacket(p *packet.Packet) error {
 	return c.conn.WritePacket(p)
 }
 
@@ -209,7 +209,7 @@ func (c *Client) heartbeat() {
 			return
 		}
 		if c.conn.WriteBufferSize() == 0 {
-			err := c.WriteMessage(HEARTBEATPacket)
+			err := c.WritePacket(HEARTBEATPacket)
 			if err != nil {
 				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
 				c.wg.Done()

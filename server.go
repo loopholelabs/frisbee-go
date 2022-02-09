@@ -37,7 +37,7 @@ var (
 	defaultPreWrite = func() {}
 )
 
-// Server accepts connections from frisbee Clients and can send and receive frisbee messages
+// Server accepts connections from frisbee Clients and can send and receive frisbee Packets
 type Server struct {
 	listener     net.Listener
 	addr         string

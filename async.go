@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/metadata"
 	"github.com/loopholelabs/frisbee/internal/ringbuffer"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
@@ -37,16 +37,16 @@ import (
 // meant to be used by frisbee client and server implementations
 type Async struct {
 	sync.Mutex
-	conn             net.Conn
-	closed           *atomic.Bool
-	writer           *bufio.Writer
-	flusher          chan struct{}
-	incomingMessages *ringbuffer.RingBuffer
-	logger           *zerolog.Logger
-	wg               sync.WaitGroup
-	error            *atomic.Error
-	pongCh           chan struct{}
-	closeCh          chan struct{}
+	conn            net.Conn
+	closed          *atomic.Bool
+	writer          *bufio.Writer
+	flusher         chan struct{}
+	incomingPackets *ringbuffer.RingBuffer
+	logger          *zerolog.Logger
+	wg              sync.WaitGroup
+	error           *atomic.Error
+	pongCh          chan struct{}
+	closeCh         chan struct{}
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -72,15 +72,15 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
 func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 	conn = &Async{
-		conn:             c,
-		closed:           atomic.NewBool(false),
-		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
-		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
-		flusher:          make(chan struct{}, 1024),
-		logger:           logger,
-		error:            atomic.NewError(nil),
-		pongCh:           make(chan struct{}, 1),
-		closeCh:          make(chan struct{}, 1),
+		conn:            c,
+		closed:          atomic.NewBool(false),
+		writer:          bufio.NewWriterSize(c, DefaultBufferSize),
+		incomingPackets: ringbuffer.NewRingBuffer(DefaultBufferSize),
+		flusher:         make(chan struct{}, 1024),
+		logger:          logger,
+		error:           atomic.NewError(nil),
+		pongCh:          make(chan struct{}, 1),
+		closeCh:         make(chan struct{}, 1),
 	}
 
 	if logger == nil {
@@ -144,17 +144,17 @@ func (c *Async) CloseChannel() <-chan struct{} {
 
 // WritePacket takes a packet.Packet and queues it up to send asynchronously.
 //
-// If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
+// If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
 	if int(p.Metadata.ContentLength) != len(p.Content) {
 		return InvalidContentLength
 	}
 
-	var encodedMessage [protocol.MessageSize]byte
+	var encodedMetadata [metadata.Size]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Metadata.Id)
-	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Metadata.Operation)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Metadata.ContentLength)
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
 
 	c.Lock()
 	if c.closed.Load() {
@@ -162,7 +162,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 		return ConnectionClosed
 	}
 
-	_, err := c.writer.Write(encodedMessage[:])
+	_, err := c.writer.Write(encodedMetadata[:])
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
@@ -216,7 +216,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 		return nil, ConnectionClosed
 	}
 
-	readPacket, err := c.incomingMessages.Pop()
+	readPacket, err := c.incomingPackets.Pop()
 	if err != nil {
 		if c.closed.Load() {
 			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from message queue")
@@ -309,7 +309,7 @@ func (c *Async) Close() error {
 
 func (c *Async) killGoroutines() {
 	c.Lock()
-	c.incomingMessages.Close()
+	c.incomingPackets.Close()
 	close(c.flusher)
 	c.Unlock()
 	_ = c.conn.SetDeadline(pastTime)
@@ -403,7 +403,7 @@ func (c *Async) readLoop() {
 	var index int
 	for {
 		buf = buf[:cap(buf)]
-		if len(buf) < protocol.MessageSize {
+		if len(buf) < metadata.Size {
 			c.Logger().Debug().Err(InvalidBufferLength).Msg("error during read loop, calling closeWithError")
 			c.wg.Done()
 			_ = c.closeWithError(InvalidBufferLength)
@@ -412,7 +412,7 @@ func (c *Async) readLoop() {
 
 		var n int
 		var err error
-		for n < protocol.MessageSize {
+		for n < metadata.Size {
 			var nn int
 			err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 			if err != nil {
@@ -424,7 +424,7 @@ func (c *Async) readLoop() {
 			nn, err = c.conn.Read(buf[n:])
 			n += nn
 			if err != nil {
-				if n < protocol.MessageSize {
+				if n < metadata.Size {
 					if errors.Is(err, os.ErrDeadlineExceeded) {
 						err = c.handleTimeout()
 						if err != nil {
@@ -445,10 +445,10 @@ func (c *Async) readLoop() {
 		index = 0
 		for index < n {
 			p := packet.Get()
-			p.Metadata.Id = binary.BigEndian.Uint16(buf[index+protocol.IdOffset : index+protocol.IdOffset+protocol.IdSize])
-			p.Metadata.Operation = binary.BigEndian.Uint16(buf[index+protocol.OperationOffset : index+protocol.OperationOffset+protocol.OperationSize])
-			p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[index+protocol.ContentLengthOffset : index+protocol.ContentLengthOffset+protocol.ContentLengthSize])
-			index += protocol.MessageSize
+			p.Metadata.Id = binary.BigEndian.Uint16(buf[index+metadata.IdOffset : index+metadata.IdOffset+metadata.IdSize])
+			p.Metadata.Operation = binary.BigEndian.Uint16(buf[index+metadata.OperationOffset : index+metadata.OperationOffset+metadata.OperationSize])
+			p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[index+metadata.ContentLengthOffset : index+metadata.ContentLengthOffset+metadata.ContentLengthSize])
+			index += metadata.Size
 
 			switch p.Metadata.Operation {
 			case PING:
@@ -498,7 +498,7 @@ func (c *Async) readLoop() {
 					} else {
 						index += p.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
-					err = c.incomingMessages.Push(p)
+					err = c.incomingPackets.Push(p)
 					if err != nil {
 						c.Logger().Error().Err(err).Msg("error while pushing to incoming message queue")
 						c.wg.Done()
@@ -506,7 +506,7 @@ func (c *Async) readLoop() {
 						return
 					}
 				} else {
-					err = c.incomingMessages.Push(p)
+					err = c.incomingPackets.Push(p)
 					if err != nil {
 						c.Logger().Error().Err(err).Msg("error while pushing to incoming message queue")
 						c.wg.Done()
@@ -518,13 +518,13 @@ func (c *Async) readLoop() {
 			if n == index {
 				index = 0
 				buf = buf[:cap(buf)]
-				if len(buf) < protocol.MessageSize {
+				if len(buf) < metadata.Size {
 					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)
 					return
 				}
 				n = 0
-				for n < protocol.MessageSize {
+				for n < metadata.Size {
 					var nn int
 					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 					if err != nil {
@@ -535,7 +535,7 @@ func (c *Async) readLoop() {
 					nn, err = c.conn.Read(buf[n:])
 					n += nn
 					if err != nil {
-						if n < protocol.MessageSize {
+						if n < metadata.Size {
 							if errors.Is(err, os.ErrDeadlineExceeded) {
 								err = c.handleTimeout()
 								if err != nil {
@@ -552,13 +552,13 @@ func (c *Async) readLoop() {
 						break
 					}
 				}
-			} else if n-index < protocol.MessageSize {
+			} else if n-index < metadata.Size {
 				copy(buf, buf[index:n])
 				n -= index
 				index = n
 
 				buf = buf[:cap(buf)]
-				min := protocol.MessageSize - index
+				min := metadata.Size - index
 				if len(buf) < min {
 					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)

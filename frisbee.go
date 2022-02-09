@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"context"
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 )
@@ -81,21 +81,21 @@ const (
 var (
 	// HEARTBEATPacket is a pre-allocated Frisbee Packet for HEARTBEAT Messages
 	HEARTBEATPacket = &packet.Packet{
-		Metadata: &protocol.Message{
+		Metadata: &metadata.Metadata{
 			Operation: HEARTBEAT,
 		},
 	}
 
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Messages
 	PINGPacket = &packet.Packet{
-		Metadata: &protocol.Message{
+		Metadata: &metadata.Metadata{
 			Operation: PING,
 		},
 	}
 
 	// PONGPacket is a pre-allocated Frisbee Packet for PONG Messages
 	PONGPacket = &packet.Packet{
-		Metadata: &protocol.Message{
+		Metadata: &metadata.Metadata{
 			Operation: PONG,
 		},
 	}

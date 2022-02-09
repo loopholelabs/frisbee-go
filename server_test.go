@@ -19,7 +19,7 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/internal/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -40,25 +40,25 @@ func TestServerRaw(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100
-	const messageSize = 512
+	const packetSize = 512
 	clientHandlerTable := make(HandlerTable)
 	serverHandlerTable := make(HandlerTable)
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverHandlerTable[protocol.MessagePing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverHandlerTable[protocol.MessagePacket] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		conn := ctx.Value(serverConnContextKey).(*Async)
 		rawServerConn = conn.Raw()
 		serverIsRaw <- struct{}{}
 		return
 	}
 
-	clientHandlerTable[protocol.MessagePing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
@@ -81,23 +81,23 @@ func TestServerRaw(t *testing.T) {
 	err = c.Connect()
 	require.NoError(t, err)
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.ContentLength = packetSize
+	p.Metadata.Operation = metadata.PacketPing
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
-		err = c.WriteMessage(p)
+		err = c.WritePacket(p)
 		assert.NoError(t, err)
 	}
 
 	p.Reset()
-	p.Metadata.Operation = protocol.MessagePacket
+	p.Metadata.Operation = metadata.PacketProbe
 
-	err = c.WriteMessage(p)
+	err = c.WritePacket(p)
 	require.NoError(t, err)
 
 	packet.Put(p)
@@ -133,11 +133,11 @@ func TestServerRaw(t *testing.T) {
 
 func BenchmarkThroughput(b *testing.B) {
 	const testSize = 1<<16 - 1
-	const messageSize = 512
+	const packetSize = 512
 
 	handlerTable := make(HandlerTable)
 
-	handlerTable[protocol.MessagePing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	handlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
@@ -157,16 +157,16 @@ func BenchmarkThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.Operation = metadata.PacketPing
 
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * messageSize)
+		b.SetBytes(testSize * packetSize)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -195,15 +195,15 @@ func BenchmarkThroughput(b *testing.B) {
 
 func BenchmarkThroughputWithResponse(b *testing.B) {
 	const testSize = 1<<16 - 1
-	const messageSize = 512
+	const packetSize = 512
 
 	handlerTable := make(HandlerTable)
 
-	handlerTable[protocol.MessagePing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 		if incoming.Metadata.Id == testSize-1 {
 			incoming.Reset()
 			incoming.Metadata.Id = testSize
-			incoming.Metadata.Operation = protocol.MessagePong
+			incoming.Metadata.Operation = metadata.PacketPong
 			outgoing = incoming
 		}
 		return
@@ -225,17 +225,17 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 
 	p := packet.Get()
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.Operation = metadata.PacketPing
 
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * messageSize)
+		b.SetBytes(testSize * packetSize)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -252,7 +252,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 			}
 
 			if readPacket.Metadata.Id != testSize {
-				b.Fatal("invalid decoded message id")
+				b.Fatal("invalid decoded metadata id")
 			}
 			packet.Put(readPacket)
 		}
