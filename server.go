@@ -113,7 +113,6 @@ func (s *Server) Start() error {
 	} else {
 		s.listener, err = net.Listen("tcp", s.addr)
 	}
-
 	if err != nil {
 		return err
 	}
@@ -193,6 +192,8 @@ func (s *Server) handleConn(newConn net.Conn) {
 				_ = s.Shutdown()
 				return
 			}
+		} else {
+			packet.Put(p)
 		}
 	}
 }

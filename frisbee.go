@@ -58,7 +58,7 @@ type Handler func(ctx context.Context, incoming *packet.Packet) (outgoing *packe
 // Frisbee will look up the correct handler for that packet.
 type HandlerTable map[uint16]Handler
 
-// These are internal reserved message types, and are the reason you cannot use 0-9 in Handler functions:
+// These are internal reserved packet types, and are the reason you cannot use 0-9 in Handler functions:
 const (
 	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
 	HEARTBEAT = uint16(iota)
@@ -66,7 +66,7 @@ const (
 	// PING is used to check if a client is still alive
 	PING
 
-	// PONG is used to respond to a PING message
+	// PONG is used to respond to a PING packets
 	PONG
 
 	RESERVED3
@@ -79,21 +79,21 @@ const (
 )
 
 var (
-	// HEARTBEATPacket is a pre-allocated Frisbee Packet for HEARTBEAT Messages
+	// HEARTBEATPacket is a pre-allocated Frisbee Packet for HEARTBEAT Packets
 	HEARTBEATPacket = &packet.Packet{
 		Metadata: &metadata.Metadata{
 			Operation: HEARTBEAT,
 		},
 	}
 
-	// PINGPacket is a pre-allocated Frisbee Packet for PING Messages
+	// PINGPacket is a pre-allocated Frisbee Packet for PING Packets
 	PINGPacket = &packet.Packet{
 		Metadata: &metadata.Metadata{
 			Operation: PING,
 		},
 	}
 
-	// PONGPacket is a pre-allocated Frisbee Packet for PONG Messages
+	// PONGPacket is a pre-allocated Frisbee Packet for PONG Packets
 	PONGPacket = &packet.Packet{
 		Metadata: &metadata.Metadata{
 			Operation: PONG,

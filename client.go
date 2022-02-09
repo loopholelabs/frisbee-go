@@ -124,7 +124,7 @@ func (c *Client) WritePacket(p *packet.Packet) error {
 	return c.conn.WritePacket(p)
 }
 
-// Flush flushes any queued frisbee Messages from the client to the server
+// Flush flushes any queued frisbee Packets from the client to the server
 func (c *Client) Flush() error {
 	return c.conn.Flush()
 }
@@ -202,6 +202,8 @@ func (c *Client) reactor() {
 				_ = c.Close()
 				return
 			}
+		} else {
+			packet.Put(p)
 		}
 	}
 }

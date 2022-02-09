@@ -23,8 +23,8 @@ import (
 )
 
 var (
-	Encoding            = errors.New("error while encoding message")
-	Decoding            = errors.New("error while decoding message")
+	Encoding            = errors.New("error while encoding metadata")
+	Decoding            = errors.New("error while decoding metadata")
 	InvalidBufferLength = errors.New("invalid buffer length")
 )
 
@@ -68,7 +68,7 @@ func (handler *Handler) Encode(id uint16, operation uint16, contentLength uint32
 	return Encode(id, operation, contentLength)
 }
 
-func (handler *Handler) Decode(buf []byte) (message Metadata, err error) {
+func (handler *Handler) Decode(buf []byte) (Metadata, error) {
 	return Decode(buf)
 }
 
@@ -104,22 +104,22 @@ func (fm *Metadata) Decode(buf [Size]byte) (err error) {
 
 // Encode without a Handler
 func Encode(id uint16, operation uint16, contentLength uint32) ([Size]byte, error) {
-	message := Metadata{
+	metadata := Metadata{
 		Id:            id,
 		Operation:     operation,
 		ContentLength: contentLength,
 	}
 
-	return message.Encode()
+	return metadata.Encode()
 }
 
 // Decode without a Handler
-func Decode(buf []byte) (message Metadata, err error) {
+func Decode(buf []byte) (metadata Metadata, err error) {
 	if len(buf) < Size {
 		return Metadata{}, InvalidBufferLength
 	}
 
-	err = message.Decode(*(*[Size]byte)(unsafe.Pointer(&buf[0])))
+	err = metadata.Decode(*(*[Size]byte)(unsafe.Pointer(&buf[0])))
 
 	return
 }

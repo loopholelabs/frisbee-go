@@ -144,7 +144,7 @@ func (c *Async) CloseChannel() <-chan struct{} {
 
 // WritePacket takes a packet.Packet and queues it up to send asynchronously.
 //
-// If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
+// If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
 	if int(p.Metadata.ContentLength) != len(p.Content) {
 		return InvalidContentLength
@@ -166,10 +166,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while writing encoded message")
+			c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while writing encoded message")
+		c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 		return c.closeWithError(err)
 	}
 	if p.Metadata.ContentLength != 0 {
@@ -178,10 +178,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 			if err != nil {
 				c.Unlock()
 				if c.closed.Load() {
-					c.Logger().Error().Err(ConnectionClosed).Msg("error while writing message content")
+					c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 					return ConnectionClosed
 				}
-				c.Logger().Error().Err(err).Msg("error while writing message content")
+				c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 				return c.closeWithError(err)
 			}
 		}
@@ -189,10 +189,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Msg("error while writing message content")
+				c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 				return ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Msg("error while writing message content")
+			c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 			return c.closeWithError(err)
 		}
 	}
@@ -209,8 +209,8 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	return nil
 }
 
-// ReadPacket is a blocking function that will wait until a Frisbee message is available and then return it (and its content).
-// In the event that the connection is closed, ReadMessage will return an error.
+// ReadPacket is a blocking function that will wait until a Frisbee packet is available and then return it (and its content).
+// In the event that the connection is closed, ReadPacket will return an error.
 func (c *Async) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
 		return nil, ConnectionClosed
@@ -219,17 +219,17 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 	readPacket, err := c.incomingPackets.Pop()
 	if err != nil {
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from message queue")
+			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
 			return nil, ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while popping from message queue")
+		c.Logger().Error().Err(err).Msg("error while popping from packet queue")
 		return nil, err
 	}
 
 	return readPacket, nil
 }
 
-// Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
+// Flush allows for synchronous messaging by flushing the write buffer and instantly sending packets
 func (c *Async) Flush() error {
 	err := c.flush()
 	if err != nil {
@@ -264,7 +264,7 @@ func (c *Async) flush() error {
 	return nil
 }
 
-// WriteBufferSize returns the size of the underlying message buffer (used for internal message handling and for heartbeat logic)
+// WriteBufferSize returns the size of the underlying write buffer (used for internal packet handling and for heartbeat logic)
 func (c *Async) WriteBufferSize() int {
 	c.Lock()
 	if c.closed.Load() {
@@ -371,7 +371,7 @@ func (c *Async) waitForPONG() {
 		_ = c.closeWithError(os.ErrDeadlineExceeded)
 	case <-c.pongCh:
 		c.wg.Done()
-		c.Logger().Debug().Msg("PONG message received on time, connection is alive")
+		c.Logger().Debug().Msg("PONG packet received on time, connection is alive")
 	}
 }
 
@@ -452,7 +452,7 @@ func (c *Async) readLoop() {
 
 			switch p.Metadata.Operation {
 			case PING:
-				c.Logger().Debug().Msg("PING Packet received by read loop, sending back PONG message")
+				c.Logger().Debug().Msg("PING Packet received by read loop, sending back PONG packet")
 				err = c.WritePacket(PONGPacket)
 				if err != nil {
 					c.wg.Done()
@@ -500,7 +500,7 @@ func (c *Async) readLoop() {
 					}
 					err = c.incomingPackets.Push(p)
 					if err != nil {
-						c.Logger().Error().Err(err).Msg("error while pushing to incoming message queue")
+						c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
 						c.wg.Done()
 						_ = c.closeWithError(err)
 						return
@@ -508,7 +508,7 @@ func (c *Async) readLoop() {
 				} else {
 					err = c.incomingPackets.Push(p)
 					if err != nil {
-						c.Logger().Error().Err(err).Msg("error while pushing to incoming message queue")
+						c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
 						c.wg.Done()
 						_ = c.closeWithError(err)
 						return

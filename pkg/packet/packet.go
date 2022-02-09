@@ -33,7 +33,7 @@ import (
 //	}
 //
 // The ID field can be used however the user sees fit, however ContentLength must match the length of the content being
-// delivered with the frisbee message (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
+// delivered with the frisbee packet (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
 type Packet struct {
 	Metadata *metadata.Metadata
 	Content  []byte

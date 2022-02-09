@@ -16,9 +16,9 @@
 
 // Package frisbee is the core package for using the frisbee messaging framework. The frisbee framework
 // is a messaging framework designed around the aspect of "bring your own protocol", and can be used by
-// simply defining your message types and their accompanying logic.
+// simply defining your packet types and their accompanying logic.
 //
-// This package provides methods for defining message types and logic, as well as functionality
+// This package provides methods for defining packet types and logic, as well as functionality
 // for implementing frisbee servers and clients. Useful features like automatic heartbeats and
 // automatic reconnections are provided as well.
 //
@@ -43,7 +43,7 @@
 //	const PONG = uint16(11)
 //
 //	func handlePing(_ *frisbee.Async, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
-//		if incomingMessage.ContentLength > 0 {
+//		if incoming.Metadata.ContentLength > 0 {
 //			log.Printf("Server Received Metadata: %s\n", incoming.Content)
 //          incoming.Metadata.Operation = PONG
 //			outgoing = incoming
@@ -88,7 +88,7 @@
 //	const PONG = uint16(11)
 //
 //	func handlePong(incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
-//		if incomingMessage.ContentLength > 0 {
+//		if incoming.Metadata.ContentLength > 0 {
 //			log.Printf("Client Received Metadata: %s\n", incoming.Content)
 //		}
 //		return
@@ -134,7 +134,7 @@
 //
 // (Examples taken from https://github.com/loopholelabs/frisbee-examples/)
 //
-// This example is a simple echo client/server, where the client will repeatedly send messages to the server,
-// and the server will echo them back. Its purpose is to describe the flow of messages from Frisbee Client to Server,
+// This example is a simple echo client/server, where the client will repeatedly send packets to the server,
+// and the server will echo them back. Its purpose is to describe the flow of packets from Frisbee Client to Server,
 // as well as give an example of how a Frisbee application must be implemented.
 package frisbee
