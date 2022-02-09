@@ -36,6 +36,10 @@ type Client struct {
 	closed           *atomic.Bool
 	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
+
+	// PacketContext is used to define packet-specific contexts based on the incoming packet
+	// and is run whenever a new packet arrives
+	PacketContext func(context.Context, *packet.Packet) context.Context
 }
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
@@ -165,24 +169,26 @@ func (c *Client) reactor() {
 
 		handlerFunc := c.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
-			var action Action
-			var outgoing *packet.Packet
-			outgoing, action = handlerFunc(c.ctx, p)
-
+			packetCtx := c.ctx
+			if c.PacketContext != nil {
+				packetCtx = c.PacketContext(packetCtx, p)
+			}
+			outgoing, action := handlerFunc(packetCtx, p)
 			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
 				err = c.conn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
 				if err != nil {
 					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
 					c.wg.Done()
 					_ = c.Close()
 					return
 				}
+			} else {
+				packet.Put(p)
 			}
-			if outgoing != p {
-				packet.Put(outgoing)
-			}
-			packet.Put(p)
-
 			switch action {
 			case NONE:
 			case CLOSE:
@@ -195,7 +201,6 @@ func (c *Client) reactor() {
 				c.wg.Done()
 				_ = c.Close()
 				return
-			default:
 			}
 		}
 	}

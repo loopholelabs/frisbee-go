@@ -53,6 +53,10 @@ type Server struct {
 	// and is run whenever a new connection is opened
 	ConnContext func(context.Context, *Async) context.Context
 
+	// PacketContext is used to define a handler-specific contexts based on the incoming packet
+	// and is run whenever a new packet arrives
+	PacketContext func(context.Context, *packet.Packet) context.Context
+
 	// OnClosed is a function run by the server whenever a connection is closed
 	OnClosed func(*Async, error)
 
@@ -157,18 +161,25 @@ func (s *Server) handleConn(newConn net.Conn) {
 
 		handlerFunc := s.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
-			outgoing, action := handlerFunc(connCtx, p)
+			packetCtx := connCtx
+			if s.PacketContext != nil {
+				packetCtx = s.PacketContext(packetCtx, p)
+			}
+			outgoing, action := handlerFunc(packetCtx, p)
 			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
 				s.PreWrite()
 				err = frisbeeConn.WritePacket(outgoing)
 				if outgoing != p {
 					packet.Put(outgoing)
 				}
+				packet.Put(p)
 				if err != nil {
 					_ = frisbeeConn.Close()
 					s.OnClosed(frisbeeConn, err)
 					return
 				}
+			} else {
+				packet.Put(p)
 			}
 			switch action {
 			case NONE:
@@ -183,7 +194,6 @@ func (s *Server) handleConn(newConn net.Conn) {
 				return
 			}
 		}
-		packet.Put(p)
 	}
 }
 
