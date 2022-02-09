@@ -55,6 +55,10 @@ type Server struct {
 	// and is run whenever a new connection is opened
 	ConnContext func(context.Context, *Async) context.Context
 
+	// PacketContext is used to define a packet-specific context based on the incoming packet
+	// for a connection, and is run every time a new packet is being handled
+	PacketContext func(context.Context, *packet.Packet) context.Context
+
 	// OnClosed is a function run by the server whenever a connection is closed
 	OnClosed func(*Async, error)
 
@@ -64,7 +68,7 @@ type Server struct {
 
 // NewServer returns an uninitialized frisbee Server with the registered HandlerTable.
 // The Start method must then be called to start the server and listen for connections
-func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server, error) {
+func NewServer(addr string, handlerTable HandlerTable, poolSize int, opts ...Option) (*Server, error) {
 	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := handlerTable[i]; ok {
 			return nil, InvalidHandlerTable
@@ -79,7 +83,11 @@ func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server,
 		}
 	}
 
-	pool, err := ants.NewPool(1<<15, ants.WithPreAlloc(true))
+	if poolSize < 100 {
+		poolSize = 100
+	}
+
+	pool, err := ants.NewPool(poolSize, ants.WithPreAlloc(true))
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +149,38 @@ func (s *Server) Start() error {
 	return nil
 }
 
+func (s *Server) handlePacket(ctx context.Context, p *packet.Packet, conn *Async) func() {
+	return func() {
+		handlerFunc := s.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			outgoing, action := handlerFunc(ctx, p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+				s.PreWrite()
+				err := conn.WritePacket(outgoing)
+				if err != nil {
+					_ = conn.Close()
+					s.OnClosed(conn, err)
+					return
+				}
+			}
+			if outgoing != p {
+				packet.Put(outgoing)
+			}
+			packet.Put(p)
+			switch action {
+			case NONE:
+			case CLOSE:
+				_ = conn.Close()
+				s.OnClosed(conn, nil)
+			case SHUTDOWN:
+				_ = conn.Close()
+				s.OnClosed(conn, nil)
+				_ = s.Shutdown()
+			}
+		}
+	}
+}
+
 func (s *Server) handleConn(newConn net.Conn) {
 	switch v := newConn.(type) {
 	case *net.TCPConn:
@@ -155,45 +195,20 @@ func (s *Server) handleConn(newConn net.Conn) {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
 
+	var p *packet.Packet
 	var err error
 	for {
-		err = s.pool.Submit(func() {
-			p, err := frisbeeConn.ReadPacket()
-			if err != nil {
-				_ = frisbeeConn.Close()
-				s.OnClosed(frisbeeConn, err)
-				return
-			}
-
-			handlerFunc := s.handlerTable[p.Metadata.Operation]
-			if handlerFunc != nil {
-				outgoing, action := handlerFunc(connCtx, p)
-				if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-					s.PreWrite()
-					err = frisbeeConn.WritePacket(outgoing)
-					if err != nil {
-						_ = frisbeeConn.Close()
-						s.OnClosed(frisbeeConn, err)
-						return
-					}
-				}
-				if outgoing != p {
-					packet.Put(outgoing)
-				}
-				packet.Put(p)
-
-				switch action {
-				case NONE:
-				case CLOSE:
-					_ = frisbeeConn.Close()
-					s.OnClosed(frisbeeConn, nil)
-				case SHUTDOWN:
-					_ = frisbeeConn.Close()
-					s.OnClosed(frisbeeConn, nil)
-					_ = s.Shutdown()
-				}
-			}
-		})
+		p, err = frisbeeConn.ReadPacket()
+		if err != nil {
+			_ = frisbeeConn.Close()
+			s.OnClosed(frisbeeConn, err)
+			return
+		}
+		packetCtx := connCtx
+		if s.PacketContext != nil {
+			packetCtx = s.PacketContext(packetCtx, p)
+		}
+		err = s.pool.Submit(s.handlePacket(packetCtx, p, frisbeeConn))
 		if err != nil {
 			_ = frisbeeConn.Close()
 			s.OnClosed(frisbeeConn, err)

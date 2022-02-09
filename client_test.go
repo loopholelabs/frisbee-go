@@ -63,7 +63,7 @@ func TestClientRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, 1000, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
@@ -145,7 +145,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, 1000, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, 1000, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
