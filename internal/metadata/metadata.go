@@ -14,7 +14,7 @@
 	limitations under the License.
 */
 
-package protocol
+package metadata
 
 import (
 	"encoding/binary"
@@ -29,9 +29,9 @@ var (
 )
 
 const (
-	MessagePing   = uint16(10) // PING
-	MessagePong   = uint16(11) // PONG
-	MessagePacket = uint16(12) // PACKET
+	PacketPing  = uint16(10) // PING
+	PacketPong  = uint16(11) // PONG
+	PacketProbe = uint16(12) // PACKET
 )
 
 const (
@@ -44,11 +44,11 @@ const (
 	ContentLengthOffset = OperationOffset + OperationSize // 4
 	ContentLengthSize   = 4
 
-	MessageSize = ContentLengthOffset + ContentLengthSize // 8
+	Size = ContentLengthOffset + ContentLengthSize // 8
 )
 
-// Message is 8 bytes in length
-type Message struct {
+// Metadata is 8 bytes in length
+type Metadata struct {
 	Id            uint16 // 2 Bytes
 	Operation     uint16 // 2 Bytes
 	ContentLength uint32 // 4 Bytes
@@ -64,16 +64,16 @@ func NewHandler() Handler {
 	return Handler{}
 }
 
-func (handler *Handler) Encode(id uint16, operation uint16, contentLength uint32) ([MessageSize]byte, error) {
+func (handler *Handler) Encode(id uint16, operation uint16, contentLength uint32) ([Size]byte, error) {
 	return Encode(id, operation, contentLength)
 }
 
-func (handler *Handler) Decode(buf []byte) (message Message, err error) {
+func (handler *Handler) Decode(buf []byte) (message Metadata, err error) {
 	return Decode(buf)
 }
 
-// Encode Message
-func (fm *Message) Encode() (result [MessageSize]byte, err error) {
+// Encode Metadata
+func (fm *Metadata) Encode() (result [Size]byte, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.Wrap(recoveredErr.(error), Encoding.Error())
@@ -87,8 +87,8 @@ func (fm *Message) Encode() (result [MessageSize]byte, err error) {
 	return
 }
 
-// Decode Message
-func (fm *Message) Decode(buf [MessageSize]byte) (err error) {
+// Decode Metadata
+func (fm *Metadata) Decode(buf [Size]byte) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.Wrap(recoveredErr.(error), Decoding.Error())
@@ -103,8 +103,8 @@ func (fm *Message) Decode(buf [MessageSize]byte) (err error) {
 }
 
 // Encode without a Handler
-func Encode(id uint16, operation uint16, contentLength uint32) ([MessageSize]byte, error) {
-	message := Message{
+func Encode(id uint16, operation uint16, contentLength uint32) ([Size]byte, error) {
+	message := Metadata{
 		Id:            id,
 		Operation:     operation,
 		ContentLength: contentLength,
@@ -114,12 +114,12 @@ func Encode(id uint16, operation uint16, contentLength uint32) ([MessageSize]byt
 }
 
 // Decode without a Handler
-func Decode(buf []byte) (message Message, err error) {
-	if len(buf) < MessageSize {
-		return Message{}, InvalidBufferLength
+func Decode(buf []byte) (message Metadata, err error) {
+	if len(buf) < Size {
+		return Metadata{}, InvalidBufferLength
 	}
 
-	err = message.Decode(*(*[MessageSize]byte)(unsafe.Pointer(&buf[0])))
+	err = message.Decode(*(*[Size]byte)(unsafe.Pointer(&buf[0])))
 
 	return
 }

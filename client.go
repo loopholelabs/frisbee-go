@@ -17,6 +17,7 @@
 package frisbee
 
 import (
+	"context"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -25,30 +26,29 @@ import (
 	"time"
 )
 
-// ClientRouterFunc defines a message handler for a specific frisbee message
-type ClientRouterFunc func(incoming *packet.Packet) (outgoing *packet.Packet, action Action)
-
-// ClientRouter maps frisbee message types to specific handler functions (of type ClientRouterFunc)
-type ClientRouter map[uint16]ClientRouterFunc
-
-// Client connects to a frisbee Server and can send and receive frisbee messages
+// Client connects to a frisbee Server and can send and receive frisbee packets
 type Client struct {
 	addr             string
 	conn             *Async
-	router           ClientRouter
+	handlerTable     HandlerTable
+	ctx              context.Context
 	options          *Options
 	closed           *atomic.Bool
 	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
+
+	// PacketContext is used to define packet-specific contexts based on the incoming packet
+	// and is run whenever a new packet arrives
+	PacketContext func(context.Context, *packet.Packet) context.Context
 }
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
 // The ConnectAsync method must then be called to dial the server and initialize the connection
-func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error) {
+func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Client, error) {
 
 	for i := uint16(0); i < RESERVED9; i++ {
-		if _, ok := router[i]; ok {
-			return nil, InvalidRouter
+		if _, ok := handlerTable[i]; ok {
+			return nil, InvalidHandlerTable
 		}
 	}
 
@@ -56,7 +56,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 	var heartbeatChannel chan struct{}
 	if options.Heartbeat > time.Duration(0) {
 		heartbeatChannel = make(chan struct{}, 1)
-		router[HEARTBEAT] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		handlerTable[HEARTBEAT] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 			heartbeatChannel <- struct{}{}
 			return
 		}
@@ -64,7 +64,8 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 
 	return &Client{
 		addr:             addr,
-		router:           router,
+		handlerTable:     handlerTable,
+		ctx:              ctx,
 		options:          options,
 		closed:           atomic.NewBool(false),
 		heartbeatChannel: heartbeatChannel,
@@ -72,7 +73,7 @@ func NewClient(addr string, router ClientRouter, opts ...Option) (*Client, error
 }
 
 // Connect actually connects to the given frisbee server, and starts the reactor goroutines
-// to receive and handle incoming messages.
+// to receive and handle incoming packets.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
 	frisbeeConn, err := ConnectAsync(c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
@@ -118,8 +119,8 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// WriteMessage sends a frisbee packet.Packet from the client to the server
-func (c *Client) WriteMessage(p *packet.Packet) error {
+// WritePacket sends a frisbee packet.Packet from the client to the server
+func (c *Client) WritePacket(p *packet.Packet) error {
 	return c.conn.WritePacket(p)
 }
 
@@ -153,70 +154,84 @@ func (c *Client) Logger() *zerolog.Logger {
 }
 
 func (c *Client) reactor() {
-	defer c.wg.Done()
 	for {
 		if c.closed.Load() {
+			c.wg.Done()
 			return
 		}
 		p, err := c.conn.ReadPacket()
 		if err != nil {
 			c.Logger().Error().Err(err).Msg("error while reading from frisbee connection")
+			c.wg.Done()
 			_ = c.Close()
 			return
 		}
 
-		routerFunc := c.router[p.Metadata.Operation]
-		if routerFunc != nil {
-			var action Action
-			var outgoing *packet.Packet
-			outgoing, action = routerFunc(p)
-
+		handlerFunc := c.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := c.ctx
+			if c.PacketContext != nil {
+				packetCtx = c.PacketContext(packetCtx, p)
+			}
+			outgoing, action := handlerFunc(packetCtx, p)
 			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-				err = c.conn.WritePacket(p)
+				err = c.conn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
 				if err != nil {
 					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+					c.wg.Done()
 					_ = c.Close()
 					return
 				}
+			} else {
+				packet.Put(p)
 			}
-			if outgoing != p {
-				packet.Put(outgoing)
-			}
-			packet.Put(p)
-
 			switch action {
+			case NONE:
 			case CLOSE:
 				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
+				c.wg.Done()
 				_ = c.Close()
 				return
 			case SHUTDOWN:
 				c.Logger().Debug().Msgf("Closing connection %s because of SHUTDOWN action", c.addr)
+				c.wg.Done()
 				_ = c.Close()
 				return
-			default:
 			}
 		}
 	}
 }
 
 func (c *Client) heartbeat() {
-	defer c.wg.Done()
 	for {
 		<-time.After(c.options.Heartbeat)
 		if c.closed.Load() {
+			c.wg.Done()
 			return
 		}
 		if c.conn.WriteBufferSize() == 0 {
-			err := c.WriteMessage(HEARTBEATPacket)
+			err := c.WritePacket(HEARTBEATPacket)
 			if err != nil {
 				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+				c.wg.Done()
 				_ = c.Close()
 				return
 			}
 			start := time.Now()
 			c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
-			<-c.heartbeatChannel
-			c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
+			select {
+			case <-c.heartbeatChannel:
+				c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
+			case <-time.After(c.options.Heartbeat):
+				c.Logger().Error().Msg("Heartbeat not received within timeout period")
+				c.wg.Done()
+				_ = c.Close()
+				return
+			}
 		} else {
 			c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
 		}
