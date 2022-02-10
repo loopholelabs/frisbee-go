@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/panjf2000/ants/v2"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -37,6 +38,12 @@ var (
 	defaultPreWrite = func() {}
 )
 
+type job struct {
+	ctx    context.Context
+	conn   *Async
+	packet *packet.Packet
+}
+
 // Server accepts connections from frisbee Clients and can send and receive frisbee Packets
 type Server struct {
 	listener     net.Listener
@@ -45,6 +52,7 @@ type Server struct {
 	shutdown     *atomic.Bool
 	options      *Options
 	wg           sync.WaitGroup
+	pool         *ants.PoolWithFunc
 
 	// BaseContext is used to define the base context for this Server and all incoming connections
 	BaseContext func() context.Context
@@ -117,6 +125,47 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	s.pool, err = ants.NewPoolWithFunc(1<<16, func(i interface{}) {
+		j := i.(*job)
+		handlerFunc := s.handlerTable[j.packet.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := j.ctx
+			if s.PacketContext != nil {
+				packetCtx = s.PacketContext(packetCtx, j.packet)
+			}
+			outgoing, action := handlerFunc(packetCtx, j.packet)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+				s.PreWrite()
+				err = j.conn.WritePacket(outgoing)
+				if outgoing != j.packet {
+					packet.Put(outgoing)
+				}
+				packet.Put(j.packet)
+				if err != nil {
+					_ = j.conn.Close()
+					s.OnClosed(j.conn, err)
+					return
+				}
+			} else {
+				packet.Put(j.packet)
+			}
+			switch action {
+			case NONE:
+			case CLOSE:
+				_ = j.conn.Close()
+				s.OnClosed(j.conn, nil)
+				return
+			case SHUTDOWN:
+				_ = j.conn.Close()
+				s.OnClosed(j.conn, nil)
+				_ = s.Shutdown()
+				return
+			}
+		} else {
+			packet.Put(j.packet)
+		}
+	}, ants.WithPreAlloc(true))
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -158,42 +207,11 @@ func (s *Server) handleConn(newConn net.Conn) {
 			return
 		}
 
-		handlerFunc := s.handlerTable[p.Metadata.Operation]
-		if handlerFunc != nil {
-			packetCtx := connCtx
-			if s.PacketContext != nil {
-				packetCtx = s.PacketContext(packetCtx, p)
-			}
-			outgoing, action := handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-				s.PreWrite()
-				err = frisbeeConn.WritePacket(outgoing)
-				if outgoing != p {
-					packet.Put(outgoing)
-				}
-				packet.Put(p)
-				if err != nil {
-					_ = frisbeeConn.Close()
-					s.OnClosed(frisbeeConn, err)
-					return
-				}
-			} else {
-				packet.Put(p)
-			}
-			switch action {
-			case NONE:
-			case CLOSE:
-				_ = frisbeeConn.Close()
-				s.OnClosed(frisbeeConn, nil)
-				return
-			case SHUTDOWN:
-				_ = frisbeeConn.Close()
-				s.OnClosed(frisbeeConn, nil)
-				_ = s.Shutdown()
-				return
-			}
-		} else {
-			packet.Put(p)
+		err = s.pool.Invoke(&job{packet: p, conn: frisbeeConn, ctx: connCtx})
+		if err != nil {
+			_ = frisbeeConn.Close()
+			s.OnClosed(frisbeeConn, err)
+			return
 		}
 	}
 }
@@ -206,6 +224,7 @@ func (s *Server) Logger() *zerolog.Logger {
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
 	s.shutdown.Store(true)
+	s.pool.Release()
 	defer s.wg.Wait()
 	return s.listener.Close()
 }

@@ -355,14 +355,14 @@ func (c *Async) flushLoop() {
 		err = c.flush()
 		if err != nil {
 			c.wg.Done()
-			_ = c.closeWithError(ConnectionClosed)
+			_ = c.closeWithError(err)
 			return
 		}
 	}
 }
 
 func (c *Async) waitForPONG() {
-	timer := time.NewTimer(defaultDeadline)
+	timer := time.NewTimer(defaultDeadline * 10)
 	defer timer.Stop()
 	select {
 	case <-timer.C:

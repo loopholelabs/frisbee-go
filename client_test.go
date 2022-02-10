@@ -130,7 +130,7 @@ func TestClientRaw(t *testing.T) {
 }
 
 func BenchmarkClientThroughput(b *testing.B) {
-	const testSize = 100000
+	const testSize = 1<<16 - 1
 	const packetSize = 512
 
 	clientHandlerTable := make(HandlerTable)
@@ -140,7 +140,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 		return
 	}
 
-	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	clientHandlerTable[metadata.PacketPong] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
