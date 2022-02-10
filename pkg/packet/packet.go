@@ -17,7 +17,7 @@
 package packet
 
 import (
-	"github.com/loopholelabs/frisbee/internal/metadata"
+	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"sync"
 )
 

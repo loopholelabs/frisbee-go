@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"context"
-	"github.com/loopholelabs/frisbee/internal/metadata"
+	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 )

@@ -20,8 +20,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/buffer"
-	"github.com/loopholelabs/frisbee/internal/metadata"
+	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -41,7 +40,7 @@ type Async struct {
 	closed   *atomic.Bool
 	writer   *bufio.Writer
 	flusher  chan struct{}
-	incoming *buffer.Packet
+	incoming *packet.Buffer
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
@@ -75,8 +74,8 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		conn:     c,
 		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
-		incoming: buffer.NewPacket(DefaultBufferSize),
-		flusher:  make(chan struct{}, 1024),
+		incoming: packet.NewBuffer(),
+		flusher:  make(chan struct{}, 3),
 		logger:   logger,
 		error:    atomic.NewError(nil),
 		pongCh:   make(chan struct{}, 1),
@@ -150,7 +149,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 		return InvalidContentLength
 	}
 
-	var encodedMetadata [metadata.Size]byte
+	encodedMetadata := metadata.Get()
 
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
@@ -163,6 +162,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	}
 
 	_, err := c.writer.Write(encodedMetadata[:])
+	metadata.Put(encodedMetadata)
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
