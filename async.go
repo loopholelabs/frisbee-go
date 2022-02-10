@@ -20,8 +20,8 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/binary"
+	"github.com/loopholelabs/frisbee/internal/buffer"
 	"github.com/loopholelabs/frisbee/internal/metadata"
-	"github.com/loopholelabs/frisbee/internal/ringbuffer"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -37,16 +37,16 @@ import (
 // meant to be used by frisbee client and server implementations
 type Async struct {
 	sync.Mutex
-	conn            net.Conn
-	closed          *atomic.Bool
-	writer          *bufio.Writer
-	flusher         chan struct{}
-	incomingPackets *ringbuffer.RingBuffer
-	logger          *zerolog.Logger
-	wg              sync.WaitGroup
-	error           *atomic.Error
-	pongCh          chan struct{}
-	closeCh         chan struct{}
+	conn     net.Conn
+	closed   *atomic.Bool
+	writer   *bufio.Writer
+	flusher  chan struct{}
+	incoming *buffer.Packet
+	logger   *zerolog.Logger
+	wg       sync.WaitGroup
+	error    *atomic.Error
+	pongCh   chan struct{}
+	closeCh  chan struct{}
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -72,15 +72,15 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
 func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 	conn = &Async{
-		conn:            c,
-		closed:          atomic.NewBool(false),
-		writer:          bufio.NewWriterSize(c, DefaultBufferSize),
-		incomingPackets: ringbuffer.NewRingBuffer(DefaultBufferSize),
-		flusher:         make(chan struct{}, 1024),
-		logger:          logger,
-		error:           atomic.NewError(nil),
-		pongCh:          make(chan struct{}, 1),
-		closeCh:         make(chan struct{}, 1),
+		conn:     c,
+		closed:   atomic.NewBool(false),
+		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
+		incoming: buffer.NewPacket(DefaultBufferSize),
+		flusher:  make(chan struct{}, 1024),
+		logger:   logger,
+		error:    atomic.NewError(nil),
+		pongCh:   make(chan struct{}, 1),
+		closeCh:  make(chan struct{}, 1),
 	}
 
 	if logger == nil {
@@ -216,7 +216,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 		return nil, ConnectionClosed
 	}
 
-	readPacket, err := c.incomingPackets.Pop()
+	readPacket, err := c.incoming.Pop()
 	if err != nil {
 		if c.closed.Load() {
 			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
@@ -309,7 +309,7 @@ func (c *Async) Close() error {
 
 func (c *Async) killGoroutines() {
 	c.Lock()
-	c.incomingPackets.Close()
+	c.incoming.Close()
 	close(c.flusher)
 	c.Unlock()
 	_ = c.conn.SetDeadline(pastTime)
@@ -498,7 +498,7 @@ func (c *Async) readLoop() {
 					} else {
 						index += p.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
-					err = c.incomingPackets.Push(p)
+					err = c.incoming.Push(p)
 					if err != nil {
 						c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
 						c.wg.Done()
@@ -506,7 +506,7 @@ func (c *Async) readLoop() {
 						return
 					}
 				} else {
-					err = c.incomingPackets.Push(p)
+					err = c.incoming.Push(p)
 					if err != nil {
 						c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
 						c.wg.Done()
