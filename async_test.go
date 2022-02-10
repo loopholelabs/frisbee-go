@@ -33,7 +33,7 @@ import (
 func TestNewAsync(t *testing.T) {
 	t.Parallel()
 
-	const messageSize = 512
+	const packetSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -58,11 +58,11 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(p.Content))
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	err = writerConn.WritePacket(p)
 	require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestNewAsync(t *testing.T) {
 	assert.NotNil(t, p.Metadata)
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
-	assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
+	assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
 	assert.Equal(t, len(data), len(p.Content))
 	assert.Equal(t, data, p.Content)
 
@@ -90,7 +90,7 @@ func TestAsyncLargeWrite(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100000
-	const messageSize = 512
+	const packetSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -103,10 +103,10 @@ func TestAsyncLargeWrite(t *testing.T) {
 	p := packet.Get()
 	p.Metadata.Id = 64
 	p.Metadata.Operation = 32
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	for i := 0; i < testSize; i++ {
-		randomData[i] = make([]byte, messageSize)
+		randomData[i] = make([]byte, packetSize)
 		_, _ = rand.Read(randomData[i])
 		p.Write(randomData[i])
 		err := writerConn.WritePacket(p)
@@ -120,7 +120,7 @@ func TestAsyncLargeWrite(t *testing.T) {
 		assert.NotNil(t, p.Metadata)
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
-		assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
+		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
 		assert.Equal(t, len(randomData[i]), len(p.Content))
 		assert.Equal(t, randomData[i], p.Content)
 		packet.Put(p)
@@ -136,7 +136,7 @@ func TestAsyncRawConn(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100000
-	const messageSize = 32
+	const packetSize = 32
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -146,14 +146,14 @@ func TestAsyncRawConn(t *testing.T) {
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
 
-	randomData := make([]byte, messageSize)
+	randomData := make([]byte, packetSize)
 	_, _ = rand.Read(randomData)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
 	p.Metadata.Operation = 32
 	p.Write(randomData)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	for i := 0; i < testSize; i++ {
 		err := writerConn.WritePacket(p)
@@ -168,7 +168,7 @@ func TestAsyncRawConn(t *testing.T) {
 		assert.NotNil(t, p.Metadata)
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
-		assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
+		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
 		assert.Equal(t, len(randomData), len(p.Content))
 		assert.Equal(t, randomData, p.Content)
 	}

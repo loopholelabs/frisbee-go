@@ -20,8 +20,8 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/protocol"
-	"github.com/loopholelabs/frisbee/internal/ringbuffer"
+	"github.com/loopholelabs/frisbee/internal/buffer"
+	"github.com/loopholelabs/frisbee/internal/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -37,16 +37,16 @@ import (
 // meant to be used by frisbee client and server implementations
 type Async struct {
 	sync.Mutex
-	conn             net.Conn
-	closed           *atomic.Bool
-	writer           *bufio.Writer
-	flusher          chan struct{}
-	incomingMessages *ringbuffer.RingBuffer
-	logger           *zerolog.Logger
-	wg               sync.WaitGroup
-	error            *atomic.Error
-	pongCh           chan struct{}
-	closeCh          chan struct{}
+	conn     net.Conn
+	closed   *atomic.Bool
+	writer   *bufio.Writer
+	flusher  chan struct{}
+	incoming *buffer.Packet
+	logger   *zerolog.Logger
+	wg       sync.WaitGroup
+	error    *atomic.Error
+	pongCh   chan struct{}
+	closeCh  chan struct{}
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -72,15 +72,15 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
 func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 	conn = &Async{
-		conn:             c,
-		closed:           atomic.NewBool(false),
-		writer:           bufio.NewWriterSize(c, DefaultBufferSize),
-		incomingMessages: ringbuffer.NewRingBuffer(DefaultBufferSize),
-		flusher:          make(chan struct{}, 1024),
-		logger:           logger,
-		error:            atomic.NewError(nil),
-		pongCh:           make(chan struct{}, 1),
-		closeCh:          make(chan struct{}, 1),
+		conn:     c,
+		closed:   atomic.NewBool(false),
+		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
+		incoming: buffer.NewPacket(DefaultBufferSize),
+		flusher:  make(chan struct{}, 1024),
+		logger:   logger,
+		error:    atomic.NewError(nil),
+		pongCh:   make(chan struct{}, 1),
+		closeCh:  make(chan struct{}, 1),
 	}
 
 	if logger == nil {
@@ -144,17 +144,17 @@ func (c *Async) CloseChannel() <-chan struct{} {
 
 // WritePacket takes a packet.Packet and queues it up to send asynchronously.
 //
-// If message.ContentLength == 0, then the content array must be nil. Otherwise, it is required that message.ContentLength == len(content).
+// If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
 	if int(p.Metadata.ContentLength) != len(p.Content) {
 		return InvalidContentLength
 	}
 
-	var encodedMessage [protocol.MessageSize]byte
+	var encodedMetadata [metadata.Size]byte
 
-	binary.BigEndian.PutUint16(encodedMessage[protocol.IdOffset:protocol.IdOffset+protocol.IdSize], p.Metadata.Id)
-	binary.BigEndian.PutUint16(encodedMessage[protocol.OperationOffset:protocol.OperationOffset+protocol.OperationSize], p.Metadata.Operation)
-	binary.BigEndian.PutUint32(encodedMessage[protocol.ContentLengthOffset:protocol.ContentLengthOffset+protocol.ContentLengthSize], p.Metadata.ContentLength)
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
 
 	c.Lock()
 	if c.closed.Load() {
@@ -162,14 +162,14 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 		return ConnectionClosed
 	}
 
-	_, err := c.writer.Write(encodedMessage[:])
+	_, err := c.writer.Write(encodedMetadata[:])
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while writing encoded message")
+			c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while writing encoded message")
+		c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 		return c.closeWithError(err)
 	}
 	if p.Metadata.ContentLength != 0 {
@@ -178,10 +178,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 			if err != nil {
 				c.Unlock()
 				if c.closed.Load() {
-					c.Logger().Error().Err(ConnectionClosed).Msg("error while writing message content")
+					c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 					return ConnectionClosed
 				}
-				c.Logger().Error().Err(err).Msg("error while writing message content")
+				c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 				return c.closeWithError(err)
 			}
 		}
@@ -189,10 +189,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Msg("error while writing message content")
+				c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 				return ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Msg("error while writing message content")
+			c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 			return c.closeWithError(err)
 		}
 	}
@@ -209,28 +209,39 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	return nil
 }
 
-// ReadPacket is a blocking function that will wait until a Frisbee message is available and then return it (and its content).
-// In the event that the connection is closed, ReadMessage will return an error.
+// ReadPacket is a blocking function that will wait until a Frisbee packet is available and then return it (and its content).
+// In the event that the connection is closed, ReadPacket will return an error.
 func (c *Async) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
 		return nil, ConnectionClosed
 	}
 
-	readPacket, err := c.incomingMessages.Pop()
+	readPacket, err := c.incoming.Pop()
 	if err != nil {
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from message queue")
+			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
 			return nil, ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while popping from message queue")
+		c.Logger().Error().Err(err).Msg("error while popping from packet queue")
 		return nil, err
 	}
 
 	return readPacket, nil
 }
 
-// Flush allows for synchronous messaging by flushing the message buffer and instantly sending messages
+// Flush allows for synchronous messaging by flushing the write buffer and instantly sending packets
 func (c *Async) Flush() error {
+	err := c.flush()
+	if err != nil {
+		return c.closeWithError(err)
+	}
+	return nil
+}
+
+// flush is an internal function for flushing data from the write buffer, however
+// it is unique in that it does not call closeWithError (and so does not try and close the underlying connection)
+// when it encounters an error, and instead leaves that responsibility to its parent caller
+func (c *Async) flush() error {
 	c.Lock()
 	if c.closed.Load() {
 		c.Unlock()
@@ -240,20 +251,20 @@ func (c *Async) Flush() error {
 		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
 		if err != nil {
 			c.Unlock()
-			return c.closeWithError(err)
+			return err
 		}
 		err = c.writer.Flush()
 		if err != nil {
 			c.Unlock()
 			c.Logger().Err(err).Msg("error while flushing data")
-			return c.closeWithError(err)
+			return err
 		}
 	}
 	c.Unlock()
 	return nil
 }
 
-// WriteBufferSize returns the size of the underlying message buffer (used for internal message handling and for heartbeat logic)
+// WriteBufferSize returns the size of the underlying write buffer (used for internal packet handling and for heartbeat logic)
 func (c *Async) WriteBufferSize() int {
 	c.Lock()
 	if c.closed.Load() {
@@ -298,7 +309,7 @@ func (c *Async) Close() error {
 
 func (c *Async) killGoroutines() {
 	c.Lock()
-	c.incomingMessages.Close()
+	c.incoming.Close()
 	close(c.flusher)
 	c.Unlock()
 	_ = c.conn.SetDeadline(pastTime)
@@ -335,15 +346,16 @@ func (c *Async) closeWithError(err error) error {
 }
 
 func (c *Async) flushLoop() {
+	var err error
 	for {
 		if _, ok := <-c.flusher; !ok {
 			c.wg.Done()
 			return
 		}
-		err := c.Flush()
+		err = c.flush()
 		if err != nil {
 			c.wg.Done()
-			_ = c.closeWithError(err)
+			_ = c.closeWithError(ConnectionClosed)
 			return
 		}
 	}
@@ -359,7 +371,7 @@ func (c *Async) waitForPONG() {
 		_ = c.closeWithError(os.ErrDeadlineExceeded)
 	case <-c.pongCh:
 		c.wg.Done()
-		c.Logger().Debug().Msg("PONG message received on time, connection is alive")
+		c.Logger().Debug().Msg("PONG packet received on time, connection is alive")
 	}
 }
 
@@ -374,7 +386,7 @@ func (c *Async) handleTimeout() error {
 		return err
 	}
 
-	err = c.Flush()
+	err = c.flush()
 	if err != nil {
 		return err
 	}
@@ -391,7 +403,7 @@ func (c *Async) readLoop() {
 	var index int
 	for {
 		buf = buf[:cap(buf)]
-		if len(buf) < protocol.MessageSize {
+		if len(buf) < metadata.Size {
 			c.Logger().Debug().Err(InvalidBufferLength).Msg("error during read loop, calling closeWithError")
 			c.wg.Done()
 			_ = c.closeWithError(InvalidBufferLength)
@@ -400,7 +412,7 @@ func (c *Async) readLoop() {
 
 		var n int
 		var err error
-		for n < protocol.MessageSize {
+		for n < metadata.Size {
 			var nn int
 			err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 			if err != nil {
@@ -412,7 +424,7 @@ func (c *Async) readLoop() {
 			nn, err = c.conn.Read(buf[n:])
 			n += nn
 			if err != nil {
-				if n < protocol.MessageSize {
+				if n < metadata.Size {
 					if errors.Is(err, os.ErrDeadlineExceeded) {
 						err = c.handleTimeout()
 						if err != nil {
@@ -433,14 +445,14 @@ func (c *Async) readLoop() {
 		index = 0
 		for index < n {
 			p := packet.Get()
-			p.Metadata.Id = binary.BigEndian.Uint16(buf[index+protocol.IdOffset : index+protocol.IdOffset+protocol.IdSize])
-			p.Metadata.Operation = binary.BigEndian.Uint16(buf[index+protocol.OperationOffset : index+protocol.OperationOffset+protocol.OperationSize])
-			p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[index+protocol.ContentLengthOffset : index+protocol.ContentLengthOffset+protocol.ContentLengthSize])
-			index += protocol.MessageSize
+			p.Metadata.Id = binary.BigEndian.Uint16(buf[index+metadata.IdOffset : index+metadata.IdOffset+metadata.IdSize])
+			p.Metadata.Operation = binary.BigEndian.Uint16(buf[index+metadata.OperationOffset : index+metadata.OperationOffset+metadata.OperationSize])
+			p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[index+metadata.ContentLengthOffset : index+metadata.ContentLengthOffset+metadata.ContentLengthSize])
+			index += metadata.Size
 
 			switch p.Metadata.Operation {
 			case PING:
-				c.Logger().Debug().Msg("PING Packet received by read loop, sending back PONG message")
+				c.Logger().Debug().Msg("PING Packet received by read loop, sending back PONG packet")
 				err = c.WritePacket(PONGPacket)
 				if err != nil {
 					c.wg.Done()
@@ -486,17 +498,17 @@ func (c *Async) readLoop() {
 					} else {
 						index += p.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
-					err = c.incomingMessages.Push(p)
+					err = c.incoming.Push(p)
 					if err != nil {
-						c.Logger().Error().Err(err).Msg("error while pushing to incoming message queue")
+						c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
 						c.wg.Done()
 						_ = c.closeWithError(err)
 						return
 					}
 				} else {
-					err = c.incomingMessages.Push(p)
+					err = c.incoming.Push(p)
 					if err != nil {
-						c.Logger().Error().Err(err).Msg("error while pushing to incoming message queue")
+						c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
 						c.wg.Done()
 						_ = c.closeWithError(err)
 						return
@@ -506,13 +518,13 @@ func (c *Async) readLoop() {
 			if n == index {
 				index = 0
 				buf = buf[:cap(buf)]
-				if len(buf) < protocol.MessageSize {
+				if len(buf) < metadata.Size {
 					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)
 					return
 				}
 				n = 0
-				for n < protocol.MessageSize {
+				for n < metadata.Size {
 					var nn int
 					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
 					if err != nil {
@@ -523,7 +535,7 @@ func (c *Async) readLoop() {
 					nn, err = c.conn.Read(buf[n:])
 					n += nn
 					if err != nil {
-						if n < protocol.MessageSize {
+						if n < metadata.Size {
 							if errors.Is(err, os.ErrDeadlineExceeded) {
 								err = c.handleTimeout()
 								if err != nil {
@@ -540,13 +552,13 @@ func (c *Async) readLoop() {
 						break
 					}
 				}
-			} else if n-index < protocol.MessageSize {
+			} else if n-index < metadata.Size {
 				copy(buf, buf[index:n])
 				n -= index
 				index = n
 
 				buf = buf[:cap(buf)]
-				min := protocol.MessageSize - index
+				min := metadata.Size - index
 				if len(buf) < min {
 					c.wg.Done()
 					_ = c.closeWithError(InvalidBufferLength)
