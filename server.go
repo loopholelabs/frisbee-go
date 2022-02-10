@@ -38,12 +38,6 @@ var (
 	defaultPreWrite = func() {}
 )
 
-type job struct {
-	ctx    context.Context
-	conn   *Async
-	packet *packet.Packet
-}
-
 // Server accepts connections from frisbee Clients and can send and receive frisbee Packets
 type Server struct {
 	listener     net.Listener
@@ -52,7 +46,8 @@ type Server struct {
 	shutdown     *atomic.Bool
 	options      *Options
 	wg           sync.WaitGroup
-	pool         *ants.PoolWithFunc
+	pool         *ants.Pool
+	poolSize     int
 
 	// BaseContext is used to define the base context for this Server and all incoming connections
 	BaseContext func() context.Context
@@ -73,8 +68,12 @@ type Server struct {
 }
 
 // NewServer returns an uninitialized frisbee Server with the registered HandlerTable.
-// The Start method must then be called to start the server and listen for connections
-func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server, error) {
+// The Start method must then be called to start the server and listen for connections.
+//
+// If poolSize == 0 then no pool will be allocated, and all handlers will be run synchronously for their
+// incoming connections. If poolSize == -1 then a pool with unlimited size will be allocated. Otherwise a pool
+// with size `poolSize` will be allocated.
+func NewServer(addr string, handlerTable HandlerTable, poolSize int, opts ...Option) (*Server, error) {
 	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := handlerTable[i]; ok {
 			return nil, InvalidHandlerTable
@@ -94,6 +93,7 @@ func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server,
 		handlerTable: handlerTable,
 		options:      options,
 		shutdown:     atomic.NewBool(false),
+		poolSize:     poolSize,
 	}, nil
 }
 
@@ -125,46 +125,12 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	s.pool, err = ants.NewPoolWithFunc(1<<16, func(i interface{}) {
-		j := i.(*job)
-		handlerFunc := s.handlerTable[j.packet.Metadata.Operation]
-		if handlerFunc != nil {
-			packetCtx := j.ctx
-			if s.PacketContext != nil {
-				packetCtx = s.PacketContext(packetCtx, j.packet)
-			}
-			outgoing, action := handlerFunc(packetCtx, j.packet)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-				s.PreWrite()
-				err = j.conn.WritePacket(outgoing)
-				if outgoing != j.packet {
-					packet.Put(outgoing)
-				}
-				packet.Put(j.packet)
-				if err != nil {
-					_ = j.conn.Close()
-					s.OnClosed(j.conn, err)
-					return
-				}
-			} else {
-				packet.Put(j.packet)
-			}
-			switch action {
-			case NONE:
-			case CLOSE:
-				_ = j.conn.Close()
-				s.OnClosed(j.conn, nil)
-				return
-			case SHUTDOWN:
-				_ = j.conn.Close()
-				s.OnClosed(j.conn, nil)
-				_ = s.Shutdown()
-				return
-			}
-		} else {
-			packet.Put(j.packet)
+	if s.poolSize != 0 {
+		s.pool, err = ants.NewPool(s.poolSize, ants.WithPreAlloc(true))
+		if err != nil {
+			return err
 		}
-	}, ants.WithPreAlloc(true))
+	}
 
 	s.wg.Add(1)
 	go func() {
@@ -183,6 +149,52 @@ func (s *Server) Start() error {
 	}()
 
 	return nil
+}
+
+func (s *Server) poolHandler(ctx context.Context, conn *Async, p *packet.Packet) func() {
+	return func() {
+		s.handler(ctx, conn, p)
+	}
+}
+
+func (s *Server) handler(ctx context.Context, conn *Async, p *packet.Packet) {
+	handlerFunc := s.handlerTable[p.Metadata.Operation]
+	if handlerFunc != nil {
+		packetCtx := ctx
+		if s.PacketContext != nil {
+			packetCtx = s.PacketContext(packetCtx, p)
+		}
+		outgoing, action := handlerFunc(packetCtx, p)
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+			s.PreWrite()
+			err := conn.WritePacket(outgoing)
+			if outgoing != p {
+				packet.Put(outgoing)
+			}
+			packet.Put(p)
+			if err != nil {
+				_ = conn.Close()
+				s.OnClosed(conn, err)
+				return
+			}
+		} else {
+			packet.Put(p)
+		}
+		switch action {
+		case NONE:
+		case CLOSE:
+			_ = conn.Close()
+			s.OnClosed(conn, nil)
+			return
+		case SHUTDOWN:
+			_ = conn.Close()
+			s.OnClosed(conn, nil)
+			_ = s.Shutdown()
+			return
+		}
+	} else {
+		packet.Put(p)
+	}
 }
 
 func (s *Server) handleConn(newConn net.Conn) {
@@ -206,12 +218,15 @@ func (s *Server) handleConn(newConn net.Conn) {
 			s.OnClosed(frisbeeConn, err)
 			return
 		}
-
-		err = s.pool.Invoke(&job{packet: p, conn: frisbeeConn, ctx: connCtx})
-		if err != nil {
-			_ = frisbeeConn.Close()
-			s.OnClosed(frisbeeConn, err)
-			return
+		if s.poolSize != 0 {
+			err = s.pool.Submit(s.poolHandler(connCtx, frisbeeConn, p))
+			if err != nil {
+				_ = frisbeeConn.Close()
+				s.OnClosed(frisbeeConn, err)
+				return
+			}
+		} else {
+			s.handler(connCtx, frisbeeConn, p)
 		}
 	}
 }
@@ -224,7 +239,9 @@ func (s *Server) Logger() *zerolog.Logger {
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
 	s.shutdown.Store(true)
-	s.pool.Release()
+	if s.poolSize != 0 {
+		s.pool.Release()
+	}
 	defer s.wg.Wait()
 	return s.listener.Close()
 }

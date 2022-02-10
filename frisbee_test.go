@@ -45,5 +45,5 @@ func ExampleNewServer() {
 
 	logger := zerolog.New(os.Stdout)
 
-	_, _ = frisbee.NewServer("127.0.0.1:8080", handlerTable, frisbee.WithLogger(&logger))
+	_, _ = frisbee.NewServer("127.0.0.1:8080", handlerTable, 0, frisbee.WithLogger(&logger))
 }

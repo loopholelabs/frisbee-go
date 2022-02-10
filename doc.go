@@ -58,7 +58,7 @@
 //		exit := make(chan os.Signal)
 //		signal.Notify(exit, os.Interrupt)
 //
-//		s := frisbee.NewServer(":8192", handlerTable)
+//		s := frisbee.NewServer(":8192", handlerTable, 0)
 //		err := s.Start()
 //		if err != nil {
 //			panic(err)
