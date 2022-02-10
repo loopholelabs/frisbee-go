@@ -20,8 +20,8 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/buffer"
 	"github.com/loopholelabs/frisbee/internal/metadata"
+	"github.com/loopholelabs/frisbee/internal/ringbuffer"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -41,7 +41,7 @@ type Async struct {
 	closed   *atomic.Bool
 	writer   *bufio.Writer
 	flusher  chan struct{}
-	incoming *buffer.Packet
+	incoming *ringbuffer.RingBuffer
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
@@ -75,7 +75,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		conn:     c,
 		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
-		incoming: buffer.NewPacket(DefaultBufferSize),
+		incoming: ringbuffer.NewRingBuffer(DefaultBufferSize),
 		flusher:  make(chan struct{}, 1024),
 		logger:   logger,
 		error:    atomic.NewError(nil),
