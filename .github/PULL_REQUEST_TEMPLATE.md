@@ -34,8 +34,7 @@ Frisbee tries to adhere to strict performance requirements, so please make sure 
 
 Please make sure you've run the following and fixed any issues that arise:
 
-- [ ] `go fmt ./...` has been run
-- [ ] `golangci-lint run --skip-dirs-use-default` has been run
+- [ ] `trunk check` has been run
 
 ## Final Checklist:
 
