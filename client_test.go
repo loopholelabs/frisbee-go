@@ -73,7 +73,7 @@ func TestClientRaw(t *testing.T) {
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -155,7 +155,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func BenchmarkClientPoolThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, poolSize, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func BenchmarkClientPoolThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), poolSize, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -381,7 +381,7 @@ func BenchmarkClientPoolThroughputResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, poolSize, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func BenchmarkClientPoolThroughputResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), poolSize, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}

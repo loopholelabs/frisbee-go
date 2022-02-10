@@ -71,7 +71,7 @@ type Server struct {
 // The Start method must then be called to start the server and listen for connections.
 //
 // If poolSize == 0 then no pool will be allocated, and all handlers will be run synchronously for their
-// incoming connections. If poolSize == -1 then a pool with unlimited size will be allocated. Otherwise a pool
+// incoming connections. If poolSize == -1 then a pool with unlimited size will be allocated. Otherwise, a pool
 // with size `poolSize` will be allocated.
 func NewServer(addr string, handlerTable HandlerTable, poolSize int, opts ...Option) (*Server, error) {
 	for i := uint16(0); i < RESERVED9; i++ {

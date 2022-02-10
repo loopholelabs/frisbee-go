@@ -19,6 +19,7 @@ package frisbee
 import (
 	"context"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/panjf2000/ants/v2"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -36,6 +37,8 @@ type Client struct {
 	closed           *atomic.Bool
 	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
+	pool             *ants.Pool
+	poolSize         int
 
 	// PacketContext is used to define packet-specific contexts based on the incoming packet
 	// and is run whenever a new packet arrives
@@ -43,8 +46,12 @@ type Client struct {
 }
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
-// The ConnectAsync method must then be called to dial the server and initialize the connection
-func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Client, error) {
+// The ConnectAsync method must then be called to dial the server and initialize the connection.
+//
+// If poolSize == 0 then no pool will be allocated, and all handlers will be run synchronously for their
+// incoming connections. If poolSize == -1 then a pool with unlimited size will be allocated. Otherwise, a pool
+// with size `poolSize` will be allocated.
+func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, poolSize int, opts ...Option) (*Client, error) {
 
 	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := handlerTable[i]; ok {
@@ -69,6 +76,7 @@ func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts
 		options:          options,
 		closed:           atomic.NewBool(false),
 		heartbeatChannel: heartbeatChannel,
+		poolSize:         poolSize,
 	}, nil
 }
 
@@ -82,6 +90,13 @@ func (c *Client) Connect() error {
 	}
 	c.conn = frisbeeConn
 	c.Logger().Info().Msgf("Connected to %s", c.addr)
+
+	if c.poolSize != 0 {
+		c.pool, err = ants.NewPool(c.poolSize, ants.WithPreAlloc(true))
+		if err != nil {
+			return err
+		}
+	}
 
 	c.wg.Add(1)
 	go c.reactor()
@@ -109,6 +124,9 @@ func (c *Client) Error() error {
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
 	if c.closed.CAS(false, true) {
+		if c.poolSize != 0 {
+			c.pool.Release()
+		}
 		err := c.conn.Close()
 		if err != nil {
 			return err
@@ -141,6 +159,9 @@ func (c *Client) Raw() (net.Conn, error) {
 		return nil, ConnectionNotInitialized
 	}
 	if c.closed.CAS(false, true) {
+		if c.poolSize != 0 {
+			c.pool.Release()
+		}
 		conn := c.conn.Raw()
 		c.wg.Wait()
 		return conn, nil
@@ -151,6 +172,48 @@ func (c *Client) Raw() (net.Conn, error) {
 // Logger returns the client's logger (useful for ClientRouter functions)
 func (c *Client) Logger() *zerolog.Logger {
 	return c.options.Logger
+}
+
+func (c *Client) poolHandler(ctx context.Context, conn *Async, p *packet.Packet) func() {
+	return func() {
+		c.handler(ctx, conn, p)
+	}
+}
+
+func (c *Client) handler(ctx context.Context, conn *Async, p *packet.Packet) {
+	handlerFunc := c.handlerTable[p.Metadata.Operation]
+	if handlerFunc != nil {
+		packetCtx := ctx
+		if c.PacketContext != nil {
+			packetCtx = c.PacketContext(packetCtx, p)
+		}
+		outgoing, action := handlerFunc(packetCtx, p)
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+			err := conn.WritePacket(outgoing)
+			if outgoing != p {
+				packet.Put(outgoing)
+			}
+			packet.Put(p)
+			if err != nil {
+				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+				c.wg.Done()
+				_ = c.Close()
+				return
+			}
+		} else {
+			packet.Put(p)
+		}
+		switch action {
+		case NONE:
+		case CLOSE, SHUTDOWN:
+			c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
+			c.wg.Done()
+			_ = c.Close()
+			return
+		}
+	} else {
+		packet.Put(p)
+	}
 }
 
 func (c *Client) reactor() {
@@ -166,44 +229,16 @@ func (c *Client) reactor() {
 			_ = c.Close()
 			return
 		}
-
-		handlerFunc := c.handlerTable[p.Metadata.Operation]
-		if handlerFunc != nil {
-			packetCtx := c.ctx
-			if c.PacketContext != nil {
-				packetCtx = c.PacketContext(packetCtx, p)
-			}
-			outgoing, action := handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
-				err = c.conn.WritePacket(outgoing)
-				if outgoing != p {
-					packet.Put(outgoing)
-				}
-				packet.Put(p)
-				if err != nil {
-					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
-					c.wg.Done()
-					_ = c.Close()
-					return
-				}
-			} else {
-				packet.Put(p)
-			}
-			switch action {
-			case NONE:
-			case CLOSE:
-				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
-				c.wg.Done()
-				_ = c.Close()
-				return
-			case SHUTDOWN:
-				c.Logger().Debug().Msgf("Closing connection %s because of SHUTDOWN action", c.addr)
+		if c.poolSize != 0 {
+			err = c.pool.Submit(c.poolHandler(c.ctx, c.conn, p))
+			if err != nil {
+				c.Logger().Error().Err(err).Msg("error while submitting to pool")
 				c.wg.Done()
 				_ = c.Close()
 				return
 			}
 		} else {
-			packet.Put(p)
+			c.handler(c.ctx, c.conn, p)
 		}
 	}
 }

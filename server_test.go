@@ -73,7 +73,7 @@ func TestServerRaw(t *testing.T) {
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)

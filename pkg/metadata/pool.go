@@ -1,8 +1,22 @@
+/*
+	Copyright 2022 Loophole Labs
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use this file except in compliance with the License.
+	You may obtain a copy of the License at
+
+		   http://www.apache.org/licenses/LICENSE-2.0
+
+	Unless required by applicable law or agreed to in writing, software
+	distributed under the License is distributed on an "AS IS" BASIS,
+	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	See the License for the specific language governing permissions and
+	limitations under the License.
+*/
+
 package metadata
 
 import "sync"
-
-type Buffer [Size]byte
 
 type Pool struct {
 	pool sync.Pool
@@ -12,15 +26,15 @@ func NewPool() *Pool {
 	return new(Pool)
 }
 
-func (p *Pool) Get() Buffer {
+func (p *Pool) Get() *[Size]byte {
 	v := p.pool.Get()
 	if v == nil {
-		v = Buffer{}
+		v = &[Size]byte{}
 	}
-	return v.(Buffer)
+	return v.(*[Size]byte)
 }
 
-func (p *Pool) Put(b Buffer) {
+func (p *Pool) Put(b *[Size]byte) {
 	p.pool.Put(b)
 }
 
@@ -28,10 +42,10 @@ var (
 	pool = NewPool()
 )
 
-func Get() Buffer {
+func Get() *[Size]byte {
 	return pool.Get()
 }
 
-func Put(b Buffer) {
+func Put(b *[Size]byte) {
 	pool.Put(b)
 }
