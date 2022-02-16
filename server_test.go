@@ -19,6 +19,7 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
+	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
@@ -87,6 +88,7 @@ func TestServerRaw(t *testing.T) {
 	p.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
+	assert.Equal(t, data, p.Content)
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -95,6 +97,7 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	p.Reset()
+	assert.Equal(t, 0, len(p.Content))
 	p.Metadata.Operation = metadata.PacketProbe
 
 	err = c.WritePacket(p)
@@ -152,7 +155,7 @@ func BenchmarkThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -197,7 +200,6 @@ func BenchmarkPoolThroughput(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 	const poolSize = 100
-
 	handlerTable := make(HandlerTable)
 
 	handlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
@@ -215,7 +217,7 @@ func BenchmarkPoolThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -283,7 +285,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -363,7 +365,7 @@ func BenchmarkPoolThroughputWithResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
 	if err != nil {
 		b.Fatal(err)
 	}

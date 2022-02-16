@@ -19,6 +19,7 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
+	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/panjf2000/ants/v2"
 	"github.com/rs/zerolog"
@@ -204,7 +205,13 @@ func (s *Server) handleConn(newConn net.Conn) {
 		_ = v.SetKeepAlivePeriod(s.options.KeepAlive)
 	}
 
-	frisbeeConn := NewAsync(newConn, s.Logger())
+	var frisbeeConn *Async
+	if s.poolSize != 0 {
+		frisbeeConn = NewAsync(newConn, s.Logger(), queue.NewUnbounded())
+	} else {
+		frisbeeConn = NewAsync(newConn, s.Logger(), queue.NewBounded(DefaultBufferSize))
+	}
+
 	connCtx := s.BaseContext()
 
 	if s.ConnContext != nil {

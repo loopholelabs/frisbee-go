@@ -18,6 +18,7 @@ package frisbee
 
 import (
 	"context"
+	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/panjf2000/ants/v2"
 	"github.com/rs/zerolog"
@@ -84,7 +85,13 @@ func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, pool
 // to receive and handle incoming packets.
 func (c *Client) Connect() error {
 	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
-	frisbeeConn, err := ConnectAsync(c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
+	var frisbeeConn *Async
+	var err error
+	if c.poolSize != 0 {
+		frisbeeConn, err = ConnectAsync(c.addr, c.options.KeepAlive, c.Logger(), queue.NewUnbounded(), c.options.TLSConfig)
+	} else {
+		frisbeeConn, err = ConnectAsync(c.addr, c.options.KeepAlive, c.Logger(), queue.NewBounded(DefaultBufferSize), c.options.TLSConfig)
+	}
 	if err != nil {
 		return err
 	}

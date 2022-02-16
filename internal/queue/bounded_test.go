@@ -14,16 +14,18 @@
 	limitations under the License.
 */
 
-package ringbuffer
+package queue
 
 import (
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
+	"unsafe"
 )
 
-func TestHelpers(t *testing.T) {
+func TestBoundedHelpers(t *testing.T) {
 	t.Run("test round", func(t *testing.T) {
 		tcs := []struct {
 			in       uint64
@@ -49,51 +51,73 @@ func TestHelpers(t *testing.T) {
 	})
 }
 
-func TestRingBuffer(t *testing.T) {
-	testPacket := func() *packet.Packet {
-		return &packet.Packet{}
+func TestBounded(t *testing.T) {
+	testPacket := func() unsafe.Pointer {
+		return unsafe.Pointer(new(packet.Packet))
 	}
-	testPacket2 := func() *packet.Packet {
-		return &packet.Packet{
+	testPacket2 := func() unsafe.Pointer {
+		return unsafe.Pointer(&packet.Packet{
 			Content: []byte{1},
-		}
+		})
 	}
 
 	t.Run("success", func(t *testing.T) {
-		rb := NewRingBuffer(1)
-		_ = rb.Push(testPacket())
+		rb := NewBounded(1)
+		p := testPacket()
+		err := rb.Push(p)
+		assert.NoError(t, err)
 		actual, err := rb.Pop()
 		assert.NoError(t, err)
-		assert.Equal(t, testPacket(), actual)
+		assert.Equal(t, p, actual)
 	})
 	t.Run("out of capacity", func(t *testing.T) {
-		rb := NewRingBuffer(0)
+		rb := NewBounded(0)
 		err := rb.Push(testPacket())
 		assert.NoError(t, err)
 	})
 	t.Run("out of capacity with non zero capacity", func(t *testing.T) {
-		rb := NewRingBuffer(1)
-		err := rb.Push(testPacket())
+		rb := NewBounded(1)
+		p1 := testPacket()
+		err := rb.Push(p1)
 		assert.NoError(t, err)
-		err = rb.Push(testPacket2())
-		assert.NoError(t, err)
-		actual, err := rb.Pop()
-		require.NoError(t, err)
-		assert.Equal(t, testPacket2(), actual)
+		doneCh := make(chan struct{}, 1)
+		p2 := testPacket2()
+		go func() {
+			err = rb.Push(p2)
+			assert.NoError(t, err)
+			doneCh <- struct{}{}
+		}()
+		select {
+		case <-doneCh:
+			t.Fatal("Queue did not block on full write")
+		case <-time.After(time.Millisecond * 10):
+			actual, err := rb.Pop()
+			require.NoError(t, err)
+			assert.Equal(t, p1, actual)
+			select {
+			case <-doneCh:
+				actual, err := rb.Pop()
+				require.NoError(t, err)
+				assert.Equal(t, p2, actual)
+			case <-time.After(time.Millisecond * 10):
+				t.Fatal("Queue did not unblock on read from full write")
+			}
+		}
+
 	})
 	t.Run("buffer closed", func(t *testing.T) {
-		rb := NewRingBuffer(1)
+		rb := NewBounded(1)
 		assert.False(t, rb.IsClosed())
 		rb.Close()
 		assert.True(t, rb.IsClosed())
 		err := rb.Push(testPacket())
-		assert.ErrorIs(t, RingerBufferClosed, err)
+		assert.ErrorIs(t, Closed, err)
 		_, err = rb.Pop()
-		assert.ErrorIs(t, RingerBufferClosed, err)
+		assert.ErrorIs(t, Closed, err)
 	})
 	t.Run("pop empty", func(t *testing.T) {
 		done := make(chan struct{}, 1)
-		rb := NewRingBuffer(1)
+		rb := NewBounded(1)
 		go func() {
 			_, _ = rb.Pop()
 			done <- struct{}{}
@@ -101,23 +125,6 @@ func TestRingBuffer(t *testing.T) {
 		assert.Equal(t, 0, len(done))
 		_ = rb.Push(testPacket())
 		<-done
-		assert.Equal(t, uint64(0), rb.Length())
-	})
-	t.Run("buffer closed then reopened", func(t *testing.T) {
-		rb := NewRingBuffer(1)
-		assert.False(t, rb.IsClosed())
-		rb.Close()
-		assert.True(t, rb.IsClosed())
-		err := rb.Push(testPacket())
-		assert.ErrorIs(t, RingerBufferClosed, err)
-		_, err = rb.Pop()
-		assert.ErrorIs(t, RingerBufferClosed, err)
-		rb.Open()
-		assert.False(t, rb.IsClosed())
-		err = rb.Push(testPacket())
-		assert.NoError(t, err)
-		actual, err := rb.Pop()
-		assert.NoError(t, err)
-		assert.Equal(t, testPacket(), actual)
+		assert.Equal(t, 0, rb.Length())
 	})
 }

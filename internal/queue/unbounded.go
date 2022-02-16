@@ -14,61 +14,71 @@
 	limitations under the License.
 */
 
-package packet
+package queue
 
 import (
-	"github.com/pkg/errors"
 	"sync"
+	"unsafe"
 )
 
-var (
-	BufferClosed = errors.New("packet buffer is closed")
-)
-
-type Buffer struct {
-	p      []*Packet
+type Unbounded struct {
+	data   []unsafe.Pointer
 	cond   *sync.Cond
 	closed bool
 }
 
-func NewBuffer() *Buffer {
-	return &Buffer{
+func NewUnbounded() *Unbounded {
+	return &Unbounded{
 		cond: sync.NewCond(new(sync.Mutex)),
 	}
 }
 
-func (p *Buffer) Push(pushPacket *Packet) error {
+func (p *Unbounded) Push(item unsafe.Pointer) error {
 	p.cond.L.Lock()
 	if p.closed {
 		p.cond.L.Unlock()
-		return BufferClosed
+		return Closed
 	}
-	p.p = append(p.p, pushPacket)
+	p.data = append(p.data, item)
 	p.cond.L.Unlock()
 	p.cond.Signal()
 	return nil
 }
 
-func (p *Buffer) Pop() (*Packet, error) {
+func (p *Unbounded) Pop() (unsafe.Pointer, error) {
 	p.cond.L.Lock()
 LOOP:
 	if p.closed {
 		p.cond.L.Unlock()
-		return nil, BufferClosed
+		return nil, Closed
 	}
-	if len(p.p) == 0 {
+	if len(p.data) == 0 {
 		p.cond.Wait()
 		goto LOOP
 	}
-	var popPacket *Packet
-	popPacket, p.p = p.p[0], p.p[1:]
+	var item unsafe.Pointer
+	item, p.data = p.data[0], p.data[1:]
 	p.cond.L.Unlock()
-	return popPacket, nil
+	return item, nil
 }
 
-func (p *Buffer) Close() {
+func (p *Unbounded) Close() {
 	p.cond.L.Lock()
 	p.closed = true
 	p.cond.L.Unlock()
 	p.cond.Broadcast()
+}
+
+func (p *Unbounded) IsClosed() (b bool) {
+	p.cond.L.Lock()
+	b = p.closed
+	p.cond.L.Unlock()
+	return
+}
+
+func (p *Unbounded) Length() (length int) {
+	p.cond.L.Lock()
+	length = len(p.data)
+	p.cond.L.Unlock()
+	return
 }
