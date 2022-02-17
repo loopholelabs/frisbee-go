@@ -68,7 +68,7 @@ func TestRecycle(t *testing.T) {
 			continue
 		} else {
 			assert.Equal(t, 0, len(p.Content))
-			assert.Equal(t, 32, cap(p.Content))
+			assert.Equal(t, 512, cap(p.Content))
 			break
 		}
 	}
