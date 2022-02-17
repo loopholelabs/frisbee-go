@@ -59,7 +59,7 @@ func loadOptions(options ...Option) *Options {
 	}
 
 	if opts.Heartbeat == 0 {
-		opts.Heartbeat = time.Millisecond * 500
+		opts.Heartbeat = time.Second * 5
 	}
 
 	return opts
@@ -86,8 +86,8 @@ func WithLogger(logger *zerolog.Logger) Option {
 	}
 }
 
-// WithHeartbeat sets the minimum time between heartbeat messages. By default, messages are only sent if
-// no messages have been sent since the last heartbeat message - to change this behaviour you can disable heartbeats
+// WithHeartbeat sets the minimum time between heartbeat packets. By default, packets are only sent if
+// no packets have been sent since the last heartbeat packet - to change this behaviour you can disable heartbeats
 // (by passing in -1), and implementing your own logic.
 func WithHeartbeat(heartbeat time.Duration) Option {
 	return func(opts *Options) {
