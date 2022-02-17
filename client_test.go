@@ -29,6 +29,8 @@ import (
 	"testing"
 )
 
+// trunk-ignore-all(golangci-lint/staticcheck)
+
 const (
 	clientConnContextKey = "conn"
 )
