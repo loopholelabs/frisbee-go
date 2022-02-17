@@ -64,11 +64,11 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 
-		if p.Content == nil {
+		if cap(p.Content) == 512 {
 			continue
 		} else {
 			assert.Equal(t, 0, len(p.Content))
-			assert.Equal(t, 512, cap(p.Content))
+			assert.Equal(t, 32, cap(p.Content))
 			break
 		}
 	}
