@@ -62,7 +62,7 @@ func TestBounded(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		rb := NewBounded(1)
+		rb := New(1, false)
 		p := testPacket()
 		err := rb.Push(p)
 		assert.NoError(t, err)
@@ -71,12 +71,12 @@ func TestBounded(t *testing.T) {
 		assert.Equal(t, p, actual)
 	})
 	t.Run("out of capacity", func(t *testing.T) {
-		rb := NewBounded(0)
+		rb := New(0, false)
 		err := rb.Push(testPacket())
 		assert.NoError(t, err)
 	})
 	t.Run("out of capacity with non zero capacity", func(t *testing.T) {
-		rb := NewBounded(1)
+		rb := New(1, true)
 		p1 := testPacket()
 		err := rb.Push(p1)
 		assert.NoError(t, err)
@@ -106,7 +106,7 @@ func TestBounded(t *testing.T) {
 
 	})
 	t.Run("buffer closed", func(t *testing.T) {
-		rb := NewBounded(1)
+		rb := New(1, false)
 		assert.False(t, rb.IsClosed())
 		rb.Close()
 		assert.True(t, rb.IsClosed())
@@ -117,7 +117,7 @@ func TestBounded(t *testing.T) {
 	})
 	t.Run("pop empty", func(t *testing.T) {
 		done := make(chan struct{}, 1)
-		rb := NewBounded(1)
+		rb := New(1, false)
 		go func() {
 			_, _ = rb.Pop()
 			done <- struct{}{}

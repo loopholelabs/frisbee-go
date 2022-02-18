@@ -29,7 +29,7 @@ var (
 	ConnectionClosed         = errors.New("connection closed")
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferLength      = errors.New("invalid buffer length")
-	InvalidHandlerTable      = errors.New("invalid handler table configuration, a reserved value may have been used")
+	InvalidHandlerTable      = errors.New("invalid handlePacket table configuration, a reserved value may have been used")
 )
 
 // Action is an ENUM used to modify the state of the client or server from a Handler function
@@ -46,9 +46,6 @@ const (
 
 	// CLOSE is used to close the frisbee connection
 	CLOSE
-
-	// SHUTDOWN is used to shutdown the frisbee client or server
-	SHUTDOWN
 )
 
 // Handler is the handler function called by frisbee for incoming packets of data, depending on the packet's Metadata.Operation field

@@ -21,7 +21,6 @@ package frisbee
 
 import (
 	"bufio"
-	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"io"
@@ -41,8 +40,8 @@ func BenchmarkAsyncThroughputLarge(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	b.Run("1MB", throughputRunner(testSize, 1<<20, readerConn, writerConn))
 	b.Run("2MB", throughputRunner(testSize, 1<<21, readerConn, writerConn))

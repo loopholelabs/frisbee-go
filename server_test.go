@@ -19,7 +19,6 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
@@ -64,7 +63,7 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
@@ -74,7 +73,7 @@ func TestServerRaw(t *testing.T) {
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -134,7 +133,7 @@ func TestServerRaw(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func BenchmarkThroughput(b *testing.B) {
+func BenchmarkThroughputServer(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -145,7 +144,7 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", handlerTable, 0, WithLogger(&emptyLogger))
+	server, err := NewServer(":0", handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -155,7 +154,7 @@ func BenchmarkThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -196,69 +195,7 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 }
 
-func BenchmarkPoolThroughput(b *testing.B) {
-	const testSize = 1<<16 - 1
-	const packetSize = 512
-	const poolSize = 100
-	handlerTable := make(HandlerTable)
-
-	handlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		return
-	}
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", handlerTable, poolSize, WithLogger(&emptyLogger))
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	err = server.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	data := make([]byte, packetSize)
-	_, _ = rand.Read(data)
-	p := packet.Get()
-	p.Metadata.Operation = metadata.PacketPing
-
-	p.Write(data)
-	p.Metadata.ContentLength = packetSize
-
-	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * packetSize)
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			for q := 0; q < testSize; q++ {
-				p.Metadata.Id = uint16(q)
-				err = frisbeeConn.WritePacket(p)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		}
-	})
-	b.StopTimer()
-
-	packet.Put(p)
-
-	err = frisbeeConn.Close()
-	if err != nil {
-		b.Fatal(err)
-	}
-	err = server.Shutdown()
-	if err != nil {
-		b.Fatal(err)
-	}
-}
-
-func BenchmarkThroughputWithResponse(b *testing.B) {
+func BenchmarkThroughputResponseServer(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -275,7 +212,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", handlerTable, 0, WithLogger(&emptyLogger))
+	server, err := NewServer(":0", handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -285,87 +222,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	data := make([]byte, packetSize)
-	_, _ = rand.Read(data)
-
-	p := packet.Get()
-	p.Metadata.Operation = metadata.PacketPing
-
-	p.Write(data)
-	p.Metadata.ContentLength = packetSize
-
-	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * packetSize)
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			for q := 0; q < testSize; q++ {
-				p.Metadata.Id = uint16(q)
-				err = frisbeeConn.WritePacket(p)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-			readPacket, err := frisbeeConn.ReadPacket()
-			if err != nil {
-				b.Fatal(err)
-			}
-
-			if readPacket.Metadata.Id != testSize {
-				b.Fatal("invalid decoded metadata id")
-			}
-			packet.Put(readPacket)
-		}
-
-	})
-	b.StopTimer()
-
-	packet.Put(p)
-
-	err = frisbeeConn.Close()
-	if err != nil {
-		b.Fatal(err)
-	}
-	err = server.Shutdown()
-	if err != nil {
-		b.Fatal(err)
-	}
-}
-
-func BenchmarkPoolThroughputWithResponse(b *testing.B) {
-	const testSize = 1<<16 - 1
-	const packetSize = 512
-	const poolSize = 100
-
-	handlerTable := make(HandlerTable)
-
-	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if incoming.Metadata.Id == testSize-1 {
-			incoming.Reset()
-			incoming.Metadata.Id = testSize
-			incoming.Metadata.Operation = metadata.PacketPong
-			outgoing = incoming
-		}
-		return
-	}
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", handlerTable, poolSize, WithLogger(&emptyLogger))
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	err = server.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, queue.NewBounded(DefaultBufferSize), nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
 	if err != nil {
 		b.Fatal(err)
 	}

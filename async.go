@@ -20,9 +20,9 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee/pkg/queue"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -42,7 +42,7 @@ type Async struct {
 	closed   *atomic.Bool
 	writer   *bufio.Writer
 	flusher  chan struct{}
-	incoming queue.Queue
+	incoming *queue.Queue
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
@@ -51,7 +51,7 @@ type Async struct {
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, incoming queue.Queue, TLSConfig *tls.Config) (*Async, error) {
+func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config, blocking bool) (*Async, error) {
 	var conn net.Conn
 	var err error
 
@@ -67,16 +67,16 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 		return nil, err
 	}
 
-	return NewAsync(conn, logger, incoming), nil
+	return NewAsync(conn, logger, blocking), nil
 }
 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
-func NewAsync(c net.Conn, logger *zerolog.Logger, incoming queue.Queue) (conn *Async) {
+func NewAsync(c net.Conn, logger *zerolog.Logger, blocking bool) (conn *Async) {
 	conn = &Async{
 		conn:     c,
 		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
-		incoming: incoming,
+		incoming: queue.New(DefaultBufferSize, blocking),
 		flusher:  make(chan struct{}, 3),
 		logger:   logger,
 		error:    atomic.NewError(nil),

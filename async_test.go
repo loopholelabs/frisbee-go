@@ -18,7 +18,6 @@ package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
@@ -40,8 +39,8 @@ func TestNewAsync(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -97,8 +96,8 @@ func TestAsyncLargeWrite(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	randomData := make([][]byte, testSize)
 	p := packet.Get()
@@ -144,8 +143,8 @@ func TestAsyncRawConn(t *testing.T) {
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	randomData := make([]byte, packetSize)
 	_, _ = rand.Read(randomData)
@@ -203,8 +202,8 @@ func TestAsyncReadClose(t *testing.T) {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -251,8 +250,8 @@ func TestAsyncWriteClose(t *testing.T) {
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -302,8 +301,8 @@ func TestAsyncTimeout(t *testing.T) {
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -357,8 +356,8 @@ func BenchmarkAsyncThroughputPipe(b *testing.B) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
 	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))
@@ -380,8 +379,8 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	readerConn := NewAsync(reader, &emptyLogger, queue.NewBounded(DefaultBufferSize))
-	writerConn := NewAsync(writer, &emptyLogger, queue.NewBounded(DefaultBufferSize))
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
 	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))

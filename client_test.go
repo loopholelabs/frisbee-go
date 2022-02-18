@@ -63,7 +63,7 @@ func TestClientRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
@@ -73,7 +73,7 @@ func TestClientRaw(t *testing.T) {
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -129,7 +129,7 @@ func TestClientRaw(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func BenchmarkClientThroughput(b *testing.B) {
+func BenchmarkThroughputClient(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -145,7 +145,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -199,78 +199,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 	}
 }
 
-func BenchmarkClientPoolThroughput(b *testing.B) {
-	const testSize = 1<<16 - 1
-	const packetSize = 512
-	const poolSize = 100
-
-	clientHandlerTable := make(HandlerTable)
-	serverHandlerTable := make(HandlerTable)
-
-	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		return
-	}
-
-	clientHandlerTable[metadata.PacketPong] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		return
-	}
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	err = s.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), poolSize, WithLogger(&emptyLogger))
-	if err != nil {
-		b.Fatal(err)
-	}
-	err = c.Connect()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	data := make([]byte, packetSize)
-	_, _ = rand.Read(data)
-	p := packet.Get()
-
-	p.Metadata.Operation = metadata.PacketPing
-	p.Write(data)
-	p.Metadata.ContentLength = packetSize
-
-	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * packetSize)
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			for q := 0; q < testSize; q++ {
-				p.Metadata.Id = uint16(q)
-				err = c.WritePacket(p)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-		}
-	})
-	b.StopTimer()
-	packet.Put(p)
-
-	err = c.Close()
-	if err != nil {
-		b.Fatal(err)
-	}
-	err = s.Shutdown()
-	if err != nil {
-		b.Fatal(err)
-	}
-}
-
-func BenchmarkClientThroughputResponse(b *testing.B) {
+func BenchmarkThroughputResponseClient(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -297,7 +226,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -307,91 +236,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), 0, WithLogger(&emptyLogger))
-	if err != nil {
-		b.Fatal(err)
-	}
-	err = c.Connect()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	data := make([]byte, packetSize)
-	_, _ = rand.Read(data)
-	p := packet.Get()
-	p.Metadata.Operation = metadata.PacketPing
-
-	p.Write(data)
-	p.Metadata.ContentLength = packetSize
-
-	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * packetSize)
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			for q := 0; q < testSize; q++ {
-				p.Metadata.Id = uint16(q)
-				err = c.WritePacket(p)
-				if err != nil {
-					b.Fatal(err)
-				}
-			}
-			<-finished
-		}
-	})
-	b.StopTimer()
-
-	packet.Put(p)
-
-	err = c.Close()
-	if err != nil {
-		b.Fatal(err)
-	}
-	err = s.Shutdown()
-	if err != nil {
-		b.Fatal(err)
-	}
-}
-
-func BenchmarkClientPoolThroughputResponse(b *testing.B) {
-	const testSize = 1<<16 - 1
-	const packetSize = 512
-	const poolSize = 100
-
-	clientHandlerTable := make(HandlerTable)
-	serverHandlerTable := make(HandlerTable)
-
-	finished := make(chan struct{}, 1)
-
-	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if incoming.Metadata.Id == testSize-1 {
-			incoming.Reset()
-			incoming.Metadata.Id = testSize
-			incoming.Metadata.Operation = metadata.PacketPong
-			outgoing = incoming
-		}
-		return
-	}
-
-	clientHandlerTable[metadata.PacketPong] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if incoming.Metadata.Id == testSize {
-			finished <- struct{}{}
-		}
-		return
-	}
-
-	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, 0, WithLogger(&emptyLogger))
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	err = s.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), poolSize, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
