@@ -41,23 +41,26 @@ func round(value uint64) uint64 {
 }
 
 type node struct {
-	position uint64
-	data     unsafe.Pointer
+	_padding0 [8]uint64 //nolint:structcheck,unused
+	position  uint64
+	_padding1 [8]uint64 //nolint:structcheck,unused
+	data      unsafe.Pointer
 }
 
 type nodes []*node
 
 type Queue struct {
-	head      uint64
 	_padding0 [8]uint64 //nolint:structcheck,unused
-	tail      uint64
+	head      uint64
 	_padding1 [8]uint64 //nolint:structcheck,unused
-	mask      uint64
+	tail      uint64
 	_padding2 [8]uint64 //nolint:structcheck,unused
-	closed    uint64
+	mask      uint64
 	_padding3 [8]uint64 //nolint:structcheck,unused
-	nodes     nodes
+	closed    uint64
 	_padding4 [8]uint64 //nolint:structcheck,unused
+	nodes     nodes
+	_padding5 [8]uint64 //nolint:structcheck,unused
 	overflow  func(uint64) error
 }
 
