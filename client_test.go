@@ -17,8 +17,9 @@
 package frisbee
 
 import (
+	"context"
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -28,40 +29,51 @@ import (
 	"testing"
 )
 
+// trunk-ignore-all(golangci-lint/staticcheck)
+
+const (
+	clientConnContextKey = "conn"
+)
+
 func TestClientRaw(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100
-	const messageSize = 512
+	const packetSize = 512
 
-	clientRouter := make(ClientRouter)
-	serverRouter := make(ServerRouter)
+	clientHandlerTable := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverRouter[protocol.MessagePacket] = func(c *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		rawServerConn = c.Raw()
+	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		conn := ctx.Value(clientConnContextKey).(*Async)
+		rawServerConn = conn.Raw()
 		serverIsRaw <- struct{}{}
 		return
 	}
 
-	clientRouter[protocol.MessagePing] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
+
+	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
+		return context.WithValue(ctx, clientConnContextKey, c)
+	}
 
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -69,23 +81,23 @@ func TestClientRaw(t *testing.T) {
 	err = c.Connect()
 	require.NoError(t, err)
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 
 	p := packet.Get()
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.Operation = metadata.PacketPing
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
-		err := c.WriteMessage(p)
+		err := c.WritePacket(p)
 		assert.NoError(t, err)
 	}
 	p.Reset()
-	p.Metadata.Operation = protocol.MessagePacket
+	p.Metadata.Operation = metadata.PacketProbe
 
-	err = c.WriteMessage(p)
+	err = c.WritePacket(p)
 	assert.NoError(t, err)
 
 	rawClientConn, err = c.Raw()
@@ -117,23 +129,23 @@ func TestClientRaw(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func BenchmarkClientThroughput(b *testing.B) {
-	const testSize = 100000
-	const messageSize = 512
+func BenchmarkThroughputClient(b *testing.B) {
+	const testSize = 1<<16 - 1
+	const packetSize = 512
 
-	clientRouter := make(ClientRouter)
-	serverRouter := make(ServerRouter)
+	clientHandlerTable := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
-	clientRouter[protocol.MessagePing] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	clientHandlerTable[metadata.PacketPong] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -143,7 +155,7 @@ func BenchmarkClientThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -152,22 +164,22 @@ func BenchmarkClientThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
 
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.Operation = metadata.PacketPing
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * messageSize)
+		b.SetBytes(testSize * packetSize)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
 				p.Metadata.Id = uint16(q)
-				err = c.WriteMessage(p)
+				err = c.WritePacket(p)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -187,26 +199,26 @@ func BenchmarkClientThroughput(b *testing.B) {
 	}
 }
 
-func BenchmarkClientThroughputResponse(b *testing.B) {
+func BenchmarkThroughputResponseClient(b *testing.B) {
 	const testSize = 1<<16 - 1
-	const messageSize = 512
+	const packetSize = 512
 
-	clientRouter := make(ClientRouter)
-	serverRouter := make(ServerRouter)
+	clientHandlerTable := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
 
 	finished := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 		if incoming.Metadata.Id == testSize-1 {
 			incoming.Reset()
 			incoming.Metadata.Id = testSize
-			incoming.Metadata.Operation = protocol.MessagePong
+			incoming.Metadata.Operation = metadata.PacketPong
 			outgoing = incoming
 		}
 		return
 	}
 
-	clientRouter[protocol.MessagePong] = func(incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+	clientHandlerTable[metadata.PacketPong] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 		if incoming.Metadata.Id == testSize {
 			finished <- struct{}{}
 		}
@@ -214,7 +226,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -224,7 +236,7 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -233,22 +245,22 @@ func BenchmarkClientThroughputResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.Operation = metadata.PacketPing
 
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * messageSize)
+		b.SetBytes(testSize * packetSize)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			for q := 0; q < testSize; q++ {
 				p.Metadata.Id = uint16(q)
-				err = c.WriteMessage(p)
+				err = c.WritePacket(p)
 				if err != nil {
 					b.Fatal(err)
 				}

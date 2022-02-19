@@ -40,8 +40,8 @@ func BenchmarkAsyncThroughputLarge(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
 
 	b.Run("1MB", throughputRunner(testSize, 1<<20, readerConn, writerConn))
 	b.Run("2MB", throughputRunner(testSize, 1<<21, readerConn, writerConn))
@@ -84,16 +84,16 @@ func BenchmarkTCPThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	TCPThroughputRunner := func(testSize uint32, messageSize uint32, readerConn net.Conn, writerConn net.Conn) func(*testing.B) {
+	TCPThroughputRunner := func(testSize uint32, packetSize uint32, readerConn net.Conn, writerConn net.Conn) func(*testing.B) {
 		bufWriter := bufio.NewWriter(writerConn)
 		bufReader := bufio.NewReader(readerConn)
 		return func(b *testing.B) {
-			b.SetBytes(int64(testSize * messageSize))
+			b.SetBytes(int64(testSize * packetSize))
 			b.ReportAllocs()
 			var err error
 
-			randomData := make([]byte, messageSize)
-			readData := make([]byte, messageSize)
+			randomData := make([]byte, packetSize)
+			readData := make([]byte, packetSize)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				done := make(chan struct{}, 1)
@@ -105,7 +105,7 @@ func BenchmarkTCPThroughput(b *testing.B) {
 							errCh <- err
 							return
 						}
-						_, err = io.ReadAtLeast(bufReader, readData[0:], int(messageSize))
+						_, err = io.ReadAtLeast(bufReader, readData[0:], int(packetSize))
 						if err != nil {
 							errCh <- err
 							return

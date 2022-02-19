@@ -17,8 +17,9 @@
 package frisbee
 
 import (
+	"context"
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/internal/protocol"
+	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -29,39 +30,50 @@ import (
 	"time"
 )
 
+// trunk-ignore-all(golangci-lint/staticcheck)
+
+const (
+	serverConnContextKey = "conn"
+)
+
 func TestServerRaw(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100
-	const messageSize = 512
-	clientRouter := make(ClientRouter)
-	serverRouter := make(ServerRouter)
+	const packetSize = 512
+	clientHandlerTable := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
 
 	serverIsRaw := make(chan struct{}, 1)
 
-	serverRouter[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	var rawServerConn, rawClientConn net.Conn
-	serverRouter[protocol.MessagePacket] = func(c *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		rawServerConn = c.Raw()
+	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		conn := ctx.Value(serverConnContextKey).(*Async)
+		rawServerConn = conn.Raw()
 		serverIsRaw <- struct{}{}
 		return
 	}
 
-	clientRouter[protocol.MessagePing] = func(_ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverRouter, WithLogger(&emptyLogger))
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
+
+	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
+		return context.WithValue(ctx, serverConnContextKey, c)
+	}
 
 	err = s.Start()
 	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientRouter, WithLogger(&emptyLogger))
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -69,23 +81,25 @@ func TestServerRaw(t *testing.T) {
 	err = c.Connect()
 	require.NoError(t, err)
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.ContentLength = packetSize
+	p.Metadata.Operation = metadata.PacketPing
+	assert.Equal(t, data, p.Content)
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
-		err = c.WriteMessage(p)
+		err = c.WritePacket(p)
 		assert.NoError(t, err)
 	}
 
 	p.Reset()
-	p.Metadata.Operation = protocol.MessagePacket
+	assert.Equal(t, 0, len(p.Content))
+	p.Metadata.Operation = metadata.PacketProbe
 
-	err = c.WriteMessage(p)
+	err = c.WritePacket(p)
 	require.NoError(t, err)
 
 	packet.Put(p)
@@ -119,18 +133,18 @@ func TestServerRaw(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func BenchmarkThroughput(b *testing.B) {
+func BenchmarkThroughputServer(b *testing.B) {
 	const testSize = 1<<16 - 1
-	const messageSize = 512
+	const packetSize = 512
 
-	router := make(ServerRouter)
+	handlerTable := make(HandlerTable)
 
-	router[protocol.MessagePing] = func(_ *Async, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+	handlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		return
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", router, WithLogger(&emptyLogger))
+	server, err := NewServer(":0", handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -140,21 +154,21 @@ func BenchmarkThroughput(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.Operation = metadata.PacketPing
 
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * messageSize)
+		b.SetBytes(testSize * packetSize)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -181,24 +195,24 @@ func BenchmarkThroughput(b *testing.B) {
 	}
 }
 
-func BenchmarkThroughputWithResponse(b *testing.B) {
+func BenchmarkThroughputResponseServer(b *testing.B) {
 	const testSize = 1<<16 - 1
-	const messageSize = 512
+	const packetSize = 512
 
-	router := make(ServerRouter)
+	handlerTable := make(HandlerTable)
 
-	router[protocol.MessagePing] = func(_ *Async, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 		if incoming.Metadata.Id == testSize-1 {
 			incoming.Reset()
 			incoming.Metadata.Id = testSize
-			incoming.Metadata.Operation = protocol.MessagePong
+			incoming.Metadata.Operation = metadata.PacketPong
 			outgoing = incoming
 		}
 		return
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", router, WithLogger(&emptyLogger))
+	server, err := NewServer(":0", handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -208,22 +222,22 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil)
+	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 
 	p := packet.Get()
-	p.Metadata.Operation = protocol.MessagePing
+	p.Metadata.Operation = metadata.PacketPing
 
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
-		b.SetBytes(testSize * messageSize)
+		b.SetBytes(testSize * packetSize)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -240,7 +254,7 @@ func BenchmarkThroughputWithResponse(b *testing.B) {
 			}
 
 			if readPacket.Metadata.Id != testSize {
-				b.Fatal("invalid decoded message id")
+				b.Fatal("invalid decoded metadata id")
 			}
 			packet.Put(readPacket)
 		}

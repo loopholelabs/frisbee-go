@@ -31,7 +31,7 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, uint16(0), p.Metadata.Id)
 	assert.Equal(t, uint16(0), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Nil(t, p.Content)
+	assert.Equal(t, []byte{}, p.Content)
 
 	Put(p)
 }
@@ -52,7 +52,7 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, uint16(0), p.Metadata.Id)
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Nil(t, p.Content)
+		assert.Equal(t, []byte{}, p.Content)
 
 		p.Content = make([]byte, 32)
 		assert.Equal(t, 32, len(p.Content))
@@ -64,7 +64,7 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 
-		if p.Content == nil {
+		if cap(p.Content) == 512 {
 			continue
 		} else {
 			assert.Equal(t, 0, len(p.Content))
