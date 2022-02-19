@@ -30,7 +30,6 @@ import (
 	"os"
 	"sync"
 	"time"
-	"unsafe"
 )
 
 // Async is the underlying asynchronous frisbee connection which has extremely efficient read and write logic and
@@ -227,7 +226,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 		return nil, err
 	}
 
-	return (*packet.Packet)(readPacket), nil
+	return readPacket, nil
 }
 
 // Flush allows for synchronous messaging by flushing the write buffer and instantly sending packets
@@ -500,7 +499,7 @@ func (c *Async) readLoop() {
 						index += p.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
 				}
-				err = c.incoming.Push(unsafe.Pointer(p))
+				err = c.incoming.Push(p)
 				if err != nil {
 					c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
 					c.wg.Done()

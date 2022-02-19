@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
-	"unsafe"
 )
 
 func TestBoundedHelpers(t *testing.T) {
@@ -52,13 +51,13 @@ func TestBoundedHelpers(t *testing.T) {
 }
 
 func TestBounded(t *testing.T) {
-	testPacket := func() unsafe.Pointer {
-		return unsafe.Pointer(new(packet.Packet))
+	testPacket := func() *packet.Packet {
+		return new(packet.Packet)
 	}
-	testPacket2 := func() unsafe.Pointer {
-		return unsafe.Pointer(&packet.Packet{
+	testPacket2 := func() *packet.Packet {
+		return &packet.Packet{
 			Content: []byte{1},
-		})
+		}
 	}
 
 	t.Run("success", func(t *testing.T) {

@@ -61,7 +61,7 @@ type Queue struct {
 	_padding4 [8]uint64 //nolint:structcheck,unused
 	nodes     nodes
 	_padding5 [8]uint64 //nolint:structcheck,unused
-	overflow  func(uint64) error
+	overflow  func() (uint64, error)
 }
 
 func New(size uint64, blocking bool) *Queue {
@@ -87,34 +87,35 @@ func (q *Queue) init(size uint64) {
 	q.mask = size - 1
 }
 
-func (q *Queue) blocker(head uint64) error {
+func (q *Queue) blocker() (uint64, error) {
 LOOP:
+	head := atomic.LoadUint64(&q.head)
 	tail := atomic.LoadUint64(&q.tail)
 	if uint64(len(q.nodes)) == head-tail {
 		if atomic.LoadUint64(&q.closed) == 1 {
-			return Closed
+			return 0, Closed
 		}
 		runtime.Gosched()
 		goto LOOP
 	}
-	return nil
+	return head, nil
 }
 
-func (q *Queue) unblocker(head uint64) error {
+func (q *Queue) unblocker() (uint64, error) {
+	head := atomic.LoadUint64(&q.head)
 	if uint64(len(q.nodes)) == head-atomic.LoadUint64(&q.tail) {
 		p, err := q.Pop()
-		packet.Put((*packet.Packet)(p))
+		packet.Put(p)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return nil
+	return head, nil
 }
 
-func (q *Queue) Push(item unsafe.Pointer) error {
+func (q *Queue) Push(item *packet.Packet) error {
 	var newNode *node
-	head := atomic.LoadUint64(&q.head)
-	err := q.blocker(head)
+	head, err := q.blocker()
 	if err != nil {
 		return err
 	}
@@ -135,12 +136,12 @@ RETRY:
 		}
 		runtime.Gosched()
 	}
-	newNode.data = item
+	newNode.data = unsafe.Pointer(item)
 	atomic.StoreUint64(&newNode.position, head+1)
 	return nil
 }
 
-func (q *Queue) Pop() (unsafe.Pointer, error) {
+func (q *Queue) Pop() (*packet.Packet, error) {
 	var oldNode *node
 	var oldPosition = atomic.LoadUint64(&q.tail)
 RETRY:
@@ -163,7 +164,7 @@ DONE:
 	data := oldNode.data
 	oldNode.data = nil
 	atomic.StoreUint64(&oldNode.position, oldPosition+q.mask+1)
-	return data, nil
+	return (*packet.Packet)(data), nil
 }
 
 func (q *Queue) Close() {
