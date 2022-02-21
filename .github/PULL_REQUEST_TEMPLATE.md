@@ -15,7 +15,7 @@ Fixes # (issue)
 
 ## Testing
 
-Please make sure that existing test cases pass (with `go test ./... -race` and `go test -bench=. ./... -race`), 
+Please make sure that existing test cases pass (with `go test ./... -race` and `go test -bench=. ./... -race`),
 and if required please add new test cases and list them below:
 
 - [ ] Test A
@@ -28,14 +28,14 @@ Frisbee tries to adhere to strict performance requirements, so please make sure 
 ### Benchmarking Results:
 
 ```shell
+
 ```
 
 ## Linting
 
 Please make sure you've run the following and fixed any issues that arise:
 
-- [ ] `go fmt ./...` has been run
-- [ ] `golangci-lint run --skip-dirs-use-default` has been run
+- [ ] `trunk check` has been run
 
 ## Final Checklist:
 
