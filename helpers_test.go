@@ -18,22 +18,27 @@ package frisbee
 
 import (
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"go.uber.org/goleak"
 	"testing"
 )
 
-func throughputRunner(testSize uint32, messageSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m, goleak.IgnoreTopFunction("github.com/panjf2000/ants/v2.(*PoolWithFunc).purgePeriodically"), goleak.IgnoreTopFunction("github.com/panjf2000/ants/v2.(*Pool).purgePeriodically"))
+}
+
+func throughputRunner(testSize uint32, packetSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
 	return func(b *testing.B) {
-		b.SetBytes(int64(testSize * messageSize))
+		b.SetBytes(int64(testSize * packetSize))
 		b.ReportAllocs()
 		var err error
 
-		randomData := make([]byte, messageSize)
+		randomData := make([]byte, packetSize)
 
 		p := packet.Get()
 		p.Metadata.Id = 64
 		p.Metadata.Operation = 32
 		p.Write(randomData)
-		p.Metadata.ContentLength = messageSize
+		p.Metadata.ContentLength = packetSize
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			done := make(chan struct{}, 1)

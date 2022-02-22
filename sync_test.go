@@ -31,7 +31,7 @@ import (
 
 func TestNewSync(t *testing.T) {
 	t.Parallel()
-	const messageSize = 512
+	const packetSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -65,11 +65,11 @@ func TestNewSync(t *testing.T) {
 	assert.NoError(t, err)
 	<-end
 
-	data := make([]byte, messageSize)
+	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 
 	p.Write(data)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	go func() {
 		start <- struct{}{}
@@ -78,8 +78,8 @@ func TestNewSync(t *testing.T) {
 		assert.NotNil(t, p.Metadata)
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
-		assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
-		assert.Equal(t, messageSize, len(p.Content))
+		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
+		assert.Equal(t, packetSize, len(p.Content))
 		assert.Equal(t, data, p.Content)
 		end <- struct{}{}
 		packet.Put(p)
@@ -102,7 +102,7 @@ func TestSyncLargeWrite(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100000
-	const messageSize = 512
+	const packetSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -116,7 +116,7 @@ func TestSyncLargeWrite(t *testing.T) {
 	p := packet.Get()
 	p.Metadata.Id = 64
 	p.Metadata.Operation = 32
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
@@ -129,8 +129,8 @@ func TestSyncLargeWrite(t *testing.T) {
 			assert.NotNil(t, p.Metadata)
 			assert.Equal(t, uint16(64), p.Metadata.Id)
 			assert.Equal(t, uint16(32), p.Metadata.Operation)
-			assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
-			assert.Equal(t, messageSize, len(p.Content))
+			assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
+			assert.Equal(t, packetSize, len(p.Content))
 			assert.Equal(t, randomData[i], p.Content)
 			packet.Put(p)
 		}
@@ -139,7 +139,7 @@ func TestSyncLargeWrite(t *testing.T) {
 
 	<-start
 	for i := 0; i < testSize; i++ {
-		randomData[i] = make([]byte, messageSize)
+		randomData[i] = make([]byte, packetSize)
 		_, _ = rand.Read(randomData[i])
 		p.Write(randomData[i])
 		err := writerConn.WritePacket(p)
@@ -159,7 +159,7 @@ func TestSyncRawConn(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100000
-	const messageSize = 32
+	const packetSize = 32
 
 	emptyLogger := zerolog.New(ioutil.Discard)
 
@@ -172,14 +172,14 @@ func TestSyncRawConn(t *testing.T) {
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
 
-	randomData := make([]byte, messageSize)
+	randomData := make([]byte, packetSize)
 	_, _ = rand.Read(randomData)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
 	p.Metadata.Operation = 32
 	p.Write(randomData)
-	p.Metadata.ContentLength = messageSize
+	p.Metadata.ContentLength = packetSize
 
 	go func() {
 		start <- struct{}{}
@@ -189,8 +189,8 @@ func TestSyncRawConn(t *testing.T) {
 			assert.NotNil(t, p.Metadata)
 			assert.Equal(t, uint16(64), p.Metadata.Id)
 			assert.Equal(t, uint16(32), p.Metadata.Operation)
-			assert.Equal(t, uint32(messageSize), p.Metadata.ContentLength)
-			assert.Equal(t, messageSize, len(p.Content))
+			assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
+			assert.Equal(t, packetSize, len(p.Content))
 			assert.Equal(t, randomData, p.Content)
 			packet.Put(p)
 		}
