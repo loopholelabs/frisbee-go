@@ -1,10 +1,9 @@
 ---
 name: Other
 about: A different type of issue
-title: ''
+title: ""
 labels: question
 assignees: ShivanshVij
-
 ---
 
 **Description of the Issue. Please be as clear as possible.**
