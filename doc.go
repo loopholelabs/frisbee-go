@@ -16,16 +16,14 @@
 
 // Package frisbee is the core package for using the frisbee messaging framework. The frisbee framework
 // is a messaging framework designed around the aspect of "bring your own protocol", and can be used by
-// simply defining your message types and their accompanying logic.
+// simply defining your packet types and their accompanying logic.
 //
-// This package provides methods for defining message types and logic, as well as functionality
+// This package provides methods for defining packet types and logic, as well as functionality
 // for implementing frisbee servers and clients. Useful features like automatic heartbeats and
 // automatic reconnections are provided as well.
 //
 // In depth documentation and examples can be found at https://loopholelabs.io/docs/frisbee
 //
-// All exported functions and methods are safe to be used concurrently unless
-// specified otherwise.
 //
 // An Echo Example
 //
@@ -35,37 +33,32 @@
 //
 //	import (
 //		"github.com/loopholelabs/frisbee"
+//      "github.com/loopholelabs/frisbee/pkg/packet"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"
 //	)
 //
-//	const PING = uint32(1)
-//	const PONG = uint32(2)
+//	const PING = uint16(10)
+//	const PONG = uint16(11)
 //
-//	func handlePing(_ *frisbee.Async, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-//		if incomingMessage.ContentLength > 0 {
-//			log.Printf("Server Received Message: %s", incomingContent)
-//			outgoingMessage = &frisbee.Message{
-//				From:          incomingMessage.From,
-//				To:            incomingMessage.To,
-//				Id:            incomingMessage.Id,
-//				Operation:     PONG,
-//				ContentLength: incomingMessage.ContentLength,
-//			}
-//			outgoingContent = incomingContent
+//	func handlePing(_ *frisbee.Async, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
+//		if incoming.Metadata.ContentLength > 0 {
+//			log.Printf("Server Received Metadata: %s\n", incoming.Content)
+//          incoming.Metadata.Operation = PONG
+//			outgoing = incoming
 //		}
 //
 //		return
 //	}
 //
 //	func main() {
-//		router := make(frisbee.ServerRouter)
-//		router[PING] = handlePing
+//		handlerTable := make(frisbee.ServerRouter)
+//		handlerTable[PING] = handlePing
 //		exit := make(chan os.Signal)
 //		signal.Notify(exit, os.Interrupt)
 //
-//		s := frisbee.NewServer(":8192", router)
+//		s := frisbee.NewServer(":8192", handlerTable, 0)
 //		err := s.Start()
 //		if err != nil {
 //			panic(err)
@@ -84,29 +77,30 @@
 //	import (
 //		"fmt"
 //		"github.com/loopholelabs/frisbee"
+//		"github.com/loopholelabs/frisbee/pkg/packet"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"
 //		"time"
 //	)
 //
-//	const PING = uint32(1)
-//	const PONG = uint32(2)
+//	const PING = uint16(10)
+//	const PONG = uint16(11)
 //
-//	func handlePong(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
-//		if incomingMessage.ContentLength > 0 {
-//			log.Printf("Client Received Message: %s", string(incomingContent))
+//	func handlePong(incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
+//		if incoming.Metadata.ContentLength > 0 {
+//			log.Printf("Client Received Metadata: %s\n", incoming.Content)
 //		}
 //		return
 //	}
 //
 //	func main() {
-//		router := make(frisbee.ClientRouter)
-//		router[PONG] = handlePong
+//		handlerTable := make(frisbee.ClientRouter)
+//		handlerTable[PONG] = handlePong
 //		exit := make(chan os.Signal)
 //		signal.Notify(exit, os.Interrupt)
 //
-//		c, err := frisbee.NewClient("127.0.0.1:8192", router)
+//		c, err := frisbee.NewClient("127.0.0.1:8192", handlerTable)
 //		if err != nil {
 //			panic(err)
 //		}
@@ -117,15 +111,12 @@
 //
 //		go func() {
 //			i := 0
+//			p := packet.Get()
+//			p.Metadata.Operation = PING
 //			for {
-//				message := []byte(fmt.Sprintf("ECHO MESSAGE: %d", i))
-//				err := c.WriteMessage(&frisbee.Message{
-//					To:            0,
-//					From:          0,
-//					Id:            uint32(i),
-//					Operation:     PING,
-//					ContentLength: uint64(len(message)),
-//				}, &message)
+//				p.Write([]byte(fmt.Sprintf("ECHO MESSAGE: %d", i)))
+//				p.Metadata.ContentLength = uint32(len(p.Content))
+//				err := c.WritePacket(p)
 //				if err != nil {
 //					panic(err)
 //				}
@@ -143,7 +134,7 @@
 //
 // (Examples taken from https://github.com/loopholelabs/frisbee-examples/)
 //
-// This example is a simple echo client/server, where the client will repeatedly send messages to the server,
-// and the server will echo them back. Its purpose is to describe the flow of messages from Frisbee Client to Server,
+// This example is a simple echo client/server, where the client will repeatedly send packets to the server,
+// and the server will echo them back. Its purpose is to describe the flow of packets from Frisbee Client to Server,
 // as well as give an example of how a Frisbee application must be implemented.
 package frisbee

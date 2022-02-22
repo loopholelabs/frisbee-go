@@ -17,31 +17,33 @@
 package frisbee_test
 
 import (
+	"context"
 	"github.com/loopholelabs/frisbee"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"os"
 )
 
 func ExampleNewClient() {
-	router := make(frisbee.ClientRouter)
+	handlerTable := make(frisbee.HandlerTable)
 
-	router[0] = func(incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	handlerTable[10] = func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
 		return
 	}
 
 	logger := zerolog.New(os.Stdout)
 
-	_, _ = frisbee.NewClient("127.0.0.1:8080", router, frisbee.WithLogger(&logger))
+	_, _ = frisbee.NewClient("127.0.0.1:8080", handlerTable, context.Background(), frisbee.WithLogger(&logger))
 }
 
 func ExampleNewServer() {
-	router := make(frisbee.ServerRouter)
+	handlerTable := make(frisbee.HandlerTable)
 
-	router[0] = func(c *frisbee.Async, incomingMessage frisbee.Message, incomingContent []byte) (outgoingMessage *frisbee.Message, outgoingContent []byte, action frisbee.Action) {
+	handlerTable[10] = func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
 		return
 	}
 
 	logger := zerolog.New(os.Stdout)
 
-	_, _ = frisbee.NewServer("127.0.0.1:8080", router, frisbee.WithLogger(&logger))
+	_, _ = frisbee.NewServer("127.0.0.1:8080", handlerTable, frisbee.WithLogger(&logger))
 }
