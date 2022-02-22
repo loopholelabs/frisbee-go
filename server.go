@@ -145,11 +145,9 @@ LOOP:
 func (s *Server) connCloser(conn *Async) {
 	select {
 	case <-conn.CloseChannel():
-		s.OnClosed(conn, conn.Error())
 		s.wg.Done()
 	case <-s.shutdownCh:
 		_ = conn.Close()
-		s.OnClosed(conn, nil)
 		s.wg.Done()
 	}
 }
