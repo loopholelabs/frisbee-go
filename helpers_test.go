@@ -23,7 +23,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m, goleak.IgnoreTopFunction("github.com/panjf2000/ants/v2.(*PoolWithFunc).purgePeriodically"), goleak.IgnoreTopFunction("github.com/panjf2000/ants/v2.(*Pool).purgePeriodically"))
+	goleak.VerifyTestMain(m)
 }
 
 func throughputRunner(testSize uint32, packetSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
