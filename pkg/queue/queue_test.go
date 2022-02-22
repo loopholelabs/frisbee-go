@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-func TestBoundedHelpers(t *testing.T) {
+func TestHelpers(t *testing.T) {
 	t.Parallel()
 
 	t.Run("test round", func(t *testing.T) {
