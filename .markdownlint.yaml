@@ -10,3 +10,4 @@ url: false
 whitespace: false
 first-line-h1: false
 no-trailing-punctuation: false
+no-duplicate-header: false
