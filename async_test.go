@@ -341,7 +341,11 @@ func TestAsyncTimeout(t *testing.T) {
 
 	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
-	assert.Error(t, readerConn.Error())
+	err = readerConn.Error()
+	if err == nil {
+		time.Sleep(defaultDeadline * 5)
+		assert.Error(t, readerConn.Error())
+	}
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
