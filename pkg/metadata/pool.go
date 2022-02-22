@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -14,20 +14,38 @@
 	limitations under the License.
 */
 
-package errors
+package metadata
 
-import "github.com/pkg/errors"
+import "sync"
 
-type ErrorContext string
-
-func WithContext(err error, context ErrorContext) error {
-	return errors.Wrap(err, string(context))
+type Pool struct {
+	pool sync.Pool
 }
 
-func New(reason string) error {
-	return errors.New(reason)
+func NewPool() *Pool {
+	return new(Pool)
 }
 
-func Is(err error, target error) bool {
-	return errors.Is(err, target)
+func (p *Pool) Get() *[Size]byte {
+	v := p.pool.Get()
+	if v == nil {
+		v = &[Size]byte{}
+	}
+	return v.(*[Size]byte)
+}
+
+func (p *Pool) Put(b *[Size]byte) {
+	p.pool.Put(b)
+}
+
+var (
+	pool = NewPool()
+)
+
+func Get() *[Size]byte {
+	return pool.Get()
+}
+
+func Put(b *[Size]byte) {
+	pool.Put(b)
 }
