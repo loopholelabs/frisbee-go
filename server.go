@@ -190,10 +190,23 @@ func (s *Server) handlePacket(p *packet.Packet, connCtx context.Context, conn *A
 }
 
 func (s *Server) handleConn(newConn net.Conn) {
+	var err error
 	switch v := newConn.(type) {
 	case *net.TCPConn:
-		_ = v.SetKeepAlive(true)
-		_ = v.SetKeepAlivePeriod(s.options.KeepAlive)
+		err = v.SetKeepAlive(true)
+		if err != nil {
+			s.Logger().Error().Err(err).Msg("Error while setting TCP Keepalive")
+			_ = v.Close()
+			s.wg.Done()
+			return
+		}
+		err = v.SetKeepAlivePeriod(s.options.KeepAlive)
+		if err != nil {
+			s.Logger().Error().Err(err).Msg("Error while setting TCP Keepalive Period")
+			_ = v.Close()
+			s.wg.Done()
+			return
+		}
 	}
 
 	frisbeeConn := NewAsync(newConn, s.Logger(), true)
@@ -202,12 +215,19 @@ func (s *Server) handleConn(newConn net.Conn) {
 	go s.connCloser(frisbeeConn)
 
 	connCtx := s.BaseContext()
+
+	var p *packet.Packet
+	p, err = frisbeeConn.ReadPacket()
+	if err != nil {
+		_ = frisbeeConn.Close()
+		s.OnClosed(frisbeeConn, err)
+		s.wg.Done()
+		return
+	}
 	if s.ConnContext != nil {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
-
-	var p *packet.Packet
-	var err error
+	s.handlePacket(p, connCtx, frisbeeConn)
 LOOP:
 	p, err = frisbeeConn.ReadPacket()
 	if err != nil {

@@ -17,6 +17,7 @@
 package frisbee
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
@@ -97,7 +98,25 @@ func (c *Sync) ConnectionState() (tls.ConnectionState, error) {
 	if tlsConn, ok := c.conn.(*tls.Conn); ok {
 		return tlsConn.ConnectionState(), nil
 	}
-	return tls.ConnectionState{}, NotTLSConnectionError
+	return emptyState, NotTLSConnectionError
+}
+
+// Handshake performs the tls.Handshake() of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Sync) Handshake() error {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.Handshake()
+	}
+	return NotTLSConnectionError
+}
+
+// HandshakeContext performs the tls.HandshakeContext() of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Sync) HandshakeContext(ctx context.Context) error {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.HandshakeContext(ctx)
+	}
+	return NotTLSConnectionError
 }
 
 // LocalAddr returns the local address of the underlying net.Conn
