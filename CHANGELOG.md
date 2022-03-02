@@ -2,10 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
+to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [v0.2.1] - 2022-03-02 (Beta)
+
+### Fixes
+
+- The `Server.ConnContext` function now runs after a TLS Handshake is completed - this means if you'd like to access
+  the `tls.ConnectionState` of a `frisbee.Conn` in the `ConnContext` it is now feasible to do so
+
+### Changes
+
+- Frisbee packets now use a `*packet.Content` object to store byte slices. This struct will append data when the `Write`
+  function is called, and can be reset using the `Reset` function. Putting a packet back in a pool automatically calls
+  the `Reset` function on the content as well.
 
 ## [v0.2.0] - 2022-02-22 (Beta)
 
@@ -108,12 +121,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.2.1...HEAD
+
+[v0.2.1]: https://github.com/loopholelabs/frisbee/compare/v0.2.0...v0.2.1
+
 [v0.2.0]: https://github.com/loopholelabs/frisbee/compare/v0.1.6...v0.2.0
+
 [v0.1.6]: https://github.com/loopholelabs/frisbee/compare/v0.1.5...v0.1.6
+
 [v0.1.5]: https://github.com/loopholelabs/frisbee/compare/v0.1.4...v0.1.5
+
 [v0.1.4]: https://github.com/loopholelabs/frisbee/compare/v0.1.3...v0.1.4
+
 [v0.1.3]: https://github.com/loopholelabs/frisbee/compare/v0.1.2...v0.1.3
+
 [v0.1.2]: https://github.com/loopholelabs/frisbee/compare/v0.1.1...v0.1.2
+
 [v0.1.1]: https://github.com/loopholelabs/frisbee/compare/v0.1.0...v0.1.1
+
 [v0.1.0]: https://github.com/loopholelabs/frisbee/releases/tag/v0.1.0
