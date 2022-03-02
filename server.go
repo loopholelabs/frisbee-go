@@ -160,7 +160,7 @@ func (s *Server) handlePacket(p *packet.Packet, connCtx context.Context, conn *A
 			packetCtx = s.PacketContext(packetCtx, p)
 		}
 		outgoing, action := handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content)) {
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(outgoing.Content.Len()) {
 			s.PreWrite()
 			err := conn.WritePacket(outgoing)
 			if outgoing != p {

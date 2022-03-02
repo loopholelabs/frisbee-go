@@ -17,6 +17,7 @@
 package packet
 
 import (
+	"crypto/rand"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -31,7 +32,7 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, uint16(0), p.Metadata.Id)
 	assert.Equal(t, uint16(0), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, []byte{}, p.Content)
+	assert.Equal(t, []byte{}, p.Content.B)
 
 	Put(p)
 }
@@ -47,31 +48,66 @@ func TestRecycle(t *testing.T) {
 
 	pool.Put(p)
 	p = pool.Get()
+
+	testData := make([]byte, p.Content.Cap()*2)
+	_, err := rand.Read(testData)
+	assert.NoError(t, err)
 	for {
 		assert.NotNil(t, p.Metadata)
 		assert.Equal(t, uint16(0), p.Metadata.Id)
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, []byte{}, p.Content)
+		assert.Equal(t, []byte{}, p.Content.B)
 
-		p.Content = make([]byte, 32)
-		assert.Equal(t, 32, len(p.Content))
+		p.Content.Write(testData)
+		assert.Equal(t, len(testData), p.Content.Len())
+		assert.GreaterOrEqual(t, p.Content.Cap(), len(testData))
 
 		pool.Put(p)
 		p = pool.Get()
+
 		assert.NotNil(t, p.Metadata)
 		assert.Equal(t, uint16(0), p.Metadata.Id)
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 
-		if cap(p.Content) == 512 {
+		if p.Content.Cap() < len(testData) {
 			continue
 		} else {
-			assert.Equal(t, 0, len(p.Content))
-			assert.Equal(t, 32, cap(p.Content))
+			assert.Equal(t, 0, p.Content.Len())
+			assert.GreaterOrEqual(t, p.Content.Cap(), len(testData))
 			break
 		}
 	}
 
 	pool.Put(p)
+}
+
+func TestWrite(t *testing.T) {
+	t.Parallel()
+
+	p := Get()
+
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	assert.NoError(t, err)
+
+	p.Content.Write(b)
+	assert.Equal(t, b, p.Content.B)
+
+	p.Reset()
+	assert.NotEqual(t, b, p.Content.B)
+	assert.Equal(t, 0, p.Content.Len())
+	assert.Equal(t, 512, p.Content.Cap())
+
+	b = make([]byte, 1024)
+	_, err = rand.Read(b)
+	assert.NoError(t, err)
+
+	p.Content.Write(b)
+
+	assert.Equal(t, b, p.Content.B)
+	assert.Equal(t, 1024, p.Content.Len())
+	assert.GreaterOrEqual(t, p.Content.Cap(), 1024)
+
 }

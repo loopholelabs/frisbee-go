@@ -37,7 +37,7 @@ func throughputRunner(testSize uint32, packetSize uint32, readerConn Conn, write
 		p := packet.Get()
 		p.Metadata.Id = 64
 		p.Metadata.Operation = 32
-		p.Write(randomData)
+		p.Content.Write(randomData)
 		p.Metadata.ContentLength = packetSize
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
