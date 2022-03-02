@@ -35,27 +35,12 @@ import (
 // delivered with the frisbee packet (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
 type Packet struct {
 	Metadata *metadata.Metadata
-	Content  []byte
-}
-
-// Write efficiently copies the byte slice b into the packet, however it
-// does *not* update the content length.
-func (p *Packet) Write(b []byte) int {
-	if p.Content == nil {
-		p.Content = make([]byte, len(b))
-		copy(p.Content, b)
-	} else if cap(p.Content) < len(b) {
-		p.Content = append(p.Content[:0], b...)
-		p.Content = p.Content[:len(b)]
-	} else {
-		p.Content = p.Content[:copy(p.Content[0:cap(p.Content)], b)]
-	}
-	return len(b)
+	Content  *Content
 }
 
 func (p *Packet) Reset() {
 	p.Metadata.Id = 0
 	p.Metadata.Operation = 0
 	p.Metadata.ContentLength = 0
-	p.Content = p.Content[:0]
+	p.Content.Reset()
 }

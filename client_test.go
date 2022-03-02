@@ -86,7 +86,7 @@ func TestClientRaw(t *testing.T) {
 
 	p := packet.Get()
 	p.Metadata.Operation = metadata.PacketPing
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 
 	for q := 0; q < testSize; q++ {
@@ -169,7 +169,7 @@ func BenchmarkThroughputClient(b *testing.B) {
 	p := packet.Get()
 
 	p.Metadata.Operation = metadata.PacketPing
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
@@ -250,7 +250,7 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 	p := packet.Get()
 	p.Metadata.Operation = metadata.PacketPing
 
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {

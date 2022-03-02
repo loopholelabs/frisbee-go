@@ -38,7 +38,7 @@ func (p *Pool) Get() (s *Packet) {
 	if v == nil {
 		s = &Packet{
 			Metadata: new(metadata.Metadata),
-			Content:  make([]byte, 0, 512),
+			Content:  NewContent(),
 		}
 		return
 	}

@@ -84,10 +84,10 @@ func TestServerRaw(t *testing.T) {
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 	p := packet.Get()
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, data, p.Content)
+	assert.Equal(t, data, p.Content.B)
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -96,7 +96,7 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	p.Reset()
-	assert.Equal(t, 0, len(p.Content))
+	assert.Equal(t, 0, p.Content.Len())
 	p.Metadata.Operation = metadata.PacketProbe
 
 	err = c.WritePacket(p)
@@ -164,7 +164,7 @@ func BenchmarkThroughputServer(b *testing.B) {
 	p := packet.Get()
 	p.Metadata.Operation = metadata.PacketPing
 
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
@@ -233,7 +233,7 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 	p := packet.Get()
 	p.Metadata.Operation = metadata.PacketPing
 
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 
 	b.Run("test", func(b *testing.B) {
