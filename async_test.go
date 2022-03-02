@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -341,9 +342,11 @@ func TestAsyncTimeout(t *testing.T) {
 
 	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
+
 	err = readerConn.Error()
 	if err == nil {
-		time.Sleep(defaultDeadline * 5)
+		runtime.Gosched()
+		time.Sleep(defaultDeadline * 10)
 	}
 	assert.Error(t, readerConn.Error())
 
