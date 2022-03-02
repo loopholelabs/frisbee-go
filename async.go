@@ -141,7 +141,7 @@ func (c *Async) Handshake() error {
 // if the connection is not *tls.Conn then the NotTLSConnectionError is returned
 func (c *Async) HandshakeContext(ctx context.Context) error {
 	if tlsConn, ok := c.conn.(*tls.Conn); ok {
-		return tlsConn.HandshakeContext(ctx)
+		return tlsConn.HandshakeContext(ctx) //trunk-ignore(golangci-lint/typecheck)
 	}
 	return NotTLSConnectionError
 }
