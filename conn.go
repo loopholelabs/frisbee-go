@@ -17,6 +17,7 @@
 package frisbee
 
 import (
+	"context"
 	"crypto/tls"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
@@ -30,10 +31,14 @@ import (
 const DefaultBufferSize = 1 << 19
 
 var (
-	defaultLogger   = zerolog.New(os.Stdout)
+	defaultLogger = zerolog.New(os.Stdout)
+
 	defaultDeadline = time.Second
-	emptyTime       = time.Time{}
-	pastTime        = time.Unix(1, 0)
+
+	emptyTime = time.Time{}
+	pastTime  = time.Unix(1, 0)
+
+	emptyState = tls.ConnectionState{}
 )
 
 var (
@@ -45,6 +50,8 @@ type Conn interface {
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 	ConnectionState() (tls.ConnectionState, error)
+	Handshake() error
+	HandshakeContext(context.Context) error
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
