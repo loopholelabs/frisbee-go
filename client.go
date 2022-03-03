@@ -167,7 +167,7 @@ func (c *Client) handlePacket(ctx context.Context, conn *Async, p *packet.Packet
 			packetCtx = c.PacketContext(packetCtx, p)
 		}
 		outgoing, action := handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(outgoing.Content.Len()) {
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
 			err := conn.WritePacket(outgoing)
 			if outgoing != p {
 				packet.Put(outgoing)
