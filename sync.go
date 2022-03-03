@@ -133,7 +133,7 @@ func (c *Sync) RemoteAddr() net.Addr {
 //
 // If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Sync) WritePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != p.Content.Len() {
+	if int(p.Metadata.ContentLength) != len(p.Content.B) {
 		return InvalidContentLength
 	}
 
@@ -200,8 +200,8 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedPacket[metadata.ContentLengthOffset : metadata.ContentLengthOffset+metadata.ContentLengthSize])
 
 	if p.Metadata.ContentLength > 0 {
-		for p.Content.Cap() < int(p.Metadata.ContentLength) {
-			p.Content.B = append(p.Content.B[:p.Content.Cap()], 0)
+		for cap(p.Content.B) < int(p.Metadata.ContentLength) {
+			p.Content.B = append(p.Content.B[:cap(p.Content.B)], 0)
 		}
 		p.Content.B = p.Content.B[:p.Metadata.ContentLength]
 		_, err = io.ReadAtLeast(c.conn, p.Content.B[:], int(p.Metadata.ContentLength))

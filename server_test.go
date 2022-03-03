@@ -96,7 +96,7 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	p.Reset()
-	assert.Equal(t, 0, p.Content.Len())
+	assert.Equal(t, 0, len(p.Content.B))
 	p.Metadata.Operation = metadata.PacketProbe
 
 	err = c.WritePacket(p)

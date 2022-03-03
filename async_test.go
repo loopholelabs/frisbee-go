@@ -57,7 +57,7 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, p.Content.Len())
+	assert.Equal(t, 0, len(p.Content.B))
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -76,7 +76,7 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-	assert.Equal(t, len(data), p.Content.Len())
+	assert.Equal(t, len(data), len(p.Content.B))
 	assert.Equal(t, data, p.Content.B)
 
 	packet.Put(p)
@@ -123,7 +123,7 @@ func TestAsyncLargeWrite(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, len(randomData[i]), p.Content.Len())
+		assert.Equal(t, len(randomData[i]), len(p.Content.B))
 		assert.Equal(t, randomData[i], p.Content.B)
 		packet.Put(p)
 	}
@@ -171,7 +171,7 @@ func TestAsyncRawConn(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, packetSize, p.Content.Len())
+		assert.Equal(t, packetSize, len(p.Content.B))
 		assert.Equal(t, randomData, p.Content.B)
 	}
 
@@ -225,7 +225,7 @@ func TestAsyncReadClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, p.Content.Len())
+	assert.Equal(t, 0, len(p.Content.B))
 
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
@@ -273,7 +273,7 @@ func TestAsyncWriteClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, p.Content.Len())
+	assert.Equal(t, 0, len(p.Content.B))
 
 	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
@@ -324,7 +324,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, p.Content.Len())
+	assert.Equal(t, 0, len(p.Content.B))
 
 	time.Sleep(defaultDeadline * 5)
 

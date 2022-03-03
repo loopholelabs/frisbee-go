@@ -165,7 +165,7 @@ func (c *Async) CloseChannel() <-chan struct{} {
 //
 // If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != p.Content.Len() {
+	if int(p.Metadata.ContentLength) != len(p.Content.B) {
 		return InvalidContentLength
 	}
 

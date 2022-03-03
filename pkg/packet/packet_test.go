@@ -49,7 +49,7 @@ func TestRecycle(t *testing.T) {
 	pool.Put(p)
 	p = pool.Get()
 
-	testData := make([]byte, p.Content.Cap()*2)
+	testData := make([]byte, cap(p.Content.B)*2)
 	_, err := rand.Read(testData)
 	assert.NoError(t, err)
 	for {
@@ -60,8 +60,8 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, []byte{}, p.Content.B)
 
 		p.Content.Write(testData)
-		assert.Equal(t, len(testData), p.Content.Len())
-		assert.GreaterOrEqual(t, p.Content.Cap(), len(testData))
+		assert.Equal(t, len(testData), len(p.Content.B))
+		assert.GreaterOrEqual(t, cap(p.Content.B), len(testData))
 
 		pool.Put(p)
 		p = pool.Get()
@@ -71,11 +71,11 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 
-		if p.Content.Cap() < len(testData) {
+		if cap(p.Content.B) < len(testData) {
 			continue
 		} else {
-			assert.Equal(t, 0, p.Content.Len())
-			assert.GreaterOrEqual(t, p.Content.Cap(), len(testData))
+			assert.Equal(t, 0, len(p.Content.B))
+			assert.GreaterOrEqual(t, cap(p.Content.B), len(testData))
 			break
 		}
 	}
@@ -97,8 +97,8 @@ func TestWrite(t *testing.T) {
 
 	p.Reset()
 	assert.NotEqual(t, b, p.Content.B)
-	assert.Equal(t, 0, p.Content.Len())
-	assert.Equal(t, 512, p.Content.Cap())
+	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 512, cap(p.Content.B))
 
 	b = make([]byte, 1024)
 	_, err = rand.Read(b)
@@ -107,7 +107,7 @@ func TestWrite(t *testing.T) {
 	p.Content.Write(b)
 
 	assert.Equal(t, b, p.Content.B)
-	assert.Equal(t, 1024, p.Content.Len())
-	assert.GreaterOrEqual(t, p.Content.Cap(), 1024)
+	assert.Equal(t, 1024, len(p.Content.B))
+	assert.GreaterOrEqual(t, cap(p.Content.B), 1024)
 
 }
