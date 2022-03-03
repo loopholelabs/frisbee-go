@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"context"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"

@@ -17,7 +17,7 @@
 package queue
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"github.com/pkg/errors"
 	"runtime"
 	"sync/atomic"

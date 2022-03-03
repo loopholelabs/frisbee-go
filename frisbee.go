@@ -18,8 +18,9 @@ package frisbee
 
 import (
 	"context"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
+	"github.com/loopholelabs/packet/pkg/content"
+	"github.com/loopholelabs/packet/pkg/metadata"
 	"github.com/pkg/errors"
 )
 
@@ -81,7 +82,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: HEARTBEAT,
 		},
-		Content: packet.NewContent(),
+		Content: content.New(),
 	}
 
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Packets
@@ -89,7 +90,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PING,
 		},
-		Content: packet.NewContent(),
+		Content: content.New(),
 	}
 
 	// PONGPacket is a pre-allocated Frisbee Packet for PONG Packets
@@ -97,6 +98,6 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PONG,
 		},
-		Content: packet.NewContent(),
+		Content: content.New(),
 	}
 )

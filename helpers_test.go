@@ -17,7 +17,7 @@
 package frisbee
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"go.uber.org/goleak"
 	"testing"
 )

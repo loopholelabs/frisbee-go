@@ -19,8 +19,8 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
+	"github.com/loopholelabs/packet/pkg/metadata"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

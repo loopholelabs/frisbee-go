@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"

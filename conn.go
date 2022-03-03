@@ -19,7 +19,7 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"net"
