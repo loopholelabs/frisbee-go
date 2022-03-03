@@ -40,27 +40,10 @@ func (c *Content) Reset() {
 // Write efficiently copies the byte slice b into the content buffer, however it
 // does *not* update the content length.
 func (c *Content) Write(b []byte) int {
-	if c.B == nil {
-		c.B = make([]byte, len(b))
-		copy(c.B, b)
-	} else if cap(c.B)-len(c.B) < len(b) {
+	if cap(c.B)-len(c.B) < len(b) {
 		c.B = append(c.B[:len(c.B)], b...)
 	} else {
 		c.B = c.B[:len(c.B)+copy(c.B[len(c.B):cap(c.B)], b)]
 	}
 	return len(b)
-}
-
-func (c *Content) Len() int {
-	if c == nil {
-		return 0
-	}
-	return len(c.B)
-}
-
-func (c *Content) Cap() int {
-	if c == nil {
-		return 0
-	}
-	return cap(c.B)
 }
