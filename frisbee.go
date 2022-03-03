@@ -81,6 +81,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: HEARTBEAT,
 		},
+		Content: packet.NewContent(),
 	}
 
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Packets
@@ -88,6 +89,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PING,
 		},
+		Content: packet.NewContent(),
 	}
 
 	// PONGPacket is a pre-allocated Frisbee Packet for PONG Packets
@@ -95,5 +97,6 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PONG,
 		},
+		Content: packet.NewContent(),
 	}
 )
