@@ -19,6 +19,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Frisbee packets now use a `*packet.Content` object to store byte slices. This struct will append data when the `Write`
   function is called, and can be reset using the `Reset` function. Putting a packet back in a pool automatically calls
   the `Reset` function on the content as well.
+- Moving the `packet` and `metadata` packages into their own repo and referencing them
 
 ## [v0.2.0] - 2022-02-22 (Beta)
 
