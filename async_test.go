@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -56,12 +57,12 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content))
+	assert.Equal(t, 0, len(p.Content.B))
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 
 	err = writerConn.WritePacket(p)
@@ -75,8 +76,8 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-	assert.Equal(t, len(data), len(p.Content))
-	assert.Equal(t, data, p.Content)
+	assert.Equal(t, len(data), len(p.Content.B))
+	assert.Equal(t, data, p.Content.B)
 
 	packet.Put(p)
 
@@ -108,8 +109,9 @@ func TestAsyncLargeWrite(t *testing.T) {
 	for i := 0; i < testSize; i++ {
 		randomData[i] = make([]byte, packetSize)
 		_, _ = rand.Read(randomData[i])
-		p.Write(randomData[i])
+		p.Content.Write(randomData[i])
 		err := writerConn.WritePacket(p)
+		p.Content.Reset()
 		assert.NoError(t, err)
 	}
 	packet.Put(p)
@@ -121,8 +123,8 @@ func TestAsyncLargeWrite(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, len(randomData[i]), len(p.Content))
-		assert.Equal(t, randomData[i], p.Content)
+		assert.Equal(t, len(randomData[i]), len(p.Content.B))
+		assert.Equal(t, randomData[i], p.Content.B)
 		packet.Put(p)
 	}
 
@@ -152,7 +154,7 @@ func TestAsyncRawConn(t *testing.T) {
 	p := packet.Get()
 	p.Metadata.Id = 64
 	p.Metadata.Operation = 32
-	p.Write(randomData)
+	p.Content.Write(randomData)
 	p.Metadata.ContentLength = packetSize
 
 	for i := 0; i < testSize; i++ {
@@ -169,8 +171,8 @@ func TestAsyncRawConn(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, len(randomData), len(p.Content))
-		assert.Equal(t, randomData, p.Content)
+		assert.Equal(t, packetSize, len(p.Content.B))
+		assert.Equal(t, randomData, p.Content.B)
 	}
 
 	rawReaderConn := readerConn.Raw()
@@ -223,7 +225,7 @@ func TestAsyncReadClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content))
+	assert.Equal(t, 0, len(p.Content.B))
 
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
@@ -271,7 +273,7 @@ func TestAsyncWriteClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content))
+	assert.Equal(t, 0, len(p.Content.B))
 
 	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
@@ -322,7 +324,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content))
+	assert.Equal(t, 0, len(p.Content.B))
 
 	time.Sleep(defaultDeadline * 5)
 
@@ -341,9 +343,11 @@ func TestAsyncTimeout(t *testing.T) {
 
 	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
+
 	err = readerConn.Error()
 	if err == nil {
-		time.Sleep(defaultDeadline * 5)
+		runtime.Gosched()
+		time.Sleep(defaultDeadline * 10)
 	}
 	assert.Error(t, readerConn.Error())
 

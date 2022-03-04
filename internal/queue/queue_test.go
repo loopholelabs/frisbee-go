@@ -17,7 +17,7 @@
 package queue
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -60,7 +60,7 @@ func TestQueue(t *testing.T) {
 	}
 	testPacket2 := func() *packet.Packet {
 		p := packet.Get()
-		p.Content = []byte{1}
+		p.Content.Write([]byte{1})
 		return p
 	}
 

@@ -18,11 +18,12 @@ package frisbee
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
-	"github.com/loopholelabs/frisbee/pkg/packet"
-	"github.com/loopholelabs/frisbee/pkg/queue"
+	"github.com/loopholelabs/frisbee/internal/queue"
+	"github.com/loopholelabs/packet"
+	"github.com/loopholelabs/packet/pkg/metadata"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -124,7 +125,25 @@ func (c *Async) ConnectionState() (tls.ConnectionState, error) {
 	if tlsConn, ok := c.conn.(*tls.Conn); ok {
 		return tlsConn.ConnectionState(), nil
 	}
-	return tls.ConnectionState{}, NotTLSConnectionError
+	return emptyState, NotTLSConnectionError
+}
+
+// Handshake performs the tls.Handshake() of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Async) Handshake() error {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.Handshake()
+	}
+	return NotTLSConnectionError
+}
+
+// HandshakeContext performs the tls.HandshakeContext() of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Async) HandshakeContext(ctx context.Context) error {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.HandshakeContext(ctx) //trunk-ignore(golangci-lint/typecheck)
+	}
+	return NotTLSConnectionError
 }
 
 // LocalAddr returns the local address of the underlying net.Conn
@@ -146,7 +165,7 @@ func (c *Async) CloseChannel() <-chan struct{} {
 //
 // If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != len(p.Content) {
+	if int(p.Metadata.ContentLength) != len(p.Content.B) {
 		return InvalidContentLength
 	}
 
@@ -185,7 +204,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 				return c.closeWithError(err)
 			}
 		}
-		_, err = c.writer.Write(p.Content[:p.Metadata.ContentLength])
+		_, err = c.writer.Write(p.Content.B[:p.Metadata.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
@@ -468,7 +487,7 @@ func (c *Async) readLoop() {
 			default:
 				if p.Metadata.ContentLength > 0 {
 					if n-index < int(p.Metadata.ContentLength) {
-						min := int(p.Metadata.ContentLength) - p.Write(buf[index:n])
+						min := int(p.Metadata.ContentLength) - p.Content.Write(buf[index:n])
 						n = 0
 						for cap(buf) < min {
 							buf = append(buf[:cap(buf)], 0)
@@ -493,10 +512,10 @@ func (c *Async) readLoop() {
 								break
 							}
 						}
-						p.Content = append(p.Content, buf[:min]...)
+						p.Content.Write(buf[:min])
 						index = min
 					} else {
-						index += p.Write(buf[index : index+int(p.Metadata.ContentLength)])
+						index += p.Content.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
 				}
 				err = c.incoming.Push(p)

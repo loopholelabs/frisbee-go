@@ -33,7 +33,7 @@
 //
 //	import (
 //		"github.com/loopholelabs/frisbee"
-//      "github.com/loopholelabs/frisbee/pkg/packet"
+//      "github.com/loopholelabs/packet"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"
@@ -77,7 +77,7 @@
 //	import (
 //		"fmt"
 //		"github.com/loopholelabs/frisbee"
-//		"github.com/loopholelabs/frisbee/pkg/packet"
+//		"github.com/loopholelabs/packet"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"

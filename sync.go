@@ -17,10 +17,11 @@
 package frisbee
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
+	"github.com/loopholelabs/packet/pkg/metadata"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -97,7 +98,25 @@ func (c *Sync) ConnectionState() (tls.ConnectionState, error) {
 	if tlsConn, ok := c.conn.(*tls.Conn); ok {
 		return tlsConn.ConnectionState(), nil
 	}
-	return tls.ConnectionState{}, NotTLSConnectionError
+	return emptyState, NotTLSConnectionError
+}
+
+// Handshake performs the tls.Handshake() of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Sync) Handshake() error {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.Handshake()
+	}
+	return NotTLSConnectionError
+}
+
+// HandshakeContext performs the tls.HandshakeContext() of a *tls.Conn
+// if the connection is not *tls.Conn then the NotTLSConnectionError is returned
+func (c *Sync) HandshakeContext(ctx context.Context) error {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
+		return tlsConn.HandshakeContext(ctx) //trunk-ignore(golangci-lint/typecheck)
+	}
+	return NotTLSConnectionError
 }
 
 // LocalAddr returns the local address of the underlying net.Conn
@@ -114,7 +133,7 @@ func (c *Sync) RemoteAddr() net.Addr {
 //
 // If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Sync) WritePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != len(p.Content) {
+	if int(p.Metadata.ContentLength) != len(p.Content.B) {
 		return InvalidContentLength
 	}
 
@@ -141,7 +160,7 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 		return c.closeWithError(err)
 	}
 	if p.Metadata.ContentLength != 0 {
-		_, err = c.conn.Write(p.Content[:p.Metadata.ContentLength])
+		_, err = c.conn.Write(p.Content.B[:p.Metadata.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
@@ -181,11 +200,11 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedPacket[metadata.ContentLengthOffset : metadata.ContentLengthOffset+metadata.ContentLengthSize])
 
 	if p.Metadata.ContentLength > 0 {
-		for cap(p.Content) < int(p.Metadata.ContentLength) {
-			p.Content = append(p.Content[:cap(p.Content)], 0)
+		for cap(p.Content.B) < int(p.Metadata.ContentLength) {
+			p.Content.B = append(p.Content.B[:cap(p.Content.B)], 0)
 		}
-		p.Content = p.Content[:p.Metadata.ContentLength]
-		_, err = io.ReadAtLeast(c.conn, p.Content[0:], int(p.Metadata.ContentLength))
+		p.Content.B = p.Content.B[:p.Metadata.ContentLength]
+		_, err = io.ReadAtLeast(c.conn, p.Content.B[:], int(p.Metadata.ContentLength))
 		if err != nil {
 			if c.closed.Load() {
 				c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")

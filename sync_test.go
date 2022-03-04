@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/packet"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -55,7 +55,7 @@ func TestNewSync(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, 0, len(p.Content))
+		assert.Equal(t, 0, len(p.Content.B))
 		end <- struct{}{}
 		packet.Put(p)
 	}()
@@ -68,7 +68,7 @@ func TestNewSync(t *testing.T) {
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
 
-	p.Write(data)
+	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 
 	go func() {
@@ -79,8 +79,8 @@ func TestNewSync(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, packetSize, len(p.Content))
-		assert.Equal(t, data, p.Content)
+		assert.Equal(t, packetSize, len(p.Content.B))
+		assert.Equal(t, data, p.Content.B)
 		end <- struct{}{}
 		packet.Put(p)
 	}()
@@ -130,8 +130,8 @@ func TestSyncLargeWrite(t *testing.T) {
 			assert.Equal(t, uint16(64), p.Metadata.Id)
 			assert.Equal(t, uint16(32), p.Metadata.Operation)
 			assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-			assert.Equal(t, packetSize, len(p.Content))
-			assert.Equal(t, randomData[i], p.Content)
+			assert.Equal(t, packetSize, len(p.Content.B))
+			assert.Equal(t, randomData[i], p.Content.B)
 			packet.Put(p)
 		}
 		end <- struct{}{}
@@ -141,8 +141,9 @@ func TestSyncLargeWrite(t *testing.T) {
 	for i := 0; i < testSize; i++ {
 		randomData[i] = make([]byte, packetSize)
 		_, _ = rand.Read(randomData[i])
-		p.Write(randomData[i])
+		p.Content.Write(randomData[i])
 		err := writerConn.WritePacket(p)
+		p.Content.Reset()
 		assert.NoError(t, err)
 	}
 	<-end
@@ -178,7 +179,7 @@ func TestSyncRawConn(t *testing.T) {
 	p := packet.Get()
 	p.Metadata.Id = 64
 	p.Metadata.Operation = 32
-	p.Write(randomData)
+	p.Content.Write(randomData)
 	p.Metadata.ContentLength = packetSize
 
 	go func() {
@@ -190,8 +191,8 @@ func TestSyncRawConn(t *testing.T) {
 			assert.Equal(t, uint16(64), p.Metadata.Id)
 			assert.Equal(t, uint16(32), p.Metadata.Operation)
 			assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-			assert.Equal(t, packetSize, len(p.Content))
-			assert.Equal(t, randomData, p.Content)
+			assert.Equal(t, packetSize, len(p.Content.B))
+			assert.Equal(t, randomData, p.Content.B)
 			packet.Put(p)
 		}
 		end <- struct{}{}
@@ -254,7 +255,7 @@ func TestSyncReadClose(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, 0, len(p.Content))
+		assert.Equal(t, 0, len(p.Content.B))
 		end <- struct{}{}
 		packet.Put(p)
 	}()
@@ -304,7 +305,7 @@ func TestSyncWriteClose(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, 0, len(p.Content))
+		assert.Equal(t, 0, len(p.Content.B))
 		packet.Put(p)
 		end <- struct{}{}
 	}()
