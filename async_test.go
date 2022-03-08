@@ -245,6 +245,56 @@ func TestAsyncReadClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAsyncReadAvailableClose(t *testing.T) {
+	t.Parallel()
+
+	reader, writer := net.Pipe()
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+
+	readerConn := NewAsync(reader, &emptyLogger, false)
+	writerConn := NewAsync(writer, &emptyLogger, false)
+
+	p := packet.Get()
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
+
+	err := writerConn.WritePacket(p)
+	require.NoError(t, err)
+
+	err = writerConn.WritePacket(p)
+	require.NoError(t, err)
+
+	packet.Put(p)
+
+	err = writerConn.Close()
+	require.NoError(t, err)
+
+	p, err = readerConn.ReadPacket()
+	require.NoError(t, err)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
+	assert.Equal(t, 0, len(p.Content.B))
+
+	p, err = readerConn.ReadPacket()
+	require.NoError(t, err)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
+	assert.Equal(t, 0, len(p.Content.B))
+
+	p, err = readerConn.ReadPacket()
+	require.Error(t, err)
+
+	err = readerConn.Close()
+	assert.NoError(t, err)
+	err = writerConn.Close()
+	assert.NoError(t, err)
+}
+
 func TestAsyncWriteClose(t *testing.T) {
 	t.Parallel()
 

@@ -46,6 +46,8 @@ type Async struct {
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
+	staleMu  sync.Mutex
+	stale    []*packet.Packet
 	pongCh   chan struct{}
 	closeCh  chan struct{}
 }
@@ -232,12 +234,29 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 // In the event that the connection is closed, ReadPacket will return an error.
 func (c *Async) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
+		c.staleMu.Lock()
+		if len(c.stale) > 0 {
+			var p *packet.Packet
+			p, c.stale = c.stale[0], c.stale[1:]
+			c.staleMu.Unlock()
+			return p, nil
+		}
+		c.staleMu.Unlock()
+		c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
 		return nil, ConnectionClosed
 	}
 
 	readPacket, err := c.incoming.Pop()
 	if err != nil {
 		if c.closed.Load() {
+			c.staleMu.Lock()
+			if len(c.stale) > 0 {
+				var p *packet.Packet
+				p, c.stale = c.stale[0], c.stale[1:]
+				c.staleMu.Unlock()
+				return p, nil
+			}
+			c.staleMu.Unlock()
 			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
 			return nil, ConnectionClosed
 		}
@@ -328,6 +347,7 @@ func (c *Async) Close() error {
 
 func (c *Async) killGoroutines() {
 	c.Lock()
+	c.staleMu.Lock()
 	c.incoming.Close()
 	close(c.flusher)
 	c.Unlock()
@@ -336,6 +356,9 @@ func (c *Async) killGoroutines() {
 	_ = c.conn.SetDeadline(emptyTime)
 	close(c.closeCh)
 	c.Logger().Debug().Msg("error channel closed, goroutines killed")
+
+	c.stale = c.incoming.Drain()
+	c.staleMu.Unlock()
 }
 
 func (c *Async) close() error {
