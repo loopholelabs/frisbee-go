@@ -367,8 +367,9 @@ func (c *Async) close() error {
 		c.killGoroutines()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
-			_ = c.conn.SetWriteDeadline(emptyTime)
+			_ = c.conn.SetWriteDeadline(time.Now().Add(defaultDeadline))
 			_ = c.writer.Flush()
+			_ = c.conn.SetWriteDeadline(emptyTime)
 		}
 		c.Unlock()
 		return nil
@@ -407,6 +408,8 @@ func (c *Async) waitForPONG() {
 	timer := time.NewTimer(defaultDeadline * 10)
 	defer timer.Stop()
 	select {
+	case <-c.closeCh:
+		c.wg.Done()
 	case <-timer.C:
 		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
 		c.wg.Done()
