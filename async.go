@@ -347,7 +347,6 @@ func (c *Async) Close() error {
 
 func (c *Async) killGoroutines() {
 	c.Lock()
-	c.staleMu.Lock()
 	c.incoming.Close()
 	close(c.flusher)
 	c.Unlock()
@@ -358,13 +357,14 @@ func (c *Async) killGoroutines() {
 	c.Logger().Debug().Msg("error channel closed, goroutines killed")
 
 	c.stale = c.incoming.Drain()
-	c.staleMu.Unlock()
 }
 
 func (c *Async) close() error {
+	c.staleMu.Lock()
 	if c.closed.CAS(false, true) {
 		c.Logger().Debug().Msg("connection close called, killing goroutines")
 		c.killGoroutines()
+		c.staleMu.Unlock()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
 			_ = c.conn.SetWriteDeadline(time.Now().Add(defaultDeadline))
@@ -374,6 +374,7 @@ func (c *Async) close() error {
 		c.Unlock()
 		return nil
 	}
+	c.staleMu.Unlock()
 	return ConnectionClosed
 }
 
