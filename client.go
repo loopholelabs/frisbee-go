@@ -159,16 +159,33 @@ func (c *Client) Logger() *zerolog.Logger {
 	return c.options.Logger
 }
 
-func (c *Client) handlePacket(ctx context.Context, conn *Async, p *packet.Packet) {
-	handlerFunc := c.handlerTable[p.Metadata.Operation]
+func (c *Client) handleConn() {
+	var p *packet.Packet
+	var outgoing *packet.Packet
+	var action Action
+	var err error
+	var handlerFunc Handler
+LOOP:
+	if c.closed.Load() {
+		c.wg.Done()
+		return
+	}
+	p, err = c.conn.ReadPacket()
+	if err != nil {
+		c.Logger().Error().Err(err).Msg("error while getting packet frisbee connection")
+		c.wg.Done()
+		_ = c.Close()
+		return
+	}
+	handlerFunc = c.handlerTable[p.Metadata.Operation]
 	if handlerFunc != nil {
-		packetCtx := ctx
+		packetCtx := c.ctx
 		if c.PacketContext != nil {
 			packetCtx = c.PacketContext(packetCtx, p)
 		}
-		outgoing, action := handlerFunc(packetCtx, p)
+		outgoing, action = handlerFunc(packetCtx, p)
 		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
-			err := conn.WritePacket(outgoing)
+			err = c.conn.WritePacket(outgoing)
 			if outgoing != p {
 				packet.Put(outgoing)
 			}
@@ -193,24 +210,6 @@ func (c *Client) handlePacket(ctx context.Context, conn *Async, p *packet.Packet
 	} else {
 		packet.Put(p)
 	}
-}
-
-func (c *Client) handleConn() {
-	var p *packet.Packet
-	var err error
-LOOP:
-	if c.closed.Load() {
-		c.wg.Done()
-		return
-	}
-	p, err = c.conn.ReadPacket()
-	if err != nil {
-		c.Logger().Error().Err(err).Msg("error while getting packet frisbee connection")
-		c.wg.Done()
-		_ = c.Close()
-		return
-	}
-	c.handlePacket(c.ctx, c.conn, p)
 	goto LOOP
 }
 

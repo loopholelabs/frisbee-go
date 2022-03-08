@@ -182,6 +182,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 	var p *packet.Packet
 	var outgoing *packet.Packet
 	var action Action
+	var handlerFunc Handler
 	p, err = frisbeeConn.ReadPacket()
 	if err != nil {
 		_ = frisbeeConn.Close()
@@ -202,7 +203,7 @@ LOOP:
 		return
 	}
 HANDLE:
-	handlerFunc := s.handlerTable[p.Metadata.Operation]
+	handlerFunc = s.handlerTable[p.Metadata.Operation]
 	if handlerFunc != nil {
 		packetCtx := connCtx
 		if s.PacketContext != nil {
