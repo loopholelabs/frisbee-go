@@ -216,32 +216,40 @@ LOOP:
 
 func (c *Client) heartbeat() {
 	for {
-		<-time.After(c.options.Heartbeat)
-		if c.closed.Load() {
+		select {
+		case <-c.CloseChannel():
 			c.wg.Done()
 			return
-		}
-		if c.conn.WriteBufferSize() == 0 {
-			err := c.WritePacket(HEARTBEATPacket)
-			if err != nil {
-				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+		case <-time.After(c.options.Heartbeat):
+			if c.closed.Load() {
 				c.wg.Done()
-				_ = c.Close()
 				return
 			}
-			start := time.Now()
-			c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
-			select {
-			case <-c.heartbeatChannel:
-				c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
-			case <-time.After(c.options.Heartbeat):
-				c.Logger().Error().Msg("Heartbeat not received within timeout period")
-				c.wg.Done()
-				_ = c.Close()
-				return
+			if c.conn.WriteBufferSize() == 0 {
+				err := c.WritePacket(HEARTBEATPacket)
+				if err != nil {
+					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+					c.wg.Done()
+					_ = c.Close()
+					return
+				}
+				start := time.Now()
+				c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
+				select {
+				case <-c.heartbeatChannel:
+					c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
+				case <-time.After(c.options.Heartbeat):
+					c.Logger().Error().Msg("Heartbeat not received within timeout period")
+					c.wg.Done()
+					_ = c.Close()
+					return
+				case <-c.CloseChannel():
+					c.wg.Done()
+					return
+				}
+			} else {
+				c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
 			}
-		} else {
-			c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
 		}
 	}
 }
