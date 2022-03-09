@@ -159,16 +159,33 @@ func (c *Client) Logger() *zerolog.Logger {
 	return c.options.Logger
 }
 
-func (c *Client) handlePacket(ctx context.Context, conn *Async, p *packet.Packet) {
-	handlerFunc := c.handlerTable[p.Metadata.Operation]
+func (c *Client) handleConn() {
+	var p *packet.Packet
+	var outgoing *packet.Packet
+	var action Action
+	var err error
+	var handlerFunc Handler
+LOOP:
+	if c.closed.Load() {
+		c.wg.Done()
+		return
+	}
+	p, err = c.conn.ReadPacket()
+	if err != nil {
+		c.Logger().Error().Err(err).Msg("error while getting packet frisbee connection")
+		c.wg.Done()
+		_ = c.Close()
+		return
+	}
+	handlerFunc = c.handlerTable[p.Metadata.Operation]
 	if handlerFunc != nil {
-		packetCtx := ctx
+		packetCtx := c.ctx
 		if c.PacketContext != nil {
 			packetCtx = c.PacketContext(packetCtx, p)
 		}
-		outgoing, action := handlerFunc(packetCtx, p)
+		outgoing, action = handlerFunc(packetCtx, p)
 		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
-			err := conn.WritePacket(outgoing)
+			err = c.conn.WritePacket(outgoing)
 			if outgoing != p {
 				packet.Put(outgoing)
 			}
@@ -193,55 +210,45 @@ func (c *Client) handlePacket(ctx context.Context, conn *Async, p *packet.Packet
 	} else {
 		packet.Put(p)
 	}
-}
-
-func (c *Client) handleConn() {
-	var p *packet.Packet
-	var err error
-LOOP:
-	if c.closed.Load() {
-		c.wg.Done()
-		return
-	}
-	p, err = c.conn.ReadPacket()
-	if err != nil {
-		c.Logger().Error().Err(err).Msg("error while getting packet frisbee connection")
-		c.wg.Done()
-		_ = c.Close()
-		return
-	}
-	c.handlePacket(c.ctx, c.conn, p)
 	goto LOOP
 }
 
 func (c *Client) heartbeat() {
 	for {
-		<-time.After(c.options.Heartbeat)
-		if c.closed.Load() {
+		select {
+		case <-c.CloseChannel():
 			c.wg.Done()
 			return
-		}
-		if c.conn.WriteBufferSize() == 0 {
-			err := c.WritePacket(HEARTBEATPacket)
-			if err != nil {
-				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+		case <-time.After(c.options.Heartbeat):
+			if c.closed.Load() {
 				c.wg.Done()
-				_ = c.Close()
 				return
 			}
-			start := time.Now()
-			c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
-			select {
-			case <-c.heartbeatChannel:
-				c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
-			case <-time.After(c.options.Heartbeat):
-				c.Logger().Error().Msg("Heartbeat not received within timeout period")
-				c.wg.Done()
-				_ = c.Close()
-				return
+			if c.conn.WriteBufferSize() == 0 {
+				err := c.WritePacket(HEARTBEATPacket)
+				if err != nil {
+					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+					c.wg.Done()
+					_ = c.Close()
+					return
+				}
+				start := time.Now()
+				c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
+				select {
+				case <-c.heartbeatChannel:
+					c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
+				case <-time.After(c.options.Heartbeat):
+					c.Logger().Error().Msg("Heartbeat not received within timeout period")
+					c.wg.Done()
+					_ = c.Close()
+					return
+				case <-c.CloseChannel():
+					c.wg.Done()
+					return
+				}
+			} else {
+				c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
 			}
-		} else {
-			c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
 		}
 	}
 }

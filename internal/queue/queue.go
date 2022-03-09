@@ -245,3 +245,36 @@ func (q *Queue) IsClosed() bool {
 func (q *Queue) Length() int {
 	return int(atomic.LoadUint64(&q.head) - atomic.LoadUint64(&q.tail))
 }
+
+// Drain drains all the current packets in the queue and returns them to the caller.
+//
+// It is an unsafe function that should only be used once, only after the queue has been closed,
+// and only while there are no producers writing to it. If used incorrectly it has the potential
+// to infinitely block the caller. If used correctly, it allows a single caller to drain any remaining
+// packets in the queue after the queue has been closed.
+func (q *Queue) Drain() []*packet.Packet {
+	length := q.Length()
+	packets := make([]*packet.Packet, 0, length)
+	for i := 0; i < length; i++ {
+		var oldNode *node
+		var oldPosition = atomic.LoadUint64(&q.tail)
+	RETRY:
+		oldNode = q.nodes[oldPosition&q.mask]
+		switch dif := atomic.LoadUint64(&oldNode.position) - (oldPosition + 1); {
+		case dif == 0:
+			if atomic.CompareAndSwapUint64(&q.tail, oldPosition, oldPosition+1) {
+				goto DONE
+			}
+		default:
+			oldPosition = atomic.LoadUint64(&q.tail)
+		}
+		runtime.Gosched()
+		goto RETRY
+	DONE:
+		data := oldNode.data
+		oldNode.data = nil
+		atomic.StoreUint64(&oldNode.position, oldPosition+q.mask+1)
+		packets = append(packets, (*packet.Packet)(data))
+	}
+	return packets
+}
