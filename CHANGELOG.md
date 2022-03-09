@@ -7,6 +7,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixes
+
+- Closing a connection doesn't mean the other side loses data it hasn't reacted to yet
+
+### Changes
+
+- A `Drain` function was added to the `internal/queue` package to allow the `killGoroutines` function in `async.go` to
+  drain the queue once it had closed it and once it had killed all existing goroutines
+- The `heartbeat` function in `client.go` was modified to exit early if it detected that the underlying connection had
+  closed
+- The `async` connection type was modified to hold `stale` data once a connection is closed. The `killGoroutines`
+  function will drain the `incoming` queue after killing all goroutines, and store those drained packets in
+  the `async.stale` variable - future and existing ReadPacket calls will first check whether there is data available in
+  the `stale` variable before they error out
+- Refactored the `handlePacket` functions for both servers and clients to be clearer and avoid allocations
+- The `close` function call in `Async` connections was modified to set a final write deadline for its final writer flush
+
 ## [v0.2.1] - 2022-03-02 (Beta)
 
 ### Fixes
