@@ -221,7 +221,7 @@ func TestAsyncReadClose(t *testing.T) {
 
 	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
-	assert.NotNil(t, p.Metadata)
+	require.NotNil(t, p.Metadata)
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
@@ -272,7 +272,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 
 	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
-	assert.NotNil(t, p.Metadata)
+	require.NotNil(t, p.Metadata)
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
@@ -280,7 +280,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 
 	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
-	assert.NotNil(t, p.Metadata)
+	require.NotNil(t, p.Metadata)
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
