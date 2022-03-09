@@ -46,6 +46,8 @@ type Async struct {
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
+	staleMu  sync.Mutex
+	stale    []*packet.Packet
 	pongCh   chan struct{}
 	closeCh  chan struct{}
 }
@@ -232,12 +234,29 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 // In the event that the connection is closed, ReadPacket will return an error.
 func (c *Async) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
+		c.staleMu.Lock()
+		if len(c.stale) > 0 {
+			var p *packet.Packet
+			p, c.stale = c.stale[0], c.stale[1:]
+			c.staleMu.Unlock()
+			return p, nil
+		}
+		c.staleMu.Unlock()
+		c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
 		return nil, ConnectionClosed
 	}
 
 	readPacket, err := c.incoming.Pop()
 	if err != nil {
 		if c.closed.Load() {
+			c.staleMu.Lock()
+			if len(c.stale) > 0 {
+				var p *packet.Packet
+				p, c.stale = c.stale[0], c.stale[1:]
+				c.staleMu.Unlock()
+				return p, nil
+			}
+			c.staleMu.Unlock()
 			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
 			return nil, ConnectionClosed
 		}
@@ -336,20 +355,26 @@ func (c *Async) killGoroutines() {
 	_ = c.conn.SetDeadline(emptyTime)
 	close(c.closeCh)
 	c.Logger().Debug().Msg("error channel closed, goroutines killed")
+
+	c.stale = c.incoming.Drain()
 }
 
 func (c *Async) close() error {
+	c.staleMu.Lock()
 	if c.closed.CAS(false, true) {
 		c.Logger().Debug().Msg("connection close called, killing goroutines")
 		c.killGoroutines()
+		c.staleMu.Unlock()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
-			_ = c.conn.SetWriteDeadline(emptyTime)
+			_ = c.conn.SetWriteDeadline(time.Now().Add(defaultDeadline))
 			_ = c.writer.Flush()
+			_ = c.conn.SetWriteDeadline(emptyTime)
 		}
 		c.Unlock()
 		return nil
 	}
+	c.staleMu.Unlock()
 	return ConnectionClosed
 }
 
@@ -384,6 +409,8 @@ func (c *Async) waitForPONG() {
 	timer := time.NewTimer(defaultDeadline * 10)
 	defer timer.Stop()
 	select {
+	case <-c.closeCh:
+		c.wg.Done()
 	case <-timer.C:
 		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
 		c.wg.Done()

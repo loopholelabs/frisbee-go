@@ -129,6 +129,71 @@ func TestClientRaw(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestClientStaleClose(t *testing.T) {
+	t.Parallel()
+
+	const testSize = 100
+	const packetSize = 512
+
+	clientHandlerTable := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
+
+	finished := make(chan struct{}, 1)
+
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		if incoming.Metadata.Id == testSize-1 {
+			outgoing = incoming
+			action = CLOSE
+		}
+		return
+	}
+
+	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		finished <- struct{}{}
+		return
+	}
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	require.NoError(t, err)
+
+	err = s.Start()
+	require.NoError(t, err)
+
+	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	assert.NoError(t, err)
+	_, err = c.Raw()
+	assert.ErrorIs(t, ConnectionNotInitialized, err)
+
+	err = c.Connect()
+	require.NoError(t, err)
+
+	data := make([]byte, packetSize)
+	_, _ = rand.Read(data)
+
+	p := packet.Get()
+	p.Metadata.Operation = metadata.PacketPing
+	p.Content.Write(data)
+	p.Metadata.ContentLength = packetSize
+
+	for q := 0; q < testSize; q++ {
+		p.Metadata.Id = uint16(q)
+		err := c.WritePacket(p)
+		assert.NoError(t, err)
+	}
+	packet.Put(p)
+	<-finished
+
+	_, err = c.conn.ReadPacket()
+	assert.ErrorIs(t, err, ConnectionClosed)
+
+	err = c.Close()
+	assert.NoError(t, err)
+
+	err = s.Shutdown()
+	assert.NoError(t, err)
+}
+
 func BenchmarkThroughputClient(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512

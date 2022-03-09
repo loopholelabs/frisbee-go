@@ -152,43 +152,6 @@ func (s *Server) connCloser(conn *Async) {
 	}
 }
 
-func (s *Server) handlePacket(p *packet.Packet, connCtx context.Context, conn *Async) {
-	handlerFunc := s.handlerTable[p.Metadata.Operation]
-	if handlerFunc != nil {
-		packetCtx := connCtx
-		if s.PacketContext != nil {
-			packetCtx = s.PacketContext(packetCtx, p)
-		}
-		outgoing, action := handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
-			s.PreWrite()
-			err := conn.WritePacket(outgoing)
-			if outgoing != p {
-				packet.Put(outgoing)
-			}
-			packet.Put(p)
-			if err != nil {
-				_ = conn.Close()
-				s.OnClosed(conn, err)
-				s.wg.Done()
-				return
-			}
-		} else {
-			packet.Put(p)
-		}
-		switch action {
-		case NONE:
-		case CLOSE:
-			_ = conn.Close()
-			s.OnClosed(conn, nil)
-			s.wg.Done()
-			return
-		}
-	} else {
-		packet.Put(p)
-	}
-}
-
 func (s *Server) handleConn(newConn net.Conn) {
 	var err error
 	switch v := newConn.(type) {
@@ -217,6 +180,9 @@ func (s *Server) handleConn(newConn net.Conn) {
 	connCtx := s.BaseContext()
 
 	var p *packet.Packet
+	var outgoing *packet.Packet
+	var action Action
+	var handlerFunc Handler
 	p, err = frisbeeConn.ReadPacket()
 	if err != nil {
 		_ = frisbeeConn.Close()
@@ -227,7 +193,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 	if s.ConnContext != nil {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
-	s.handlePacket(p, connCtx, frisbeeConn)
+	goto HANDLE
 LOOP:
 	p, err = frisbeeConn.ReadPacket()
 	if err != nil {
@@ -236,7 +202,41 @@ LOOP:
 		s.wg.Done()
 		return
 	}
-	s.handlePacket(p, connCtx, frisbeeConn)
+HANDLE:
+	handlerFunc = s.handlerTable[p.Metadata.Operation]
+	if handlerFunc != nil {
+		packetCtx := connCtx
+		if s.PacketContext != nil {
+			packetCtx = s.PacketContext(packetCtx, p)
+		}
+		outgoing, action = handlerFunc(packetCtx, p)
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
+			s.PreWrite()
+			err = frisbeeConn.WritePacket(outgoing)
+			if outgoing != p {
+				packet.Put(outgoing)
+			}
+			packet.Put(p)
+			if err != nil {
+				_ = frisbeeConn.Close()
+				s.OnClosed(frisbeeConn, err)
+				s.wg.Done()
+				return
+			}
+		} else {
+			packet.Put(p)
+		}
+		switch action {
+		case NONE:
+		case CLOSE:
+			_ = frisbeeConn.Close()
+			s.OnClosed(frisbeeConn, nil)
+			s.wg.Done()
+			return
+		}
+	} else {
+		packet.Put(p)
+	}
 	goto LOOP
 }
 
