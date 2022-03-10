@@ -40,6 +40,8 @@ type Sync struct {
 	closed *atomic.Bool
 	logger *zerolog.Logger
 	error  *atomic.Error
+	ctxMu  sync.RWMutex
+	ctx    context.Context
 }
 
 // ConnectSync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -216,6 +218,21 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	}
 
 	return p, nil
+}
+
+// SetContext allows users to save a context within a connection
+func (c *Sync) SetContext(ctx context.Context) {
+	c.ctxMu.Lock()
+	c.ctx = ctx
+	c.ctxMu.Unlock()
+}
+
+// Context returns the saved context within the connection
+func (c *Sync) Context() (ctx context.Context) {
+	c.ctxMu.RLock()
+	ctx = c.ctx
+	c.ctxMu.RUnlock()
+	return
 }
 
 // Logger returns the underlying logger of the frisbee connection
