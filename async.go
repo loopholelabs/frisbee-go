@@ -187,10 +187,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
+			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 		return c.closeWithError(err)
 	}
 	if p.Metadata.ContentLength != 0 {
@@ -199,10 +199,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 			if err != nil {
 				c.Unlock()
 				if c.closed.Load() {
-					c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
+					c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 					return ConnectionClosed
 				}
-				c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
+				c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 				return c.closeWithError(err)
 			}
 		}
@@ -210,10 +210,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 				return ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 			return c.closeWithError(err)
 		}
 	}
@@ -242,7 +242,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 			return p, nil
 		}
 		c.staleMu.Unlock()
-		c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
+		c.Logger().Debug().Err(ConnectionClosed).Msg("error while popping from packet queue")
 		return nil, ConnectionClosed
 	}
 
@@ -257,10 +257,10 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 				return p, nil
 			}
 			c.staleMu.Unlock()
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
+			c.Logger().Debug().Err(ConnectionClosed).Msg("error while popping from packet queue")
 			return nil, ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while popping from packet queue")
+		c.Logger().Debug().Err(err).Msg("error while popping from packet queue")
 		return nil, err
 	}
 
@@ -412,7 +412,7 @@ func (c *Async) waitForPONG() {
 	case <-c.closeCh:
 		c.wg.Done()
 	case <-timer.C:
-		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
+		c.Logger().Debug().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
 		c.wg.Done()
 		_ = c.closeWithError(os.ErrDeadlineExceeded)
 	case <-c.pongCh:
@@ -547,7 +547,7 @@ func (c *Async) readLoop() {
 				}
 				err = c.incoming.Push(p)
 				if err != nil {
-					c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
+					c.Logger().Debug().Err(err).Msg("error while pushing to incoming packet queue")
 					c.wg.Done()
 					_ = c.closeWithError(err)
 					return

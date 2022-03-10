@@ -153,10 +153,10 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while writing to underlying net.Conn")
+			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while writing to underlying net.Conn")
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 		return c.closeWithError(err)
 	}
 	if p.Metadata.ContentLength != 0 {
@@ -164,10 +164,10 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Msg("error while writing to underlying net.Conn")
+				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 				return ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Msg("error while writing to underlying net.Conn")
+			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return c.closeWithError(err)
 		}
 	}
@@ -187,10 +187,10 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	_, err := io.ReadAtLeast(c.conn, encodedPacket[:], metadata.Size)
 	if err != nil {
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
+			c.Logger().Debug().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
 			return nil, ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while reading from underlying net.Conn")
+		c.Logger().Debug().Err(err).Msg("error while reading from underlying net.Conn")
 		return nil, c.closeWithError(err)
 	}
 	p := packet.Get()
@@ -207,10 +207,10 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 		_, err = io.ReadAtLeast(c.conn, p.Content.B[:], int(p.Metadata.ContentLength))
 		if err != nil {
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
+				c.Logger().Debug().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
 				return nil, ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Msg("error while reading from underlying net.Conn")
+			c.Logger().Debug().Err(err).Msg("error while reading from underlying net.Conn")
 			return nil, c.closeWithError(err)
 		}
 	}
