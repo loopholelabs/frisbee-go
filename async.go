@@ -50,6 +50,8 @@ type Async struct {
 	stale    []*packet.Packet
 	pongCh   chan struct{}
 	closeCh  chan struct{}
+	ctxMu    sync.RWMutex
+	ctx      context.Context
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -187,10 +189,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
+			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 		return c.closeWithError(err)
 	}
 	if p.Metadata.ContentLength != 0 {
@@ -199,10 +201,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 			if err != nil {
 				c.Unlock()
 				if c.closed.Load() {
-					c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
+					c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 					return ConnectionClosed
 				}
-				c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
+				c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet content")
 				return c.closeWithError(err)
 			}
 		}
@@ -210,10 +212,10 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 				return ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 			return c.closeWithError(err)
 		}
 	}
@@ -242,7 +244,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 			return p, nil
 		}
 		c.staleMu.Unlock()
-		c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
+		c.Logger().Debug().Err(ConnectionClosed).Msg("error while popping from packet queue")
 		return nil, ConnectionClosed
 	}
 
@@ -257,10 +259,10 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 				return p, nil
 			}
 			c.staleMu.Unlock()
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while popping from packet queue")
+			c.Logger().Debug().Err(ConnectionClosed).Msg("error while popping from packet queue")
 			return nil, ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while popping from packet queue")
+		c.Logger().Debug().Err(err).Msg("error while popping from packet queue")
 		return nil, err
 	}
 
@@ -276,30 +278,19 @@ func (c *Async) Flush() error {
 	return nil
 }
 
-// flush is an internal function for flushing data from the write buffer, however
-// it is unique in that it does not call closeWithError (and so does not try and close the underlying connection)
-// when it encounters an error, and instead leaves that responsibility to its parent caller
-func (c *Async) flush() error {
-	c.Lock()
-	if c.closed.Load() {
-		c.Unlock()
-		return ConnectionClosed
-	}
-	if c.writer.Buffered() > 0 {
-		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
-		if err != nil {
-			c.Unlock()
-			return err
-		}
-		err = c.writer.Flush()
-		if err != nil {
-			c.Unlock()
-			c.Logger().Err(err).Msg("error while flushing data")
-			return err
-		}
-	}
-	c.Unlock()
-	return nil
+// SetContext allows users to save a context within a connection
+func (c *Async) SetContext(ctx context.Context) {
+	c.ctxMu.Lock()
+	c.ctx = ctx
+	c.ctxMu.Unlock()
+}
+
+// Context returns the saved context within the connection
+func (c *Async) Context() (ctx context.Context) {
+	c.ctxMu.RLock()
+	ctx = c.ctx
+	c.ctxMu.RUnlock()
+	return
 }
 
 // WriteBufferSize returns the size of the underlying write buffer (used for internal packet handling and for heartbeat logic)
@@ -343,6 +334,32 @@ func (c *Async) Close() error {
 	}
 	_ = c.conn.Close()
 	return err
+}
+
+// flush is an internal function for flushing data from the write buffer, however
+// it is unique in that it does not call closeWithError (and so does not try and close the underlying connection)
+// when it encounters an error, and instead leaves that responsibility to its parent caller
+func (c *Async) flush() error {
+	c.Lock()
+	if c.closed.Load() {
+		c.Unlock()
+		return ConnectionClosed
+	}
+	if c.writer.Buffered() > 0 {
+		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
+		if err != nil {
+			c.Unlock()
+			return err
+		}
+		err = c.writer.Flush()
+		if err != nil {
+			c.Unlock()
+			c.Logger().Err(err).Msg("error while flushing data")
+			return err
+		}
+	}
+	c.Unlock()
+	return nil
 }
 
 func (c *Async) killGoroutines() {
@@ -412,7 +429,7 @@ func (c *Async) waitForPONG() {
 	case <-c.closeCh:
 		c.wg.Done()
 	case <-timer.C:
-		c.Logger().Error().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
+		c.Logger().Debug().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
 		c.wg.Done()
 		_ = c.closeWithError(os.ErrDeadlineExceeded)
 	case <-c.pongCh:
@@ -547,7 +564,7 @@ func (c *Async) readLoop() {
 				}
 				err = c.incoming.Push(p)
 				if err != nil {
-					c.Logger().Error().Err(err).Msg("error while pushing to incoming packet queue")
+					c.Logger().Debug().Err(err).Msg("error while pushing to incoming packet queue")
 					c.wg.Done()
 					_ = c.closeWithError(err)
 					return

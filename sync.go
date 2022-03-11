@@ -40,6 +40,8 @@ type Sync struct {
 	closed *atomic.Bool
 	logger *zerolog.Logger
 	error  *atomic.Error
+	ctxMu  sync.RWMutex
+	ctx    context.Context
 }
 
 // ConnectSync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -153,10 +155,10 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while writing to underlying net.Conn")
+			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while writing to underlying net.Conn")
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 		return c.closeWithError(err)
 	}
 	if p.Metadata.ContentLength != 0 {
@@ -164,10 +166,10 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Msg("error while writing to underlying net.Conn")
+				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 				return ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Msg("error while writing to underlying net.Conn")
+			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
 			return c.closeWithError(err)
 		}
 	}
@@ -187,10 +189,10 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	_, err := io.ReadAtLeast(c.conn, encodedPacket[:], metadata.Size)
 	if err != nil {
 		if c.closed.Load() {
-			c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
+			c.Logger().Debug().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
 			return nil, ConnectionClosed
 		}
-		c.Logger().Error().Err(err).Msg("error while reading from underlying net.Conn")
+		c.Logger().Debug().Err(err).Msg("error while reading from underlying net.Conn")
 		return nil, c.closeWithError(err)
 	}
 	p := packet.Get()
@@ -207,15 +209,30 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 		_, err = io.ReadAtLeast(c.conn, p.Content.B[:], int(p.Metadata.ContentLength))
 		if err != nil {
 			if c.closed.Load() {
-				c.Logger().Error().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
+				c.Logger().Debug().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
 				return nil, ConnectionClosed
 			}
-			c.Logger().Error().Err(err).Msg("error while reading from underlying net.Conn")
+			c.Logger().Debug().Err(err).Msg("error while reading from underlying net.Conn")
 			return nil, c.closeWithError(err)
 		}
 	}
 
 	return p, nil
+}
+
+// SetContext allows users to save a context within a connection
+func (c *Sync) SetContext(ctx context.Context) {
+	c.ctxMu.Lock()
+	c.ctx = ctx
+	c.ctxMu.Unlock()
+}
+
+// Context returns the saved context within the connection
+func (c *Sync) Context() (ctx context.Context) {
+	c.ctxMu.RLock()
+	ctx = c.ctx
+	c.ctxMu.RUnlock()
+	return
 }
 
 // Logger returns the underlying logger of the frisbee connection
