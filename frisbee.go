@@ -45,6 +45,9 @@ const (
 	// NONE is used to do nothing (default)
 	NONE = Action(iota)
 
+	// UPDATE is used to trigger an UpdateContext call on the Server or Client
+	UPDATE
+
 	// CLOSE is used to close the frisbee connection
 	CLOSE
 )
