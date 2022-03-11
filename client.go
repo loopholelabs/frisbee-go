@@ -40,6 +40,10 @@ type Client struct {
 	// PacketContext is used to define packet-specific contexts based on the incoming packet
 	// and is run whenever a new packet arrives
 	PacketContext func(context.Context, *packet.Packet) context.Context
+
+	// UpdateContext is used to update a handler-specific context whenever the returned
+	// Action from a handler is UPDATE
+	UpdateContext func(context.Context, *Async) context.Context
 }
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
@@ -201,6 +205,10 @@ LOOP:
 		}
 		switch action {
 		case NONE:
+		case UPDATE:
+			if c.UpdateContext != nil {
+				c.ctx = c.UpdateContext(c.ctx, c.conn)
+			}
 		case CLOSE:
 			c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
 			c.wg.Done()

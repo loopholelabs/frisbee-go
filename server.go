@@ -58,6 +58,10 @@ type Server struct {
 	// and is run whenever a new packet arrives
 	PacketContext func(context.Context, *packet.Packet) context.Context
 
+	// UpdateContext is used to update a handler-specific context whenever the returned
+	// Action from a handler is UPDATE
+	UpdateContext func(context.Context, *Async) context.Context
+
 	// OnClosed is a function run by the server whenever a connection is closed
 	OnClosed func(*Async, error)
 
@@ -228,6 +232,10 @@ HANDLE:
 		}
 		switch action {
 		case NONE:
+		case UPDATE:
+			if s.UpdateContext != nil {
+				connCtx = s.UpdateContext(connCtx, frisbeeConn)
+			}
 		case CLOSE:
 			_ = frisbeeConn.Close()
 			s.OnClosed(frisbeeConn, nil)
