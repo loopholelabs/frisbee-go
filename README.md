@@ -22,7 +22,7 @@ same is true for selected other new features explicitly marked as
 
 Documentation and example usage is available at [https://loopholelabs.io/docs/frisbee][homepage].
 
-## RPC Generator Usage
+## RPC Generator
 
 The included RPC Generator is still in very early **Alpha**. While it is functional and being used within other products
 we're building at [Loophole Labs][loophomepage], the `Proto3` spec has a myriad of edge-cases that make it difficult to
@@ -32,6 +32,19 @@ That being said, as the library matures and usage of the RPC framework grows we'
 coverage and fix any edge case bugs. One of the major benefits to the RPC framework is that reading the generated code
 is extremely straight forward, making it easy to debug potential issues down the line.
 
+### Usage
+
+Usage of the RPC Framework is very straight forward. You must already have the `protoc` CLI installed and available in
+your path.
+
+First, you must build the RPC Generator CLI Utility (from the root of this repository):
+
+```bash
+go build -o frisbee cmd/cmd.go
+```
+
+Then
+
 ### Unsupported Features
 
 The Frisbee RPC Generator currently does not support:
@@ -39,7 +52,7 @@ The Frisbee RPC Generator currently does not support:
 - `OneOf` Message Types
 - Streaming Messages between the client and server
 
-Example `Proto3` files can be found [here](/pkg/rpc/examples).
+Example `Proto3` files can be found [here](/protoc-gen-frisbee/examples).
 
 ## Contributing
 

@@ -14,10 +14,10 @@
 	limitations under the License.
 */
 
-package rpc
+package generator
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/rpc/version"
+	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/version"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"

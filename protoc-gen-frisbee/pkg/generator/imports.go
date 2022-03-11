@@ -14,39 +14,32 @@
 	limitations under the License.
 */
 
-package rpc
+package generator
 
-import (
-	"github.com/loopholelabs/frisbee/pkg/rpc"
-	"io/ioutil"
-	"os"
+const (
+	importOpenHeader = "import ("
 )
 
-func RPC() {
-	gen := rpc.New()
-
-	data, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		panic(err)
+var (
+	requiredImports = []string{
+		"github.com/loopholelabs/frisbee",
+		"github.com/loopholelabs/packet",
+		"github.com/loopholelabs/packet/pkg/packer",
+		"github.com/rs/zerolog",
+		"crypto/tls",
+		"github.com/pkg/errors",
+		"context",
+		"sync",
+		"sync/atomic",
 	}
+)
 
-	req, err := gen.UnmarshalRequest(data)
-	if err != nil {
-		panic(err)
+func writeImports(f File, imports []string) {
+	f.P()
+	f.P(importOpenHeader)
+	for _, im := range imports {
+		f.P("\t\"", im, "\"")
 	}
-
-	res, err := gen.Generate(req)
-	if err != nil {
-		panic(err)
-	}
-
-	data, err = gen.MarshalResponse(res)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = os.Stdout.Write(data)
-	if err != nil {
-		panic(err)
-	}
+	f.P(parenthesesClose)
+	f.P()
 }

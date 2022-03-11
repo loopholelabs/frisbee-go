@@ -14,7 +14,7 @@
 	limitations under the License.
 */
 
-package rpc
+package generator
 
 import (
 	"github.com/loopholelabs/frisbee/internal/utils"

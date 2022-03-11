@@ -14,32 +14,27 @@
 	limitations under the License.
 */
 
-package rpc
+package generator
 
 const (
-	importOpenHeader = "import ("
+	extension        = ".frisbee.go"
+	pointer          = "*"
+	tab              = "\t"
+	space            = " "
+	equal            = "="
+	comma            = ","
+	period           = "."
+	mapSuffix        = "Map"
+	parenthesesOpen  = "("
+	parenthesesClose = ")"
+	typeOpen         = "type "
+	typeClose        = "}"
+	slice            = "[]"
+	structOpen       = " struct {"
+	handlerSignature = "func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action)"
+	packerAnyKind    = "packer.AnyKind"
 )
 
-var (
-	requiredImports = []string{
-		"github.com/loopholelabs/frisbee",
-		"github.com/loopholelabs/packet",
-		"github.com/loopholelabs/packet/pkg/packer",
-		"github.com/rs/zerolog",
-		"crypto/tls",
-		"github.com/pkg/errors",
-		"context",
-		"sync",
-		"sync/atomic",
-	}
+const (
+	operationOffset = 10
 )
-
-func writeImports(f File, imports []string) {
-	f.P()
-	f.P(importOpenHeader)
-	for _, im := range imports {
-		f.P("\t\"", im, "\"")
-	}
-	f.P(parenthesesClose)
-	f.P()
-}

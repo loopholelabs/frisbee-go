@@ -16,8 +16,37 @@
 
 package main
 
-import "github.com/loopholelabs/frisbee/cmd/rpc"
+import (
+	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/pkg/generator"
+	"io/ioutil"
+	"os"
+)
 
 func main() {
-	rpc.RPC()
+	gen := generator.New()
+
+	data, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		panic(err)
+	}
+
+	req, err := gen.UnmarshalRequest(data)
+	if err != nil {
+		panic(err)
+	}
+
+	res, err := gen.Generate(req)
+	if err != nil {
+		panic(err)
+	}
+
+	data, err = gen.MarshalResponse(res)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = os.Stdout.Write(data)
+	if err != nil {
+		panic(err)
+	}
 }
