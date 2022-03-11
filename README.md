@@ -48,7 +48,7 @@ go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@rpc
 To generate RPC code with Frisbee, simply run the following:
 
 ```bash
-protoc --go_out=. --frisbee_out=. <path to proto3 file>
+protoc --frisbee_out=. <path to proto3 file>
 ```
 
 ### Unsupported Features
