@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ type Client struct {
 	addr             string
 	conn             *Async
 	handlerTable     HandlerTable
-	ctx              context.Context
+	initialCtx       context.Context
 	options          *Options
 	closed           *atomic.Bool
 	wg               sync.WaitGroup
@@ -69,7 +69,7 @@ func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts
 	return &Client{
 		addr:             addr,
 		handlerTable:     handlerTable,
-		ctx:              ctx,
+		initialCtx:       ctx,
 		options:          options,
 		closed:           atomic.NewBool(false),
 		heartbeatChannel: heartbeatChannel,
@@ -88,6 +88,8 @@ func (c *Client) Connect() error {
 	}
 	c.conn = frisbeeConn
 	c.Logger().Info().Msgf("Connected to %s", c.addr)
+
+	c.conn.SetContext(c.initialCtx)
 
 	c.wg.Add(1)
 	go c.handleConn()
@@ -123,6 +125,16 @@ func (c *Client) Close() error {
 		return nil
 	}
 	return c.conn.Close()
+}
+
+// SetContext allows users to override the base context of the client
+func (c *Client) SetContext(ctx context.Context) {
+	c.conn.SetContext(ctx)
+}
+
+// Context allows users to retrieve the base context of the client
+func (c *Client) Context() context.Context {
+	return c.conn.Context()
 }
 
 // WritePacket sends a frisbee packet.Packet from the client to the server
@@ -179,7 +191,7 @@ LOOP:
 	}
 	handlerFunc = c.handlerTable[p.Metadata.Operation]
 	if handlerFunc != nil {
-		packetCtx := c.ctx
+		packetCtx := c.Context()
 		if c.PacketContext != nil {
 			packetCtx = c.PacketContext(packetCtx, p)
 		}

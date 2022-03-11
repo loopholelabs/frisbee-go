@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 	s.wg.Add(1)
 	go s.connCloser(frisbeeConn)
 
-	connCtx := s.BaseContext()
+	frisbeeConn.SetContext(s.BaseContext())
 
 	var p *packet.Packet
 	var outgoing *packet.Packet
@@ -191,7 +191,7 @@ func (s *Server) handleConn(newConn net.Conn) {
 		return
 	}
 	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
+		frisbeeConn.SetContext(s.ConnContext(frisbeeConn.Context(), frisbeeConn))
 	}
 	goto HANDLE
 LOOP:
@@ -205,7 +205,7 @@ LOOP:
 HANDLE:
 	handlerFunc = s.handlerTable[p.Metadata.Operation]
 	if handlerFunc != nil {
-		packetCtx := connCtx
+		packetCtx := frisbeeConn.Context()
 		if s.PacketContext != nil {
 			packetCtx = s.PacketContext(packetCtx, p)
 		}
