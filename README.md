@@ -35,15 +35,21 @@ is extremely straight forward, making it easy to debug potential issues down the
 ### Usage
 
 Usage of the RPC Framework is very straight forward. You must already have the `protoc` CLI installed and available in
-your path.
+your path. For instructions on how to install `protoc`, see
+the [Protocol Buffer Compiler Installation](https://grpc.io/docs/protoc-installation/) guide.
 
-First, you must build the RPC Generator CLI Utility (from the root of this repository):
+Once `protoc` in installed, you need to install the `Frisbee Protoc Generator` plugin. Make sure your `$GOBIN` variable
+is set, and part of your system's `$PATH` variable (`export PATH=$GOBIN:$PATH`), then run the following:
 
 ```bash
-go build -o frisbee cmd/cmd.go
+go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@rpc
 ```
 
-Then
+To generate RPC code with Frisbee, simply run the following:
+
+```bash
+protoc --go_out=. --frisbee_out=. <path to proto3 file>
+```
 
 ### Unsupported Features
 
