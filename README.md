@@ -13,23 +13,63 @@ This is the [Go](http://golang.org) library for
 
 ## Important note about releases and stability
 
-This repository generally follows [Semantic
-Versioning](https://semver.org/). However, **this library is currently in Alpha** and
-is still considered experimental. Breaking changes of the library will _not_ trigger a
-new major release. The same is true for selected other new features explicitly marked as
+This repository generally follows [Semantic Versioning](https://semver.org/). However, **this library is currently in
+Beta** and is still considered experimental. Breaking changes of the library will _not_ trigger a new major release. The
+same is true for selected other new features explicitly marked as
 **EXPERIMENTAL** in CHANGELOG.md.
 
 ## Usage
 
 Documentation and example usage is available at [https://loopholelabs.io/docs/frisbee][homepage].
 
+## RPC Generator
+
+The included RPC Generator is still in very early **Alpha**. While it is functional and being used within other products
+we're building at [Loophole Labs][loophomepage], the `Proto3` spec has a myriad of edge-cases that make it difficult to
+guarantee validity of generated RPC frameworks.
+
+That being said, as the library matures and usage of the RPC framework grows we'll be able to increase our testing
+coverage and fix any edge case bugs. One of the major benefits to the RPC framework is that reading the generated code
+is extremely straight forward, making it easy to debug potential issues down the line.
+
+### Usage
+
+Usage of the RPC Framework is very straight forward. You must already have the `protoc` CLI installed and available in
+your path. For instructions on how to install `protoc`, see
+the [Protocol Buffer Compiler Installation](https://grpc.io/docs/protoc-installation/) guide.
+
+Once `protoc` in installed, you need to install the `Frisbee Protoc Generator` plugin. Make sure your `$GOBIN` variable
+is set, and part of your system's `$PATH` variable (`export PATH=$GOBIN:$PATH`), then run the following:
+
+```bash
+go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@rpc
+```
+
+To generate RPC code with Frisbee, simply run the following:
+
+```bash
+protoc --frisbee_out=. <path to proto3 file>
+```
+
+### Unsupported Features
+
+The Frisbee RPC Generator currently does not support:
+
+- `OneOf` Message Types
+- Streaming Messages between the client and server
+
+Example `Proto3` files can be found [here](/protoc-gen-frisbee/examples).
+
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at [https://github.com/loopholelabs/frisbee][gitrepo]. For more contribution information check out [the contribution guide](https://github.com/loopholelabs/frisbee/blob/master/CONTRIBUTING.md).
+Bug reports and pull requests are welcome on GitHub at [https://github.com/loopholelabs/frisbee][gitrepo]. For more
+contribution information check
+out [the contribution guide](https://github.com/loopholelabs/frisbee/blob/master/CONTRIBUTING.md).
 
 ## License
 
-The Frisbee project is available as open source under the terms of the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+The Frisbee project is available as open source under the terms of
+the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
 ## Code of Conduct
 
@@ -42,3 +82,4 @@ Everyone interacting in the Frisbee project’s codebases, issue trackers, chat 
 [gitrepo]: https://github.com/loopholelabs/frisbee
 [loopholelabs]: https://cdn.loopholelabs.io/loopholelabs/LoopholeLabsLogo.svg
 [homepage]: https://loopholelabs.io/docs/frisbee
+[loophomepage]: https://loopholelabs.io

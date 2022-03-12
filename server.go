@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
-	"github.com/loopholelabs/packet"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
