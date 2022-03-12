@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Loophole Labs
+	Copyright 2022 Loophole Labs
 
 	Licensed under the Apache License, Version 2.0 (the "License");
 	you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/packet"
-	"github.com/loopholelabs/packet/pkg/metadata"
+	"github.com/loopholelabs/frisbee/pkg/metadata"
+	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"

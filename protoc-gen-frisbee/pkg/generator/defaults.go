@@ -32,7 +32,7 @@ const (
 	slice            = "[]"
 	structOpen       = " struct {"
 	handlerSignature = "func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action)"
-	packerAnyKind    = "packer.AnyKind"
+	packetAnyKind    = "packet.AnyKind"
 )
 
 const (

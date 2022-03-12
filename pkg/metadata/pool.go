@@ -14,31 +14,38 @@
 	limitations under the License.
 */
 
-package generator
+package metadata
 
-const (
-	importOpenHeader = "import ("
-)
+import "sync"
+
+type Pool struct {
+	pool sync.Pool
+}
+
+func NewPool() *Pool {
+	return new(Pool)
+}
+
+func (p *Pool) Get() *[Size]byte {
+	v := p.pool.Get()
+	if v == nil {
+		v = &[Size]byte{}
+	}
+	return v.(*[Size]byte)
+}
+
+func (p *Pool) Put(b *[Size]byte) {
+	p.pool.Put(b)
+}
 
 var (
-	requiredImports = []string{
-		"github.com/loopholelabs/frisbee",
-		"github.com/loopholelabs/frisbee/pkg/packet",
-		"github.com/rs/zerolog",
-		"crypto/tls",
-		"github.com/pkg/errors",
-		"context",
-		"sync",
-		"sync/atomic",
-	}
+	pool = NewPool()
 )
 
-func writeImports(f File, imports []string) {
-	f.P()
-	f.P(importOpenHeader)
-	for _, im := range imports {
-		f.P("\t\"", im, "\"")
-	}
-	f.P(parenthesesClose)
-	f.P()
+func Get() *[Size]byte {
+	return pool.Get()
+}
+
+func Put(b *[Size]byte) {
+	pool.Put(b)
 }
