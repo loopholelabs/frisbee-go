@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option go_package = "/simple";
+
+service SimpleService {
+  rpc Echo(Request) returns (Response);
+}
+
+message Request {
+  string Message = 1;
+  bytes B = 2;
+  repeated string Repeat = 3;
+  Response Embedded = 4;
+  message Nested {
+    string N = 1;
+  }
+  Nested NestedM = 5;
+}
+
+message Response{
+  string Message = 1;
+}
