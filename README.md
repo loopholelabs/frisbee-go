@@ -25,7 +25,7 @@ Documentation and example usage is available at [https://loopholelabs.io/docs/fr
 ## RPC Generator
 
 The included RPC Generator is still in very early **Alpha**. While it is functional and being used within other products
-we're building at [Loophole Labs][loophomepage], the `Proto3` spec has a myriad of edge-cases that make it difficult to
+we're building at [Loophole Labs][loophomepage], the `proto3` spec has a myriad of edge-cases that make it difficult to
 guarantee validity of generated RPC frameworks.
 
 That being said, as the library matures and usage of the RPC framework grows we'll be able to increase our testing
@@ -42,7 +42,7 @@ Once `protoc` in installed, you need to install the `Frisbee Protoc Generator` p
 is set, and part of your system's `$PATH` variable (`export PATH=$GOBIN:$PATH`), then run the following:
 
 ```bash
-go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@rpc
+go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@latest
 ```
 
 To generate RPC code with Frisbee, simply run the following:

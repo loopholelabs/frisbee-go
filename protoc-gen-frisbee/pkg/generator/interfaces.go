@@ -17,7 +17,7 @@
 package generator
 
 import (
-	"github.com/loopholelabs/frisbee/internal/utils"
+	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"strings"
 )
