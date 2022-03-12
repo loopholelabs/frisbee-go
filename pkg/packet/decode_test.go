@@ -34,12 +34,9 @@ func TestDecodeNil(t *testing.T) {
 	assert.True(t, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, value = decodeNil(p.Content.B)
+	_, value = decodeNil(p.Content.B[1:])
 	assert.False(t, value)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value = decodeNil(p.Content.B)
 	assert.True(t, value)
 	assert.Equal(t, 0, len(remaining))
@@ -50,7 +47,7 @@ func TestDecodeNil(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		encodeNil(p)
-		remaining, value = decodeNil(p.Content.B)
+		_, _ = decodeNil(p.Content.B)
 		p.Content.Reset()
 	})
 	assert.Zero(t, n)
@@ -68,12 +65,9 @@ func TestDecodeMap(t *testing.T) {
 	assert.Equal(t, uint32(32), size)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeMap(p.Content.B, StringKind, Uint32Kind)
+	_, _, err = decodeMap(p.Content.B[1:], StringKind, Uint32Kind)
 	assert.ErrorIs(t, err, InvalidMap)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	_, _, err = decodeMap(p.Content.B, StringKind, Float64Kind)
 	assert.ErrorIs(t, err, InvalidMap)
 
@@ -106,12 +100,9 @@ func TestDecodeBytes(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, value, err = decodeBytes(p.Content.B, value)
+	_, value, err = decodeBytes(p.Content.B[1:], value)
 	assert.ErrorIs(t, err, InvalidBytes)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeBytes(p.Content.B, value)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -173,12 +164,9 @@ func TestDecodeString(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeString(p.Content.B)
+	_, _, err = decodeString(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidString)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeString(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -233,12 +221,9 @@ func TestDecodeError(t *testing.T) {
 	assert.ErrorIs(t, value, v)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeError(p.Content.B)
+	_, _, err = decodeError(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidError)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeError(p.Content.B)
 	assert.NoError(t, err)
 	assert.ErrorIs(t, value, v)
@@ -291,12 +276,9 @@ func TestDecodeBool(t *testing.T) {
 	assert.True(t, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeBool(p.Content.B)
+	_, _, err = decodeBool(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidBool)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeBool(p.Content.B)
 	assert.NoError(t, err)
 	assert.True(t, value)
@@ -351,12 +333,9 @@ func TestDecodeUint8(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeUint8(p.Content.B)
+	_, _, err = decodeUint8(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidUint8)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeUint8(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -389,12 +368,9 @@ func TestDecodeUint16(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeUint16(p.Content.B)
+	_, _, err = decodeUint16(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidUint16)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeUint16(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -427,12 +403,9 @@ func TestDecodeUint32(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeUint32(p.Content.B)
+	_, _, err = decodeUint32(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidUint32)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeUint32(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -466,12 +439,9 @@ func TestDecodeUint64(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeUint64(p.Content.B)
+	_, _, err = decodeUint64(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidUint64)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeUint64(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -505,12 +475,9 @@ func TestDecodeInt32(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeInt32(p.Content.B)
+	_, _, err = decodeInt32(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidInt32)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeInt32(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -544,12 +511,9 @@ func TestDecodeInt64(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeInt64(p.Content.B)
+	_, _, err = decodeInt64(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidInt64)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeInt64(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -583,12 +547,9 @@ func TestDecodeFloat32(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeFloat32(p.Content.B)
+	_, _, err = decodeFloat32(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidFloat32)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeFloat32(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -622,12 +583,9 @@ func TestDecodeFloat64(t *testing.T) {
 	assert.Equal(t, v, value)
 	assert.Equal(t, 0, len(remaining))
 
-	var b byte
-	b, p.Content.B = p.Content.B[0], p.Content.B[1:]
-	_, _, err = decodeFloat64(p.Content.B)
+	_, _, err = decodeFloat64(p.Content.B[1:])
 	assert.ErrorIs(t, err, InvalidFloat64)
 
-	p.Content.B = append([]byte{b}, p.Content.B...)
 	remaining, value, err = decodeFloat64(p.Content.B)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
