@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.3.1] - 2022-03-12 (Beta)
+
+### Fixes
+
+- Fixes a `protoc-gen-frisbee` bug where the client message type didn't have the correct offset
+
 ## [v0.3.0] - 2022-03-12 (Beta)
 
 ### Changes

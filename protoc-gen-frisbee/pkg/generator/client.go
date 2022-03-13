@@ -53,7 +53,7 @@ func writeClientMethod(f File, method protoreflect.MethodDescriptor, operation i
 	f.P("func (c *Client) ", utils.CamelCase(string(method.Name())), "(ctx context.Context, req *", utils.CamelCase(string(method.Input().FullName())), ") (res *", utils.CamelCase(string(method.Output().FullName())), ", err error) {")
 	f.P(tab, "ch := make(chan *", utils.CamelCase(string(method.Output().FullName())), ", 1)")
 	f.P(tab, "p := packet.Get()")
-	f.P(tab, "p.Metadata.Operation = ", operation)
+	f.P(tab, "p.Metadata.Operation = ", operation+operationOffset)
 	f.P("LOOP:")
 	f.P(tab, "p.Metadata.Id = c.next", utils.CamelCase(string(method.Name())), ".Load().(uint16)")
 	f.P(tab, "if !c.next", utils.CamelCase(string(method.Name())), ".CompareAndSwap(p.Metadata.Id, p.Metadata.Id+1) {")
@@ -87,7 +87,7 @@ func writeClientMethod(f File, method protoreflect.MethodDescriptor, operation i
 func writeClientIgnoreMethod(f File, method protoreflect.MethodDescriptor, operation int) {
 	f.P("func (c *Client) ", utils.CamelCase(string(method.Name())), "Ignore(ctx context.Context, req *", utils.CamelCase(string(method.Input().FullName())), ") (err error) {")
 	f.P(tab, "p := packet.Get()")
-	f.P(tab, "p.Metadata.Operation = ", operation)
+	f.P(tab, "p.Metadata.Operation = ", operation+operationOffset)
 	f.P("LOOP:")
 	f.P(tab, "p.Metadata.Id = c.next", utils.CamelCase(string(method.Name())), ".Load().(uint16)")
 	f.P(tab, "if !c.next", utils.CamelCase(string(method.Name())), ".CompareAndSwap(p.Metadata.Id, p.Metadata.Id+1) {")
