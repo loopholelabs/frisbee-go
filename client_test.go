@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -454,5 +455,8 @@ func BenchmarkThroughputResponseMultipleClient(b *testing.B) {
 	runner(b, 1)
 	runner(b, 2)
 	runner(b, 5)
+
+	runner(b, runtime.NumCPU()/2)
+	runner(b, runtime.NumCPU())
 
 }
