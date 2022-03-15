@@ -19,8 +19,7 @@
 // simply defining your packet types and their accompanying logic.
 //
 // This package provides methods for defining packet types and logic, as well as functionality
-// for implementing frisbee servers and clients. Useful features like automatic heartbeats and
-// automatic reconnections are provided as well.
+// for implementing frisbee servers and clients.
 //
 // In depth documentation and examples can be found at https://loopholelabs.io/docs/frisbee
 //

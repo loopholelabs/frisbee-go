@@ -293,18 +293,6 @@ func (c *Async) Context() (ctx context.Context) {
 	return
 }
 
-// WriteBufferSize returns the size of the underlying write buffer (used for internal packet handling and for heartbeat logic)
-func (c *Async) WriteBufferSize() int {
-	c.Lock()
-	if c.closed.Load() {
-		c.Unlock()
-		return 0
-	}
-	i := c.writer.Buffered()
-	c.Unlock()
-	return i
-}
-
 // Logger returns the underlying logger of the frisbee connection
 func (c *Async) Logger() *zerolog.Logger {
 	return c.logger

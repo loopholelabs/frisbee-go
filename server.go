@@ -24,7 +24,6 @@ import (
 	"go.uber.org/atomic"
 	"net"
 	"sync"
-	"time"
 )
 
 var (
@@ -80,13 +79,6 @@ func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server,
 	}
 
 	options := loadOptions(opts...)
-	if options.Heartbeat > time.Duration(0) {
-		handlerTable[HEARTBEAT] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			outgoing = incoming
-			return
-		}
-	}
-
 	return &Server{
 		addr:         addr,
 		handlerTable: handlerTable,
@@ -238,12 +230,9 @@ func (s *Server) handleConn(newConn net.Conn) {
 	_ = frisbeeConn.Close()
 	s.OnClosed(frisbeeConn, err)
 	s.connectionsMu.Lock()
-	if s.shutdown.Load() {
-		s.connectionsMu.Unlock()
-		s.wg.Done()
-		return
+	if !s.shutdown.Load() {
+		delete(s.connections, frisbeeConn)
 	}
-	delete(s.connections, frisbeeConn)
 	s.connectionsMu.Unlock()
 	s.wg.Done()
 }

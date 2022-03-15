@@ -35,11 +35,10 @@ var DefaultLogger = zerolog.New(ioutil.Discard)
 //	options := Options {
 //		KeepAlive: time.Minute * 3,
 //		Logger: &DefaultLogger,
-//		Heartbeat: time.Second * 5,
+//		TLSConfig: nil,
 //	}
 type Options struct {
 	KeepAlive time.Duration
-	Heartbeat time.Duration
 	Logger    *zerolog.Logger
 	TLSConfig *tls.Config
 }
@@ -56,10 +55,6 @@ func loadOptions(options ...Option) *Options {
 
 	if opts.KeepAlive == 0 {
 		opts.KeepAlive = time.Minute * 3
-	}
-
-	if opts.Heartbeat == 0 {
-		opts.Heartbeat = time.Second * 5
 	}
 
 	return opts
@@ -86,16 +81,7 @@ func WithLogger(logger *zerolog.Logger) Option {
 	}
 }
 
-// WithHeartbeat sets the minimum time between heartbeat packets. By default, packets are only sent if
-// no packets have been sent since the last heartbeat packet - to change this behaviour you can disable heartbeats
-// (by passing in -1), and implementing your own logic.
-func WithHeartbeat(heartbeat time.Duration) Option {
-	return func(opts *Options) {
-		opts.Heartbeat = heartbeat
-	}
-}
-
-// WithTLS sets the TLS configuration for Frisbee. By default no TLS configuration is used, and
+// WithTLS sets the TLS configuration for Frisbee. By default, no TLS configuration is used, and
 // Frisbee will use unencrypted TCP connections. If the Frisbee Server is using TLS, then you must pass in
 // a TLS config (even an empty one `&tls.Config{}`) for the Frisbee Client.
 func WithTLS(tlsConfig *tls.Config) Option {
