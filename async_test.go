@@ -534,14 +534,23 @@ func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
 	b.Run("2 Pair, 32 Bytes", runner(2, 32))
 	b.Run("5 Pair, 32 Bytes", runner(5, 32))
 	b.Run("10 Pair, 32 Bytes", runner(10, 32))
+	b.Run("Half CPU Pair, 32 Bytes", runner(runtime.NumCPU()/2, 32))
+	b.Run("CPU Pair, 32 Bytes", runner(runtime.NumCPU(), 32))
+	b.Run("2xCPU Pair, 32 Bytes", runner(runtime.NumCPU()*2, 32))
 
 	b.Run("1 Pair, 512 Bytes", runner(1, 512))
 	b.Run("2 Pair, 512 Bytes", runner(2, 512))
 	b.Run("5 Pair, 512 Bytes", runner(5, 512))
 	b.Run("10 Pair, 512 Bytes", runner(10, 512))
+	b.Run("Half CPU Pair, 512 Bytes", runner(runtime.NumCPU()/2, 512))
+	b.Run("CPU Pair, 512 Bytes", runner(runtime.NumCPU(), 512))
+	b.Run("2xCPU Pair, 512 Bytes", runner(runtime.NumCPU()*2, 512))
 
 	b.Run("1 Pair, 4096 Bytes", runner(1, 4096))
 	b.Run("2 Pair, 4096 Bytes", runner(2, 4096))
 	b.Run("5 Pair, 4096 Bytes", runner(5, 4096))
 	b.Run("10 Pair, 4096 Bytes", runner(10, 4096))
+	b.Run("Half CPU Pair, 512 Bytes", runner(runtime.NumCPU()/2, 512))
+	b.Run("CPU Pair, 512 Bytes", runner(runtime.NumCPU(), 512))
+	b.Run("2xCPU Pair, 512 Bytes", runner(runtime.NumCPU()*2, 512))
 }
