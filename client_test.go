@@ -19,6 +19,7 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/rs/zerolog"
@@ -26,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
+	"sync"
 	"testing"
 )
 
@@ -345,4 +347,112 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+}
+
+func BenchmarkThroughputResponseMultipleClient(b *testing.B) {
+	const testSize = 1<<16 - 1
+	const packetSize = 512
+
+	runner := func(b *testing.B, numClients int) {
+		serverHandlerTable := make(HandlerTable)
+
+		finished := make(chan struct{}, numClients)
+
+		serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+			if incoming.Metadata.Id == testSize-1 {
+				incoming.Reset()
+				incoming.Metadata.Id = testSize
+				incoming.Metadata.Operation = metadata.PacketPong
+				outgoing = incoming
+			}
+			return
+		}
+
+		emptyLogger := zerolog.New(ioutil.Discard)
+		s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		err = s.Start()
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		data := make([]byte, packetSize)
+		_, _ = rand.Read(data)
+		p := packet.Get()
+		p.Metadata.Operation = metadata.PacketPing
+
+		p.Content.Write(data)
+		p.Metadata.ContentLength = packetSize
+
+		clients := make([]*Client, 0, numClients)
+
+		for i := 0; i < numClients; i++ {
+			clientHandlerTable := make(HandlerTable)
+			clientHandlerTable[metadata.PacketPong] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+				if incoming.Metadata.Id == testSize {
+					finished <- struct{}{}
+				}
+				return
+			}
+			c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+			if err != nil {
+				b.Fatal(err)
+			}
+			err = c.Connect()
+			if err != nil {
+				b.Fatal(err)
+			}
+			clients = append(clients, c)
+		}
+
+		var wg sync.WaitGroup
+		b.Run(fmt.Sprintf("Run with %d clients", numClients), func(b *testing.B) {
+			b.SetBytes(testSize * packetSize)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				wg.Add(numClients)
+				for i := 0; i < numClients; i++ {
+					go func(i int) {
+						for q := 0; q < testSize; q++ {
+							p.Metadata.Id = uint16(q)
+							err = clients[i].WritePacket(p)
+							if err != nil {
+								b.Error(err)
+								wg.Done()
+								return
+							}
+						}
+						<-finished
+						wg.Done()
+					}(i)
+				}
+				wg.Wait()
+			}
+
+		})
+		b.StopTimer()
+
+		packet.Put(p)
+
+		for i := 0; i < numClients; i++ {
+			err = clients[i].Close()
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+
+		err = s.Shutdown()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	runner(b, 1)
+	runner(b, 2)
+	runner(b, 5)
+
 }
