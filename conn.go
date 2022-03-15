@@ -22,16 +22,16 @@ import (
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"io/ioutil"
 	"net"
-	"os"
 	"time"
 )
 
 // DefaultBufferSize is the size of the default buffer
-const DefaultBufferSize = 1 << 19
+const DefaultBufferSize = 1 << 16
 
 var (
-	defaultLogger = zerolog.New(os.Stdout)
+	defaultLogger = zerolog.New(ioutil.Discard)
 
 	defaultDeadline = time.Second
 

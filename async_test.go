@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"net"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
@@ -448,4 +449,99 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
+}
+
+func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
+	const testSize = 100
+
+	throughputRunner := func(testSize uint32, packetSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
+		return func(b *testing.B) {
+			var err error
+
+			randomData := make([]byte, packetSize)
+
+			p := packet.Get()
+			p.Metadata.Id = 64
+			p.Metadata.Operation = 32
+			p.Content.Write(randomData)
+			p.Metadata.ContentLength = packetSize
+			for i := 0; i < b.N; i++ {
+				done := make(chan struct{}, 1)
+				errCh := make(chan error, 1)
+				go func() {
+					for i := uint32(0); i < testSize; i++ {
+						p, err := readerConn.ReadPacket()
+						if err != nil {
+							errCh <- err
+							return
+						}
+						packet.Put(p)
+					}
+					done <- struct{}{}
+				}()
+				for i := uint32(0); i < testSize; i++ {
+					select {
+					case err = <-errCh:
+						b.Fatal(err)
+					default:
+						err = writerConn.WritePacket(p)
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+				select {
+				case <-done:
+					continue
+				case err = <-errCh:
+					b.Fatal(err)
+				}
+			}
+
+			packet.Put(p)
+		}
+	}
+
+	runner := func(numClients int, packetSize uint32) func(b *testing.B) {
+		return func(b *testing.B) {
+			var wg sync.WaitGroup
+			wg.Add(numClients)
+			b.SetBytes(int64(testSize * packetSize))
+			b.ReportAllocs()
+			for i := 0; i < numClients; i++ {
+				go func() {
+					emptyLogger := zerolog.New(ioutil.Discard)
+
+					reader, writer, err := pair.New()
+					if err != nil {
+						b.Error(err)
+					}
+
+					readerConn := NewAsync(reader, &emptyLogger, false)
+					writerConn := NewAsync(writer, &emptyLogger, false)
+					throughputRunner(testSize, packetSize, readerConn, writerConn)(b)
+
+					_ = readerConn.Close()
+					_ = writerConn.Close()
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+		}
+	}
+
+	b.Run("1 Pair, 32 Bytes", runner(1, 32))
+	b.Run("2 Pair, 32 Bytes", runner(2, 32))
+	b.Run("5 Pair, 32 Bytes", runner(5, 32))
+	b.Run("10 Pair, 32 Bytes", runner(10, 32))
+
+	b.Run("1 Pair, 512 Bytes", runner(1, 512))
+	b.Run("2 Pair, 512 Bytes", runner(2, 512))
+	b.Run("5 Pair, 512 Bytes", runner(5, 512))
+	b.Run("10 Pair, 512 Bytes", runner(10, 512))
+
+	b.Run("1 Pair, 4096 Bytes", runner(1, 4096))
+	b.Run("2 Pair, 4096 Bytes", runner(2, 4096))
+	b.Run("5 Pair, 4096 Bytes", runner(5, 4096))
+	b.Run("10 Pair, 4096 Bytes", runner(10, 4096))
 }
