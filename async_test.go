@@ -120,6 +120,7 @@ func TestAsyncLargeWrite(t *testing.T) {
 	for i := 0; i < testSize; i++ {
 		p, err := readerConn.ReadPacket()
 		assert.NoError(t, err)
+		require.NotNil(t, p)
 		assert.NotNil(t, p.Metadata)
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)

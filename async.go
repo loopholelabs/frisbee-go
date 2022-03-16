@@ -21,7 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/queue"
+	"github.com/loopholelabs/frisbee/internal/lqueue"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
@@ -42,7 +42,7 @@ type Async struct {
 	closed   *atomic.Bool
 	writer   *bufio.Writer
 	flusher  chan struct{}
-	incoming *queue.Queue
+	incoming *lqueue.LQueue
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
@@ -80,7 +80,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger, blocking bool) (conn *Async) {
 		conn:     c,
 		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
-		incoming: queue.New(DefaultBufferSize, blocking),
+		incoming: lqueue.New(DefaultBufferSize),
 		flusher:  make(chan struct{}, 3),
 		logger:   logger,
 		error:    atomic.NewError(nil),
@@ -240,6 +240,9 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 		if len(c.stale) > 0 {
 			var p *packet.Packet
 			p, c.stale = c.stale[0], c.stale[1:]
+			if p == nil {
+				panic("Asdf")
+			}
 			c.staleMu.Unlock()
 			return p, nil
 		}
