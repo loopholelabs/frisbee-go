@@ -23,19 +23,17 @@ import (
 	"go.uber.org/atomic"
 	"net"
 	"sync"
-	"time"
 )
 
 // Client connects to a frisbee Server and can send and receive frisbee packets
 type Client struct {
-	addr             string
-	conn             *Async
-	handlerTable     HandlerTable
-	ctx              context.Context
-	options          *Options
-	closed           *atomic.Bool
-	wg               sync.WaitGroup
-	heartbeatChannel chan struct{}
+	addr         string
+	conn         *Async
+	handlerTable HandlerTable
+	ctx          context.Context
+	options      *Options
+	closed       *atomic.Bool
+	wg           sync.WaitGroup
 
 	// PacketContext is used to define packet-specific contexts based on the incoming packet
 	// and is run whenever a new packet arrives
@@ -61,22 +59,13 @@ func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts
 	}
 
 	options := loadOptions(opts...)
-	var heartbeatChannel chan struct{}
-	if options.Heartbeat > time.Duration(0) {
-		heartbeatChannel = make(chan struct{}, 1)
-		handlerTable[HEARTBEAT] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-			heartbeatChannel <- struct{}{}
-			return
-		}
-	}
 
 	return &Client{
-		addr:             addr,
-		handlerTable:     handlerTable,
-		ctx:              ctx,
-		options:          options,
-		closed:           atomic.NewBool(false),
-		heartbeatChannel: heartbeatChannel,
+		addr:         addr,
+		handlerTable: handlerTable,
+		ctx:          ctx,
+		options:      options,
+		closed:       atomic.NewBool(false),
 	}, nil
 }
 
@@ -96,12 +85,6 @@ func (c *Client) Connect() error {
 	c.wg.Add(1)
 	go c.handleConn()
 	c.Logger().Debug().Msgf("Connection handler started for %s", c.addr)
-
-	if c.options.Heartbeat > time.Duration(0) {
-		c.wg.Add(1)
-		go c.heartbeat()
-		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
-	}
 
 	return nil
 }
@@ -219,44 +202,4 @@ LOOP:
 		packet.Put(p)
 	}
 	goto LOOP
-}
-
-func (c *Client) heartbeat() {
-	for {
-		select {
-		case <-c.CloseChannel():
-			c.wg.Done()
-			return
-		case <-time.After(c.options.Heartbeat):
-			if c.closed.Load() {
-				c.wg.Done()
-				return
-			}
-			if c.conn.WriteBufferSize() == 0 {
-				err := c.WritePacket(HEARTBEATPacket)
-				if err != nil {
-					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
-					c.wg.Done()
-					_ = c.Close()
-					return
-				}
-				start := time.Now()
-				c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
-				select {
-				case <-c.heartbeatChannel:
-					c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
-				case <-time.After(c.options.Heartbeat):
-					c.Logger().Error().Msg("Heartbeat not received within timeout period")
-					c.wg.Done()
-					_ = c.Close()
-					return
-				case <-c.CloseChannel():
-					c.wg.Done()
-					return
-				}
-			} else {
-				c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
-			}
-		}
-	}
 }
