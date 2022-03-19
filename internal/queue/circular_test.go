@@ -138,34 +138,34 @@ func TestCircular(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 2, rb.Length())
 		assert.Equal(t, uint64(2), rb.head)
-		assert.Equal(t, uint64(0), rb.tail)
+		assert.Equal(t, uint64(4), rb.tail)
 
 		err = rb.Push(p2)
 		assert.NoError(t, err)
 		assert.Equal(t, 3, rb.Length())
 		assert.Equal(t, uint64(2), rb.head)
-		assert.Equal(t, uint64(1), rb.tail)
+		assert.Equal(t, uint64(5), rb.tail)
 
 		actual, err = rb.Pop()
 		require.NoError(t, err)
 		assert.Equal(t, p2, actual)
 		assert.Equal(t, 2, rb.Length())
 		assert.Equal(t, uint64(3), rb.head)
-		assert.Equal(t, uint64(1), rb.tail)
+		assert.Equal(t, uint64(5), rb.tail)
 
 		actual, err = rb.Pop()
 		require.NoError(t, err)
 		assert.Equal(t, p2, actual)
 		assert.Equal(t, 1, rb.Length())
-		assert.Equal(t, uint64(0), rb.head)
-		assert.Equal(t, uint64(1), rb.tail)
+		assert.Equal(t, uint64(4), rb.head)
+		assert.Equal(t, uint64(5), rb.tail)
 
 		actual, err = rb.Pop()
 		require.NoError(t, err)
 		assert.Equal(t, p2, actual)
 		assert.Equal(t, 0, rb.Length())
-		assert.Equal(t, uint64(1), rb.head)
-		assert.Equal(t, uint64(1), rb.tail)
+		assert.Equal(t, uint64(5), rb.head)
+		assert.Equal(t, uint64(5), rb.tail)
 	})
 	t.Run("buffer closed", func(t *testing.T) {
 		rb := NewCircular(1)
@@ -285,14 +285,26 @@ func TestCircular(t *testing.T) {
 		err = rb.Push(p5)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 4, rb.Length())
+		assert.Equal(t, 5, rb.Length())
 
 		err = rb.Push(p6)
 		assert.NoError(t, err)
 
-		assert.Equal(t, 4, rb.Length())
+		assert.Equal(t, 6, rb.Length())
 
 		actual, err := rb.Pop()
+		assert.NoError(t, err)
+		assert.Equal(t, p1, actual)
+
+		assert.Equal(t, 5, rb.Length())
+
+		actual, err = rb.Pop()
+		assert.NoError(t, err)
+		assert.Equal(t, p2, actual)
+
+		assert.Equal(t, 4, rb.Length())
+
+		actual, err = rb.Pop()
 		assert.NoError(t, err)
 		assert.Equal(t, p3, actual)
 
@@ -301,19 +313,7 @@ func TestCircular(t *testing.T) {
 		actual, err = rb.Pop()
 		assert.NoError(t, err)
 		assert.Equal(t, p4, actual)
-
+		assert.NotEqual(t, p1, p4)
 		assert.Equal(t, 2, rb.Length())
-
-		actual, err = rb.Pop()
-		assert.NoError(t, err)
-		assert.Equal(t, p5, actual)
-
-		assert.Equal(t, 1, rb.Length())
-
-		actual, err = rb.Pop()
-		assert.NoError(t, err)
-		assert.Equal(t, p6, actual)
-		assert.NotEqual(t, p1, p6)
-		assert.Equal(t, 0, rb.Length())
 	})
 }
