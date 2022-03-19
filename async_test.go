@@ -90,7 +90,7 @@ func TestNewAsync(t *testing.T) {
 func TestAsyncLargeWrite(t *testing.T) {
 	t.Parallel()
 
-	const testSize = DefaultBufferSize
+	const testSize = 100000
 	const packetSize = 512
 
 	emptyLogger := zerolog.New(ioutil.Discard)

@@ -31,6 +31,7 @@ func TestWithoutOptions(t *testing.T) {
 	options := loadOptions()
 
 	assert.Equal(t, time.Minute*3, options.KeepAlive)
+	assert.Equal(t, time.Second*5, options.Heartbeat)
 	assert.Equal(t, &DefaultLogger, options.Logger)
 	assert.Nil(t, options.TLSConfig)
 }
@@ -40,6 +41,7 @@ func TestWithOptions(t *testing.T) {
 
 	option := WithOptions(Options{
 		KeepAlive: time.Minute * 6,
+		Heartbeat: time.Second * 60,
 		Logger:    nil,
 		TLSConfig: &tls.Config{},
 	})
@@ -47,6 +49,7 @@ func TestWithOptions(t *testing.T) {
 	options := loadOptions(option)
 
 	assert.Equal(t, time.Minute*6, options.KeepAlive)
+	assert.Equal(t, time.Second*60, options.Heartbeat)
 	assert.Equal(t, &DefaultLogger, options.Logger)
 	assert.Equal(t, &tls.Config{}, options.TLSConfig)
 }
@@ -56,11 +59,13 @@ func TestDisableOptions(t *testing.T) {
 
 	option := WithOptions(Options{
 		KeepAlive: -1,
+		Heartbeat: -1,
 	})
 
 	options := loadOptions(option)
 
 	assert.Equal(t, time.Duration(-1), options.KeepAlive)
+	assert.Equal(t, time.Duration(-1), options.Heartbeat)
 	assert.Equal(t, &DefaultLogger, options.Logger)
 	assert.Nil(t, options.TLSConfig)
 }
@@ -74,12 +79,14 @@ func TestIndividualOptions(t *testing.T) {
 	}
 
 	keepAliveOption := WithKeepAlive(time.Minute * 6)
+	heartbeatOption := WithHeartbeat(time.Second * 60)
 	loggerOption := WithLogger(&logger)
 	TLSOption := WithTLS(tlsConfig)
 
-	options := loadOptions(keepAliveOption, loggerOption, TLSOption)
+	options := loadOptions(keepAliveOption, loggerOption, heartbeatOption, TLSOption)
 
 	assert.Equal(t, time.Minute*6, options.KeepAlive)
+	assert.Equal(t, time.Second*60, options.Heartbeat)
 	assert.Equal(t, &logger, options.Logger)
 	assert.Equal(t, tlsConfig, options.TLSConfig)
 }

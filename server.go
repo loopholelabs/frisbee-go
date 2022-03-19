@@ -24,6 +24,7 @@ import (
 	"go.uber.org/atomic"
 	"net"
 	"sync"
+	"time"
 )
 
 var (
@@ -38,14 +39,13 @@ var (
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee Packets
 type Server struct {
-	listener      net.Listener
-	addr          string
-	handlerTable  HandlerTable
-	shutdown      *atomic.Bool
-	options       *Options
-	wg            sync.WaitGroup
-	connections   map[*Async]struct{}
-	connectionsMu sync.Mutex
+	listener     net.Listener
+	addr         string
+	handlerTable HandlerTable
+	shutdown     *atomic.Bool
+	shutdownCh   chan struct{}
+	options      *Options
+	wg           sync.WaitGroup
 
 	// BaseContext is used to define the base context for this Server and all incoming connections
 	BaseContext func() context.Context
@@ -79,13 +79,19 @@ func NewServer(addr string, handlerTable HandlerTable, opts ...Option) (*Server,
 	}
 
 	options := loadOptions(opts...)
+	if options.Heartbeat > time.Duration(0) {
+		handlerTable[HEARTBEAT] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+			outgoing = incoming
+			return
+		}
+	}
 
 	return &Server{
 		addr:         addr,
 		handlerTable: handlerTable,
 		options:      options,
 		shutdown:     atomic.NewBool(false),
-		connections:  make(map[*Async]struct{}),
+		shutdownCh:   make(chan struct{}),
 	}, nil
 }
 
@@ -124,76 +130,30 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) handleListener() {
-	var newConn net.Conn
-	var err error
-	for {
-		newConn, err = s.listener.Accept()
-		if err != nil {
-			if s.shutdown.Load() {
-				s.wg.Done()
-				return
-			}
-			s.Logger().Fatal().Err(err).Msg("error while accepting connection")
+LOOP:
+	newConn, err := s.listener.Accept()
+	if err != nil {
+		if s.shutdown.Load() {
 			s.wg.Done()
 			return
 		}
-		s.wg.Add(1)
-		go s.handleConn(newConn)
+		s.Logger().Fatal().Err(err).Msg("error while accepting connection")
+		s.wg.Done()
+		return
 	}
+	s.wg.Add(1)
+	go s.handleConn(newConn)
+	goto LOOP
 }
 
-func (s *Server) handlePacket(frisbeeConn *Async, connCtx context.Context) (err error) {
-	var p *packet.Packet
-	var outgoing *packet.Packet
-	var action Action
-	var handlerFunc Handler
-	p, err = frisbeeConn.ReadPacket()
-	if err != nil {
-		return
+func (s *Server) connCloser(conn *Async) {
+	select {
+	case <-conn.CloseChannel():
+		s.wg.Done()
+	case <-s.shutdownCh:
+		_ = conn.Close()
+		s.wg.Done()
 	}
-	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
-	}
-	goto HANDLE
-LOOP:
-	p, err = frisbeeConn.ReadPacket()
-	if err != nil {
-		return
-	}
-HANDLE:
-	handlerFunc = s.handlerTable[p.Metadata.Operation]
-	if handlerFunc != nil {
-		packetCtx := connCtx
-		if s.PacketContext != nil {
-			packetCtx = s.PacketContext(packetCtx, p)
-		}
-		outgoing, action = handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
-			s.PreWrite()
-			err = frisbeeConn.WritePacket(outgoing)
-			if outgoing != p {
-				packet.Put(outgoing)
-			}
-			packet.Put(p)
-			if err != nil {
-				return
-			}
-		} else {
-			packet.Put(p)
-		}
-		switch action {
-		case NONE:
-		case UPDATE:
-			if s.UpdateContext != nil {
-				connCtx = s.UpdateContext(connCtx, frisbeeConn)
-			}
-		case CLOSE:
-			return
-		}
-	} else {
-		packet.Put(p)
-	}
-	goto LOOP
 }
 
 func (s *Server) handleConn(newConn net.Conn) {
@@ -217,25 +177,75 @@ func (s *Server) handleConn(newConn net.Conn) {
 	}
 
 	frisbeeConn := NewAsync(newConn, s.Logger(), true)
+
+	s.wg.Add(1)
+	go s.connCloser(frisbeeConn)
+
 	connCtx := s.BaseContext()
 
-	s.connectionsMu.Lock()
-	if s.shutdown.Load() {
+	var p *packet.Packet
+	var outgoing *packet.Packet
+	var action Action
+	var handlerFunc Handler
+	p, err = frisbeeConn.ReadPacket()
+	if err != nil {
+		_ = frisbeeConn.Close()
+		s.OnClosed(frisbeeConn, err)
 		s.wg.Done()
 		return
 	}
-	s.connections[frisbeeConn] = struct{}{}
-	s.connectionsMu.Unlock()
-
-	err = s.handlePacket(frisbeeConn, connCtx)
-	_ = frisbeeConn.Close()
-	s.OnClosed(frisbeeConn, err)
-	s.connectionsMu.Lock()
-	if !s.shutdown.Load() {
-		delete(s.connections, frisbeeConn)
+	if s.ConnContext != nil {
+		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
-	s.connectionsMu.Unlock()
-	s.wg.Done()
+	goto HANDLE
+LOOP:
+	p, err = frisbeeConn.ReadPacket()
+	if err != nil {
+		_ = frisbeeConn.Close()
+		s.OnClosed(frisbeeConn, err)
+		s.wg.Done()
+		return
+	}
+HANDLE:
+	handlerFunc = s.handlerTable[p.Metadata.Operation]
+	if handlerFunc != nil {
+		packetCtx := connCtx
+		if s.PacketContext != nil {
+			packetCtx = s.PacketContext(packetCtx, p)
+		}
+		outgoing, action = handlerFunc(packetCtx, p)
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
+			s.PreWrite()
+			err = frisbeeConn.WritePacket(outgoing)
+			if outgoing != p {
+				packet.Put(outgoing)
+			}
+			packet.Put(p)
+			if err != nil {
+				_ = frisbeeConn.Close()
+				s.OnClosed(frisbeeConn, err)
+				s.wg.Done()
+				return
+			}
+		} else {
+			packet.Put(p)
+		}
+		switch action {
+		case NONE:
+		case UPDATE:
+			if s.UpdateContext != nil {
+				connCtx = s.UpdateContext(connCtx, frisbeeConn)
+			}
+		case CLOSE:
+			_ = frisbeeConn.Close()
+			s.OnClosed(frisbeeConn, nil)
+			s.wg.Done()
+			return
+		}
+	} else {
+		packet.Put(p)
+	}
+	goto LOOP
 }
 
 // Logger returns the server's logger (useful for ServerRouter functions)
@@ -246,12 +256,7 @@ func (s *Server) Logger() *zerolog.Logger {
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
 	s.shutdown.Store(true)
-	s.connectionsMu.Lock()
-	for c := range s.connections {
-		_ = c.Close()
-		delete(s.connections, c)
-	}
-	s.connectionsMu.Unlock()
+	close(s.shutdownCh)
 	defer s.wg.Wait()
 	return s.listener.Close()
 }

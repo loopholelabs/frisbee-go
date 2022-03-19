@@ -61,8 +61,11 @@ type HandlerTable map[uint16]Handler
 
 // These are internal reserved packet types, and are the reason you cannot use 0-9 in Handler functions:
 const (
+	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
+	HEARTBEAT = uint16(iota)
+
 	// PING is used to check if a client is still alive
-	PING = uint16(iota)
+	PING
 
 	// PONG is used to respond to a PING packets
 	PONG
@@ -77,6 +80,14 @@ const (
 )
 
 var (
+	// HEARTBEATPacket is a pre-allocated Frisbee Packet for HEARTBEAT Packets
+	HEARTBEATPacket = &packet.Packet{
+		Metadata: &metadata.Metadata{
+			Operation: HEARTBEAT,
+		},
+		Content: content.New(),
+	}
+
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Packets
 	PINGPacket = &packet.Packet{
 		Metadata: &metadata.Metadata{
