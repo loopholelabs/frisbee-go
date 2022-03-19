@@ -11,6 +11,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Swapping the lock-free Queue out with a simpler locking queue that has significantly less lock contention in scenarios
   when multiple buffers are required.
+- Refactoring server and client to spawn fewer goroutines per-connection.
 
 ## [v0.3.1] - 2022-03-12 (Beta)
 
