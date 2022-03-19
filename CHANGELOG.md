@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.3.2] - 2022-03-18 (Beta)
+
+## Changes
+
+- Swapping the lock-free Queue out with a simpler locking queue that has significantly less lock contention in scenarios
+  when multiple buffers are required.
+- Refactoring server and client to spawn fewer goroutines per-connection.
+
 ## [v0.3.1] - 2022-03-12 (Beta)
 
 ### Fixes
@@ -171,7 +179,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.3.2...HEAD
+[v0.3.2]: https://github.com/loopholelabs/frisbee/compare/v0.3.1...v0.3.2
+[v0.3.1]: https://github.com/loopholelabs/frisbee/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/loopholelabs/frisbee/compare/v0.2.4...v0.3.0
 [v0.2.4]: https://github.com/loopholelabs/frisbee/compare/v0.2.3...v0.2.4
 [v0.2.3]: https://github.com/loopholelabs/frisbee/compare/v0.2.2...v0.2.3
