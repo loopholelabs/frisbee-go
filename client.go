@@ -28,7 +28,6 @@ import (
 
 // Client connects to a frisbee Server and can send and receive frisbee packets
 type Client struct {
-	addr             string
 	conn             *Async
 	handlerTable     HandlerTable
 	ctx              context.Context
@@ -48,12 +47,7 @@ type Client struct {
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
 // The ConnectAsync method must then be called to dial the server and initialize the connection.
-//
-// If poolSize == 0 then no pool will be allocated, and all handlers will be run synchronously for their
-// incoming connections. If poolSize == -1 then a pool with unlimited size will be allocated. Otherwise, a pool
-// with size `poolSize` will be allocated.
-func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Client, error) {
-
+func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Client, error) {
 	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := handlerTable[i]; ok {
 			return nil, InvalidHandlerTable
@@ -71,7 +65,6 @@ func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts
 	}
 
 	return &Client{
-		addr:             addr,
 		handlerTable:     handlerTable,
 		ctx:              ctx,
 		options:          options,
@@ -81,26 +74,43 @@ func NewClient(addr string, handlerTable HandlerTable, ctx context.Context, opts
 }
 
 // Connect actually connects to the given frisbee server, and starts the reactor goroutines
-// to receive and handle incoming packets.
-func (c *Client) Connect() error {
-	c.Logger().Debug().Msgf("Connecting to %s", c.addr)
+// to receive and handle incoming packets. If this function is called, FromConn should not be called.
+func (c *Client) Connect(addr string) error {
+	c.Logger().Debug().Msgf("Connecting to %s", addr)
 	var frisbeeConn *Async
 	var err error
-	frisbeeConn, err = ConnectAsync(c.addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig, true)
+	frisbeeConn, err = ConnectAsync(addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
 	if err != nil {
 		return err
 	}
 	c.conn = frisbeeConn
-	c.Logger().Info().Msgf("Connected to %s", c.addr)
+	c.Logger().Info().Msgf("Connected to %s", addr)
 
 	c.wg.Add(1)
 	go c.handleConn()
-	c.Logger().Debug().Msgf("Connection handler started for %s", c.addr)
+	c.Logger().Debug().Msgf("Connection handler started for %s", addr)
 
 	if c.options.Heartbeat > time.Duration(0) {
 		c.wg.Add(1)
 		go c.heartbeat()
-		c.Logger().Debug().Msgf("Heartbeat started for %s", c.addr)
+		c.Logger().Debug().Msgf("Heartbeat started for %s", addr)
+	}
+
+	return nil
+}
+
+// FromConn takes a pre-existing connection to a Frisbee server and starts the reactor goroutines
+// to receive and handle incoming packets. If this function is called, Connect should not be called.
+func (c *Client) FromConn(conn net.Conn) error {
+	c.conn = NewAsync(conn, c.Logger())
+	c.wg.Add(1)
+	go c.handleConn()
+	c.Logger().Debug().Msgf("Connection handler started for %s", c.conn.RemoteAddr())
+
+	if c.options.Heartbeat > time.Duration(0) {
+		c.wg.Add(1)
+		go c.heartbeat()
+		c.Logger().Debug().Msgf("Heartbeat started for %s", c.conn.RemoteAddr())
 	}
 
 	return nil
@@ -210,7 +220,7 @@ LOOP:
 				c.ctx = c.UpdateContext(c.ctx, c.conn)
 			}
 		case CLOSE:
-			c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.addr)
+			c.Logger().Debug().Msg("Closing connection because of CLOSE action")
 			c.wg.Done()
 			_ = c.Close()
 			return

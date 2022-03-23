@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Changes
+
+- Changing `Connect` signatures and `Start` signatures for servers, and clients
+- Changing the functionality of Server.`Start` so that it blocks and returns an error
+- Adding `ServeConn` and `FromConn` functions for severs and clients
+- Updating `protoc-gen-frisbee` to comply with the new changes
+- Updating the buf.build manifest for `protoc-gen-frisbee`
+
+## Fixes
+
+- Fixing panics from `ConnectSync` and `ConnectAsync` functions when the connection cannot be established - it now
+  returns an error properly instead
+
 ## [v0.3.2] - 2022-03-18 (Beta)
 
 ## Changes

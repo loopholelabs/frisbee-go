@@ -40,8 +40,8 @@ func BenchmarkAsyncThroughputLarge(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	readerConn := NewAsync(reader, &emptyLogger, false)
-	writerConn := NewAsync(writer, &emptyLogger, false)
+	readerConn := NewAsync(reader, &emptyLogger)
+	writerConn := NewAsync(writer, &emptyLogger)
 
 	b.Run("1MB", throughputRunner(testSize, 1<<20, readerConn, writerConn))
 	b.Run("2MB", throughputRunner(testSize, 1<<21, readerConn, writerConn))

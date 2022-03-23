@@ -21,13 +21,13 @@ import (
 	"crypto/rand"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
 	"testing"
-	"time"
 )
 
 // trunk-ignore-all(golangci-lint/staticcheck)
@@ -64,25 +64,24 @@ func TestClientRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
 		return context.WithValue(ctx, clientConnContextKey, c)
 	}
 
-	go func() {
-		err := s.Start()
-		require.NoError(t, err)
-	}()
-	time.Sleep(time.Millisecond * 50)
+	serverConn, clientConn, err := pair.New()
+	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
-	err = c.Connect()
+	err = c.FromConn(clientConn)
 	require.NoError(t, err)
 
 	data := make([]byte, packetSize)
@@ -158,21 +157,20 @@ func TestClientStaleClose(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
-	go func() {
-		err := s.Start()
-		require.NoError(t, err)
-	}()
-	time.Sleep(time.Millisecond * 50)
+	serverConn, clientConn, err := pair.New()
+	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
-	err = c.Connect()
+	err = c.FromConn(clientConn)
 	require.NoError(t, err)
 
 	data := make([]byte, packetSize)
@@ -217,24 +215,23 @@ func BenchmarkThroughputClient(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	go func() {
-		err := s.Start()
-		if err != nil {
-			b.Error(err)
-		}
-	}()
-	time.Sleep(time.Millisecond * 50)
-
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	serverConn, clientConn, err := pair.New()
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = c.Connect()
+
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	if err != nil {
+		b.Fatal(err)
+	}
+	err = c.FromConn(clientConn)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -301,24 +298,23 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	go func() {
-		err := s.Start()
-		if err != nil {
-			b.Error(err)
-		}
-	}()
-	time.Sleep(time.Millisecond * 50)
-
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	serverConn, clientConn, err := pair.New()
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = c.Connect()
+
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	if err != nil {
+		b.Fatal(err)
+	}
+	err = c.FromConn(clientConn)
 	if err != nil {
 		b.Fatal(err)
 	}

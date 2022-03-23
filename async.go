@@ -55,7 +55,7 @@ type Async struct {
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config, blocking bool) (*Async, error) {
+func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Async, error) {
 	var conn net.Conn
 	var err error
 
@@ -73,11 +73,11 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 		return nil, err
 	}
 
-	return NewAsync(conn, logger, blocking), nil
+	return NewAsync(conn, logger), nil
 }
 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
-func NewAsync(c net.Conn, logger *zerolog.Logger, blocking bool) (conn *Async) {
+func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 	conn = &Async{
 		conn:     c,
 		closed:   atomic.NewBool(false),

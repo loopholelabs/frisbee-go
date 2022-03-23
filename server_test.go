@@ -30,7 +30,6 @@ import (
 	"runtime"
 	"sync"
 	"testing"
-	"time"
 )
 
 // trunk-ignore-all(golangci-lint/staticcheck)
@@ -66,26 +65,26 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
 		return context.WithValue(ctx, serverConnContextKey, c)
 	}
 
-	go func() {
-		err := s.Start()
-		require.NoError(t, err)
-	}()
-	time.Sleep(time.Millisecond * 50)
+	serverConn, clientConn, err := pair.New()
+	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
+
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
-	err = c.Connect()
-	require.NoError(t, err)
+	err = c.FromConn(clientConn)
+	assert.NoError(t, err)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -163,21 +162,20 @@ func TestServerStaleClose(t *testing.T) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
-	go func() {
-		err := s.Start()
-		require.NoError(t, err)
-	}()
-	time.Sleep(time.Millisecond * 50)
+	serverConn, clientConn, err := pair.New()
+	require.NoError(t, err)
 
-	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
-	err = c.Connect()
+	err = c.FromConn(clientConn)
 	require.NoError(t, err)
 
 	data := make([]byte, packetSize)
@@ -217,23 +215,19 @@ func BenchmarkThroughputServer(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", handlerTable, WithLogger(&emptyLogger))
+	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	go func() {
-		err := server.Start()
-		if err != nil {
-			b.Error(err)
-		}
-	}()
-	time.Sleep(time.Millisecond * 50)
-
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
+	serverConn, clientConn, err := pair.New()
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	go server.ServeConn(serverConn)
+
+	frisbeeConn := NewAsync(clientConn, &emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -275,6 +269,11 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
+	serverConn, clientConn, err := pair.New()
+	if err != nil {
+		b.Fatal(err)
+	}
+
 	handlerTable := make(HandlerTable)
 
 	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
@@ -288,23 +287,14 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 	}
 
 	emptyLogger := zerolog.New(ioutil.Discard)
-	server, err := NewServer(":0", handlerTable, WithLogger(&emptyLogger))
+	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	go func() {
-		err := server.Start()
-		if err != nil {
-			b.Error(err)
-		}
-	}()
-	time.Sleep(time.Millisecond * 50)
+	go server.ServeConn(serverConn)
 
-	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
-	if err != nil {
-		b.Fatal(err)
-	}
+	frisbeeConn := NewAsync(clientConn, &emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -419,8 +409,8 @@ func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
 						b.Error(err)
 					}
 
-					readerConn := NewAsync(reader, &emptyLogger, false)
-					writerConn := NewAsync(writer, &emptyLogger, false)
+					readerConn := NewAsync(reader, &emptyLogger)
+					writerConn := NewAsync(writer, &emptyLogger)
 					throughputRunner(testSize, packetSize, readerConn, writerConn)(b)
 
 					_ = readerConn.Close()
