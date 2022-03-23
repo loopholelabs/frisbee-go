@@ -14,6 +14,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Adding `ServeConn` and `FromConn` functions for severs and clients
 - Updating `protoc-gen-frisbee` to comply with the new changes
 - Updating the buf.build manifest for `protoc-gen-frisbee`
+- Making `baseContext`, `onClosed`, and `preWrite` hooks for the Server private, and creating `Setter` functions that
+  make it impossible to set those functions to nil
 
 ## Fixes
 
