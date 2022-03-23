@@ -73,8 +73,11 @@ func TestServerRaw(t *testing.T) {
 		return context.WithValue(ctx, serverConnContextKey, c)
 	}
 
-	err = s.Start()
-	require.NoError(t, err)
+	go func() {
+		err := s.Start()
+		require.NoError(t, err)
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
@@ -163,8 +166,11 @@ func TestServerStaleClose(t *testing.T) {
 	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
-	err = s.Start()
-	require.NoError(t, err)
+	go func() {
+		err := s.Start()
+		require.NoError(t, err)
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
@@ -216,10 +222,13 @@ func BenchmarkThroughputServer(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	err = server.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
+	go func() {
+		err := server.Start()
+		if err != nil {
+			b.Error(err)
+		}
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
 	if err != nil {
@@ -284,10 +293,13 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	err = server.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
+	go func() {
+		err := server.Start()
+		if err != nil {
+			b.Error(err)
+		}
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	frisbeeConn, err := ConnectAsync(server.listener.Addr().String(), time.Minute*3, &emptyLogger, nil, true)
 	if err != nil {

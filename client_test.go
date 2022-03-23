@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
+	"time"
 )
 
 // trunk-ignore-all(golangci-lint/staticcheck)
@@ -70,8 +71,11 @@ func TestClientRaw(t *testing.T) {
 		return context.WithValue(ctx, clientConnContextKey, c)
 	}
 
-	err = s.Start()
-	require.NoError(t, err)
+	go func() {
+		err := s.Start()
+		require.NoError(t, err)
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
@@ -157,8 +161,11 @@ func TestClientStaleClose(t *testing.T) {
 	s, err := NewServer(":0", serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
-	err = s.Start()
-	require.NoError(t, err)
+	go func() {
+		err := s.Start()
+		require.NoError(t, err)
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
@@ -215,10 +222,13 @@ func BenchmarkThroughputClient(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	err = s.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
+	go func() {
+		err := s.Start()
+		if err != nil {
+			b.Error(err)
+		}
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	if err != nil {
@@ -296,10 +306,13 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	err = s.Start()
-	if err != nil {
-		b.Fatal(err)
-	}
+	go func() {
+		err := s.Start()
+		if err != nil {
+			b.Error(err)
+		}
+	}()
+	time.Sleep(time.Millisecond * 50)
 
 	c, err := NewClient(s.listener.Addr().String(), clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	if err != nil {

@@ -124,25 +124,19 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	s.wg.Add(1)
-	go s.handleListener()
-
-	return nil
+	return s.handleListener()
 }
 
-func (s *Server) handleListener() {
+func (s *Server) handleListener() error {
 	var newConn net.Conn
 	var err error
 	for {
 		newConn, err = s.listener.Accept()
 		if err != nil {
 			if s.shutdown.Load() {
-				s.wg.Done()
-				return
+				return nil
 			}
-			s.Logger().Fatal().Err(err).Msg("error while accepting connection")
-			s.wg.Done()
-			return
+			return err
 		}
 		s.wg.Add(1)
 		go s.handleConn(newConn)
