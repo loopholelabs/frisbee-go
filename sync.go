@@ -53,8 +53,10 @@ func ConnectSync(addr string, keepAlive time.Duration, logger *zerolog.Logger, T
 		conn, err = tls.Dial("tcp", addr, TLSConfig)
 	} else {
 		conn, err = net.Dial("tcp", addr)
-		_ = conn.(*net.TCPConn).SetKeepAlive(true)
-		_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
+		if err == nil {
+			_ = conn.(*net.TCPConn).SetKeepAlive(true)
+			_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
+		}
 	}
 
 	if err != nil {
