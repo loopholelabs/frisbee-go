@@ -220,7 +220,7 @@ LOOP:
 				c.ctx = c.UpdateContext(c.ctx, c.conn)
 			}
 		case CLOSE:
-			c.Logger().Debug().Msg("Closing connection because of CLOSE action")
+			c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.conn.RemoteAddr())
 			c.wg.Done()
 			_ = c.Close()
 			return
