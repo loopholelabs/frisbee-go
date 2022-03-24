@@ -323,7 +323,7 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 			}
 
 			if readPacket.Metadata.Id != testSize {
-				b.Fatal("invalid decoded metadata id")
+				b.Fatal("invalid decoded metadata id", readPacket.Metadata.Id)
 			}
 			packet.Put(readPacket)
 		}
