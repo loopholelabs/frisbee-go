@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.1] - 2022-03-24 (Beta)
+
+## Changes
+
+- Using new `internal/dialer` package to handle dialing for Async and Sync connections with automatic retires
+- Handling proper backoffs for accept loop in `Server` so server does not just crash when many connections are opened at
+  once
+
+## Fixes
+
+- Fixing `SetBaseContext`, `SetOnClosed`, and `SetPreWrite` functions to not error out if a valid function is used
+- Async test cases are less flaky
+
 ## [v0.4.0] - 2022-03-24 (Beta)
 
 ## Changes
@@ -196,7 +209,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.1...HEAD
+[v0.4.1]: https://github.com/loopholelabs/frisbee/compare/v0.4.0...v0.4.1
 [v0.4.0]: https://github.com/loopholelabs/frisbee/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/loopholelabs/frisbee/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/loopholelabs/frisbee/compare/v0.3.0...v0.3.1

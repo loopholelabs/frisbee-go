@@ -333,7 +333,9 @@ func TestAsyncWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Millisecond * 50)
+	runtime.Gosched()
+	time.Sleep(defaultDeadline * 2)
+	runtime.Gosched()
 
 	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
@@ -379,29 +381,44 @@ func TestAsyncTimeout(t *testing.T) {
 	time.Sleep(defaultDeadline * 5)
 
 	err = writerConn.Error()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = writerConn.WritePacket(p)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+
+	err = writerConn.Flush()
+	require.NoError(t, err)
 
 	packet.Put(p)
 
+	time.Sleep(defaultDeadline)
+	require.Equal(t, 1, readerConn.incoming.Length())
+
 	err = writerConn.conn.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	runtime.Gosched()
 	time.Sleep(defaultDeadline * 5)
 	runtime.Gosched()
 
+	p, err = readerConn.ReadPacket()
+	require.NoError(t, err)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
+	assert.Equal(t, 0, len(p.Content.B))
+
 	_, err = readerConn.ReadPacket()
-	assert.ErrorIs(t, err, ConnectionClosed)
+	require.ErrorIs(t, err, ConnectionClosed)
 
 	err = readerConn.Error()
 	if err == nil {
 		runtime.Gosched()
 		time.Sleep(defaultDeadline * 10)
+		runtime.Gosched()
 	}
-	assert.Error(t, readerConn.Error())
+	require.Error(t, readerConn.Error())
 
 	err = readerConn.Close()
 	assert.NoError(t, err)
