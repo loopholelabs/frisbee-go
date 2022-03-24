@@ -78,19 +78,19 @@ func writeServer(f File, services protoreflect.ServiceDescriptors) {
 	}
 	serverFields := builder.String()
 	serverFields = serverFields[:len(serverFields)-2]
-	f.P("func NewServer(", serverFields, ", listenAddr string, tlsConfig *tls.Config, logger *zerolog.Logger) (*Server, error) {")
+	f.P("func NewServer(", serverFields, ", tlsConfig *tls.Config, logger *zerolog.Logger) (*Server, error) {")
 	f.P(tab, "table := make(frisbee.HandlerTable)")
 	writeServerHandlers(f, services)
 
 	f.P(tab, "var s *frisbee.Server")
 	f.P(tab, "var err error")
 	f.P(tab, "if tlsConfig != nil {")
-	f.P(tab, tab, "s, err = frisbee.NewServer(listenAddr, table, frisbee.WithTLS(tlsConfig), frisbee.WithLogger(logger))")
+	f.P(tab, tab, "s, err = frisbee.NewServer(table, frisbee.WithTLS(tlsConfig), frisbee.WithLogger(logger))")
 	f.P(tab, tab, "if err != nil {")
 	f.P(tab, tab, tab, "return nil, err")
 	f.P(tab, tab, "}")
 	f.P(tab, "} else {")
-	f.P(tab, tab, "s, err = frisbee.NewServer(listenAddr, table, frisbee.WithLogger(logger))")
+	f.P(tab, tab, "s, err = frisbee.NewServer(table, frisbee.WithLogger(logger))")
 	f.P(tab, tab, "if err != nil {")
 	f.P(tab, tab, tab, "return nil, err")
 	f.P(tab, tab, "}")

@@ -7,6 +7,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.0] - 2022-03-24 (Beta)
+
+## Changes
+
+- Changing `Connect` signatures and `Start` signatures for servers, and clients
+- Changing the functionality of Server.`Start` so that it blocks and returns an error
+- Adding `ServeConn` and `FromConn` functions for severs and clients
+- Updating `protoc-gen-frisbee` to comply with the new changes
+- Updating the buf.build manifest for `protoc-gen-frisbee`
+- Making `baseContext`, `onClosed`, and `preWrite` hooks for the Server private, and creating `Setter` functions that
+  make it impossible to set those functions to nil
+
+## Fixes
+
+- Fixing panics from `ConnectSync` and `ConnectAsync` functions when the connection cannot be established - it now
+  returns an error properly instead
+
 ## [v0.3.2] - 2022-03-18 (Beta)
 
 ## Changes
@@ -179,7 +196,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.3.2...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.0...HEAD
+[v0.4.0]: https://github.com/loopholelabs/frisbee/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/loopholelabs/frisbee/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/loopholelabs/frisbee/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/loopholelabs/frisbee/compare/v0.2.4...v0.3.0
