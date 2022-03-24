@@ -325,6 +325,10 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 			if readPacket.Metadata.Id != testSize {
 				b.Fatal("invalid decoded metadata id", readPacket.Metadata.Id)
 			}
+
+			if readPacket.Metadata.Operation != metadata.PacketPong {
+				b.Fatal("invalid decoded operation", readPacket.Metadata.Operation)
+			}
 			packet.Put(readPacket)
 		}
 
