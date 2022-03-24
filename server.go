@@ -150,6 +150,7 @@ func (s *Server) Start(addr string) error {
 }
 
 func (s *Server) handleListener() error {
+	var backoff time.Duration
 	var newConn net.Conn
 	var err error
 	for {
@@ -158,10 +159,28 @@ func (s *Server) handleListener() error {
 			if s.shutdown.Load() {
 				return nil
 			}
+			if ne, ok := err.(temporary); ok && ne.Temporary() {
+				if backoff == 0 {
+					backoff = minBackoff
+				} else {
+					backoff *= 2
+				}
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+				s.Logger().Warn().Err(err).Msgf("Temporary Accept Error, retrying in %s", backoff)
+				time.Sleep(backoff)
+				if s.shutdown.Load() {
+					return nil
+				}
+				continue
+			}
 			return err
 		}
+		backoff = 0
+
+		s.wg.Add(1)
 		go func() {
-			s.wg.Add(1)
 			s.ServeConn(newConn)
 			s.wg.Done()
 		}()

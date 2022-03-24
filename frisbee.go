@@ -22,6 +22,7 @@ import (
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
+	"time"
 )
 
 // These are various frisbee errors that can be returned by the client or server:
@@ -103,4 +104,17 @@ var (
 		},
 		Content: content.New(),
 	}
+)
+
+// temporary is an interface used to check if an error is recoverable
+type temporary interface {
+	Temporary() bool
+}
+
+const (
+	// maxBackoff is the maximum amount ot time to wait before retrying to accept from a listener
+	maxBackoff = time.Second
+
+	// minBackoff is the minimum amount ot time to wait before retrying to accept from a listener
+	minBackoff = time.Millisecond * 5
 )
