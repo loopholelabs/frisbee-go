@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"github.com/loopholelabs/frisbee/internal/dialer"
 	"github.com/loopholelabs/frisbee/internal/queue"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
@@ -59,10 +60,12 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 	var conn net.Conn
 	var err error
 
+	d := dialer.NewRetry()
+
 	if TLSConfig != nil {
-		conn, err = tls.Dial("tcp", addr, TLSConfig)
+		conn, err = d.DialTLS("tcp", addr, TLSConfig)
 	} else {
-		conn, err = net.Dial("tcp", addr)
+		conn, err = d.Dial("tcp", addr)
 		if err == nil {
 			_ = conn.(*net.TCPConn).SetKeepAlive(true)
 			_ = conn.(*net.TCPConn).SetKeepAlivePeriod(keepAlive)
@@ -425,7 +428,7 @@ func (c *Async) flushLoop() {
 }
 
 func (c *Async) waitForPONG() {
-	timer := time.NewTimer(defaultDeadline * 10)
+	timer := time.NewTimer(defaultDeadline)
 	defer timer.Stop()
 	select {
 	case <-c.closeCh:

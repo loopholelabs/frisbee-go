@@ -106,7 +106,7 @@ func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 
 // SetBaseContext sets the baseContext function for the server. If f is nil, it returns an error.
 func (s *Server) SetBaseContext(f func() context.Context) error {
-	if f != nil {
+	if f == nil {
 		return BaseContextNil
 	}
 	s.baseContext = f
@@ -115,7 +115,7 @@ func (s *Server) SetBaseContext(f func() context.Context) error {
 
 // SetOnClosed sets the onClosed function for the server. If f is nil, it returns an error.
 func (s *Server) SetOnClosed(f func(*Async, error)) error {
-	if f != nil {
+	if f == nil {
 		return OnClosedNil
 	}
 	s.onClosed = f
@@ -124,7 +124,7 @@ func (s *Server) SetOnClosed(f func(*Async, error)) error {
 
 // SetPreWrite sets the preWrite function for the server. If f is nil, it returns an error.
 func (s *Server) SetPreWrite(f func()) error {
-	if f != nil {
+	if f == nil {
 		return PreWriteNil
 	}
 	s.preWrite = f
@@ -150,6 +150,7 @@ func (s *Server) Start(addr string) error {
 }
 
 func (s *Server) handleListener() error {
+	var backoff time.Duration
 	var newConn net.Conn
 	var err error
 	for {
@@ -158,10 +159,28 @@ func (s *Server) handleListener() error {
 			if s.shutdown.Load() {
 				return nil
 			}
+			if ne, ok := err.(temporary); ok && ne.Temporary() {
+				if backoff == 0 {
+					backoff = minBackoff
+				} else {
+					backoff *= 2
+				}
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+				s.Logger().Warn().Err(err).Msgf("Temporary Accept Error, retrying in %s", backoff)
+				time.Sleep(backoff)
+				if s.shutdown.Load() {
+					return nil
+				}
+				continue
+			}
 			return err
 		}
+		backoff = 0
+
+		s.wg.Add(1)
 		go func() {
-			s.wg.Add(1)
 			s.ServeConn(newConn)
 			s.wg.Done()
 		}()
