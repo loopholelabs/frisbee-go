@@ -106,7 +106,7 @@ func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 
 // SetBaseContext sets the baseContext function for the server. If f is nil, it returns an error.
 func (s *Server) SetBaseContext(f func() context.Context) error {
-	if f != nil {
+	if f == nil {
 		return BaseContextNil
 	}
 	s.baseContext = f
@@ -115,7 +115,7 @@ func (s *Server) SetBaseContext(f func() context.Context) error {
 
 // SetOnClosed sets the onClosed function for the server. If f is nil, it returns an error.
 func (s *Server) SetOnClosed(f func(*Async, error)) error {
-	if f != nil {
+	if f == nil {
 		return OnClosedNil
 	}
 	s.onClosed = f
@@ -124,7 +124,7 @@ func (s *Server) SetOnClosed(f func(*Async, error)) error {
 
 // SetPreWrite sets the preWrite function for the server. If f is nil, it returns an error.
 func (s *Server) SetPreWrite(f func()) error {
-	if f != nil {
+	if f == nil {
 		return PreWriteNil
 	}
 	s.preWrite = f
