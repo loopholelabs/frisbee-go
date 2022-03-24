@@ -333,7 +333,9 @@ func TestAsyncWriteClose(t *testing.T) {
 	err = writerConn.conn.Close()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Millisecond * 50)
+	runtime.Gosched()
+	time.Sleep(defaultDeadline * 2)
+	runtime.Gosched()
 
 	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
@@ -384,6 +386,9 @@ func TestAsyncTimeout(t *testing.T) {
 	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
 
+	err = writerConn.Flush()
+	assert.NoError(t, err)
+
 	packet.Put(p)
 
 	err = writerConn.conn.Close()
@@ -393,6 +398,14 @@ func TestAsyncTimeout(t *testing.T) {
 	time.Sleep(defaultDeadline * 5)
 	runtime.Gosched()
 
+	p, err = readerConn.ReadPacket()
+	assert.NoError(t, err)
+	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(64), p.Metadata.Id)
+	assert.Equal(t, uint16(32), p.Metadata.Operation)
+	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
+	assert.Equal(t, 0, len(p.Content.B))
+
 	_, err = readerConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
 
@@ -400,6 +413,7 @@ func TestAsyncTimeout(t *testing.T) {
 	if err == nil {
 		runtime.Gosched()
 		time.Sleep(defaultDeadline * 10)
+		runtime.Gosched()
 	}
 	assert.Error(t, readerConn.Error())
 
