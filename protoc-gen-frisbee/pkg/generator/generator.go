@@ -17,10 +17,12 @@
 package generator
 
 import (
+	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
 	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/version"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
+	"text/template"
 )
 
 type Generator struct {
@@ -51,42 +53,46 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 		return nil, err
 	}
 
+	temp := template.Must(template.New("main").Funcs(template.FuncMap{
+		"CamelCase":         utils.CamelCaseFN,
+		"CamelCaseN":        utils.CamelCaseN,
+		"MakeIterable":      utils.MakeIterable,
+		"Counter":           utils.Counter,
+		"FirstLowerCase":    utils.FirstLowerCase,
+		"FirstLowerCaseN":   utils.FirstLowerCaseN,
+		"FindValue":         findValue,
+		"GetKind":           getKind,
+		"GetLUTEncoder":     getLUTEncoder,
+		"GetLUTDecoder":     getLUTDecoder,
+		"GetEncodingFields": getEncodingFields,
+		"GetDecodingFields": getDecodingFields,
+		"GetKindLUT":        getKindLUT,
+		"GetServerFields":   getServerFields,
+	}).ParseGlob("protoc-gen-frisbee/templates/*"))
+
 	for _, f := range plugin.Files {
 		if !f.Generate {
 			continue
 		}
 		genFile := plugin.NewGeneratedFile(fileName(f.GeneratedFilenamePrefix), f.GoImportPath)
-		writeComment(genFile, version.Version, f.Desc.Path())
-		if f.Desc.Package().Name() == "" {
-			writePackage(genFile, f.GoPackageName)
-		} else {
-			writePackage(genFile, protogen.GoPackageName(f.Desc.Package().Name()))
-		}
-		writeImports(genFile, requiredImports)
-		writeErrors(genFile)
 
-		for i := 0; i < f.Desc.Enums().Len(); i++ {
-			enum := f.Desc.Enums().Get(i)
-			writeEnums(genFile, string(enum.FullName()), enum.Values())
+		packageName := string(f.Desc.Package().Name())
+		if packageName == "" {
+			packageName = string(f.GoPackageName)
 		}
 
-		for i := 0; i < f.Desc.Messages().Len(); i++ {
-			message := f.Desc.Messages().Get(i)
-			message.Options().ProtoReflect()
-			for i := 0; i < message.Enums().Len(); i++ {
-				enum := message.Enums().Get(i)
-				writeEnums(genFile, string(enum.FullName()), enum.Values())
-			}
-			writeStructs(genFile, string(message.FullName()), message.Fields(), message.Messages())
+		err = temp.ExecuteTemplate(genFile, "base.go.txt", map[string]interface{}{
+			"pluginVersion": version.Version,
+			"sourcePath":    f.Desc.Path(),
+			"package":       f.GoPackageName,
+			"imports":       requiredImports,
+			"enums":         f.Desc.Enums(),
+			"messages":      f.Desc.Messages(),
+			"services":      f.Desc.Services(),
+		})
+		if err != nil {
+			return nil, err
 		}
-
-		for i := 0; i < f.Desc.Services().Len(); i++ {
-			service := f.Desc.Services().Get(i)
-			writeInterface(genFile, string(service.Name()), service.Methods())
-		}
-
-		writeServer(genFile, f.Desc.Services())
-		writeClient(genFile, f.Desc.Services())
 	}
 
 	return plugin.Response(), nil

@@ -1,0 +1,41 @@
+{{define "encode"}}
+func (x *{{ CamelCase .FullName }}) Encode (p *packet.Packet) {
+    if x == nil {
+        packet.Encoder(p).Nil()
+    } else if x.error != nil {
+        packet.Encoder(p).Error(x.error)
+    } else {
+        {{ $encoding := GetEncodingFields .Fields -}}
+        packet.Encoder(p).Bool(x.ignore){{ range $val := $encoding.Values -}}{{ $val -}}{{end -}}
+        {{ if $encoding.SliceFields -}}
+            {{template "encodeSlices" $encoding -}}
+        {{end -}}
+        {{ if $encoding.MessageFields -}}
+        {{template "encodeMessages" $encoding -}}
+        {{end -}}
+    }
+}
+{{end}}
+
+{{define "encodeSlices"}}
+    {{ range $field := .SliceFields -}}
+        {{ $encoder := GetLUTEncoder $field.Kind -}}
+        {{ if and (eq $encoder "") (eq $field.Kind 11) -}} {{/* protoreflect.MessageKind */ -}}
+        packet.Encoder(p).Slice(uint32(len(x.{{ CamelCaseN $field.Name }})), packet.AnyKind)
+        for _, v := range x.{{CamelCaseN $field.Name}} {
+            v.Encode(p)
+        }
+        {{else -}}
+        packet.Encoder(p).Slice(uint32(len(x.{{ CamelCaseN $field.Name }})), {{ GetKindLUT $field.Kind }})
+        for _, v := range x.{{ CamelCaseN $field.Name }} {
+            packet.Encoder(p){{$encoder}}(v)
+        }
+        {{end -}}
+    {{end -}}
+{{end}}
+
+{{define "encodeMessages"}}
+    {{ range $field := .MessageFields -}}
+        x.{{ CamelCaseN $field.Name }}.Encode(p)
+    {{end -}}
+{{end}}

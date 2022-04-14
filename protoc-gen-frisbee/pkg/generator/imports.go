@@ -16,10 +16,6 @@
 
 package generator
 
-const (
-	importOpenHeader = "import ("
-)
-
 var (
 	requiredImports = []string{
 		"github.com/loopholelabs/frisbee",
@@ -32,13 +28,3 @@ var (
 		"sync/atomic",
 	}
 )
-
-func writeImports(f File, imports []string) {
-	f.P()
-	f.P(importOpenHeader)
-	for _, im := range imports {
-		f.P("\t\"", im, "\"")
-	}
-	f.P(parenthesesClose)
-	f.P()
-}
