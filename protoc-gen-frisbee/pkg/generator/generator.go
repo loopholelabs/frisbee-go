@@ -53,21 +53,21 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 		return nil, err
 	}
 
-	temp := template.Must(template.New("main").Funcs(template.FuncMap{
-		"CamelCase":         utils.CamelCaseFN,
-		"CamelCaseN":        utils.CamelCaseN,
-		"MakeIterable":      utils.MakeIterable,
-		"Counter":           utils.Counter,
-		"FirstLowerCase":    utils.FirstLowerCase,
-		"FirstLowerCaseN":   utils.FirstLowerCaseN,
-		"FindValue":         findValue,
-		"GetKind":           getKind,
-		"GetLUTEncoder":     getLUTEncoder,
-		"GetLUTDecoder":     getLUTDecoder,
-		"GetEncodingFields": getEncodingFields,
-		"GetDecodingFields": getDecodingFields,
-		"GetKindLUT":        getKindLUT,
-		"GetServerFields":   getServerFields,
+	templ := template.Must(template.New("main").Funcs(template.FuncMap{
+		"CamelCase":          utils.CamelCaseFullName,
+		"CamelCaseName":      utils.CamelCaseName,
+		"MakeIterable":       utils.MakeIterable,
+		"Counter":            utils.Counter,
+		"FirstLowerCase":     utils.FirstLowerCase,
+		"FirstLowerCaseName": utils.FirstLowerCaseName,
+		"FindValue":          findValue,
+		"GetKind":            getKind,
+		"GetLUTEncoder":      getLUTEncoder,
+		"GetLUTDecoder":      getLUTDecoder,
+		"GetEncodingFields":  getEncodingFields,
+		"GetDecodingFields":  getDecodingFields,
+		"GetKindLUT":         getKindLUT,
+		"GetServerFields":    getServerFields,
 	}).ParseGlob("protoc-gen-frisbee/templates/*"))
 
 	for _, f := range plugin.Files {
@@ -81,7 +81,7 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 			packageName = string(f.GoPackageName)
 		}
 
-		err = temp.ExecuteTemplate(genFile, "base.go.txt", map[string]interface{}{
+		err = templ.ExecuteTemplate(genFile, "base.go.txt", map[string]interface{}{
 			"pluginVersion": version.Version,
 			"sourcePath":    f.Desc.Path(),
 			"package":       packageName,

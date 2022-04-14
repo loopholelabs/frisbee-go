@@ -24,13 +24,13 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
         {{ range $field := $decoding.Other -}}
             {{ $decoder := GetLUTDecoder $field.Kind -}}
             {{ if eq $field.Kind 12 -}} {{/* protoreflect.BytesKind */ -}}
-                x.{{ CamelCaseN $field.Name }}, err = d{{ $decoder }}(nil)
+                x.{{ CamelCaseName $field.Name }}, err = d{{ $decoder }}(nil)
             {{ else if eq $field.Kind 14 -}}  {{/* protoreflect.EnumKind */ -}}
-                var {{ CamelCaseN $field.Name }}Temp uint32
-                {{ CamelCaseN $field.Name }}Temp, err = d{{ $decoder }}()
-                x.{{ CamelCaseN $field.Name }} = {{ FindValue $field }}({{ CamelCaseN $field.Name }}Temp)
+                var {{ CamelCaseName $field.Name }}Temp uint32
+                {{ CamelCaseName $field.Name }}Temp, err = d{{ $decoder }}()
+                x.{{ CamelCaseName $field.Name }} = {{ FindValue $field }}({{ CamelCaseName $field.Name }}Temp)
             {{ else -}}
-                x.{{ CamelCaseN $field.Name }}, err = d{{ $decoder }}()
+                x.{{ CamelCaseName $field.Name }}, err = d{{ $decoder }}()
             {{end -}}
             if err != nil {
                 return err
@@ -46,15 +46,15 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
         if err != nil {
             return err
         }
-        if uint32(len(x.{{ CamelCaseN $field.Name }})) != sliceSize {
-            x.{{ CamelCaseN $field.Name }} = make({{ FindValue $field }}, sliceSize)
+        if uint32(len(x.{{ CamelCaseName $field.Name }})) != sliceSize {
+            x.{{ CamelCaseName $field.Name }} = make({{ FindValue $field }}, sliceSize)
         }
         for i := uint32(0); i < sliceSize; i++ {
             {{ $decoder := GetLUTDecoder $field.Kind -}}
             {{ if eq $field.Kind 11 -}} {{/* protoreflect.MessageKind */ -}}
-            err = x.{{ CamelCaseN $field.Name }}[i].decode(d)
+            err = x.{{ CamelCaseName $field.Name }}[i].decode(d)
             {{ else -}}
-            x.{{ CamelCaseN $field.Name }}[i], err = d{{ $decoder }}()
+            x.{{ CamelCaseName $field.Name }}[i], err = d{{ $decoder }}()
             {{end -}}
             if err != nil {
                 return err
@@ -67,21 +67,21 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
                 {{ $keyKind := GetKind $field.MapKey.Kind -}}
                 {{ $valKind := GetKind $field.MapValue.Kind -}}
 
-                {{ CamelCaseN $field.Name }}Size, err := d.Map({{ $keyKind }}, {{ $valKind }})
+                {{ CamelCaseName $field.Name }}Size, err := d.Map({{ $keyKind }}, {{ $valKind }})
                 if err != nil {
                 return err
                 }
-                x.{{ CamelCaseN $field.Name }} = New{{ CamelCase $field.FullName }}Map({{ CamelCaseN $field.Name }}Size)
-                err = x.{{ CamelCaseN $field.Name }}.decode(d, {{ CamelCaseN $field.Name }}Size)
+                x.{{ CamelCaseName $field.Name }} = New{{ CamelCase $field.FullName }}Map({{ CamelCaseName $field.Name }}Size)
+                err = x.{{ CamelCaseName $field.Name }}.decode(d, {{ CamelCaseName $field.Name }}Size)
                 if err != nil {
                 return err
                 }
                 }
             {{ else -}}
-                if x.{{ CamelCaseN $field.Name }} == nil {
-                x.{{ CamelCaseN $field.Name }} = New{{ CamelCase $field.Message.FullName }}()
+                if x.{{ CamelCaseName $field.Name }} == nil {
+                x.{{ CamelCaseName $field.Name }} = New{{ CamelCase $field.Message.FullName }}()
                 }
-                err = x.{{ CamelCaseN $field.Name }}.decode(d)
+                err = x.{{ CamelCaseName $field.Name }}.decode(d)
                 if err != nil {
                 return err
                 }

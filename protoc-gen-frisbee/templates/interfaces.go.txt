@@ -7,10 +7,10 @@
 
 
 {{define "interface"}}
-type {{ CamelCaseN .Name }} interface {
+type {{ CamelCaseName .Name }} interface {
     {{ range $i, $v := MakeIterable .Methods.Len -}}
     {{ $method := $.Methods.Get $i -}}
-    {{ CamelCaseN $method.Name }} (context.Context, *{{ CamelCase $method.Input.FullName }}) (*{{ CamelCase $method.Output.FullName }}, error)
+    {{ CamelCaseName $method.Name }} (context.Context, *{{ CamelCase $method.Input.FullName }}) (*{{ CamelCase $method.Output.FullName }}, error)
     {{ end -}}
 }
 {{end}}

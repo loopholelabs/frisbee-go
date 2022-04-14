@@ -71,11 +71,11 @@ func CamelCase(s string) string {
 	return string(t)
 }
 
-func CamelCaseFN(name protoreflect.FullName) string {
+func CamelCaseFullName(name protoreflect.FullName) string {
 	return CamelCase(string(name))
 }
 
-func CamelCaseN(name protoreflect.Name) string {
+func CamelCaseName(name protoreflect.Name) string {
 	return CamelCase(string(name))
 }
 
@@ -96,7 +96,7 @@ func FirstLowerCase(s string) string {
 	return string(unicode.ToLower(r)) + s[n:]
 }
 
-func FirstLowerCaseN(name protoreflect.Name) string {
+func FirstLowerCaseName(name protoreflect.Name) string {
 	return FirstLowerCase(string(name))
 }
 

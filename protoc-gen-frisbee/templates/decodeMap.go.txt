@@ -9,7 +9,7 @@ func (x {{CamelCase .FullName}}Map) decode(d *packet.Decoder, size uint32) error
     {{end -}}
     var v {{ FindValue .MapValue }}
     {{ if eq .MapValue.Kind 14 -}} {{/* protoreflect.EnumKind */ -}}
-    var {{ CamelCaseN .MapValue.Name }}Temp uint32
+    var {{ CamelCaseName .MapValue.Name }}Temp uint32
     {{end -}}
     var err error
     for i := uint32(0); i < size; i++ {
@@ -34,8 +34,8 @@ func (x {{CamelCase .FullName}}Map) decode(d *packet.Decoder, size uint32) error
         err = v.decode(d)
         {{else -}}
             {{ if eq .MapValue.Kind 14 -}} {{/* protoreflect.EnumKind */ -}}
-                {{CamelCaseN .MapValue.Name}}Temp, err = d{{$valDecoder}}()
-                v = {{ FindValue .MapValue }}({{ CamelCaseN .MapValue.Name }}Temp)
+                {{CamelCaseName .MapValue.Name}}Temp, err = d{{$valDecoder}}()
+                v = {{ FindValue .MapValue }}({{ CamelCaseName .MapValue.Name }}Temp)
             {{else -}}
                 v, err = d{{$valDecoder}}()
             {{end -}}

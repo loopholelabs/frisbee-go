@@ -36,12 +36,12 @@ type Server struct {
                 err := req.Decode(incoming)
                 if err == nil {
                     if req.ignore {
-                        {{ FirstLowerCaseN $service.Name }}.{{ CamelCaseN $method.Name }}(ctx, req)
+                        {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(ctx, req)
                     } else {
                         var res *{{ CamelCase $method.Output.FullName }}
                         outgoing = incoming
                         outgoing.Content.Reset()
-                        res, err = {{ FirstLowerCase (CamelCaseN $service.Name) }}.{{ CamelCaseN $method.Name }}(ctx, req)
+                        res, err = {{ FirstLowerCase (CamelCaseName $service.Name) }}.{{ CamelCaseName $method.Name }}(ctx, req)
                         if err != nil {
                             res.Error(outgoing, err)
                         } else {

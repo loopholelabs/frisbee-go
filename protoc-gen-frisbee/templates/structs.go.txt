@@ -26,7 +26,7 @@
         {{ range $i, $v := (MakeIterable $.Fields.Len) -}}
             {{ $field := $.Fields.Get $i -}}
             {{ $value := FindValue $field -}}
-            {{ CamelCaseN $field.Name }} {{ $value }}
+            {{ CamelCaseName $field.Name }} {{ $value }}
         {{end -}}
     }
 
@@ -43,7 +43,7 @@ func New{{ CamelCase .FullName }}() *{{ CamelCase .FullName }} {
         {{ range $i, $v := (MakeIterable .Fields.Len) -}}
             {{ $field := $.Fields.Get $i -}}
             {{ if and (eq $field.Kind 11) (ne $field.Cardinality 3) -}} {{/* protoreflect.MessageKind protoreflect.Repeated */ -}}
-                {{ CamelCaseN $field.Name }}: New{{ CamelCase $field.Message.FullName }}(),
+                {{ CamelCaseName $field.Name }}: New{{ CamelCase $field.Message.FullName }}(),
             {{end -}}
         {{end -}}
     }
