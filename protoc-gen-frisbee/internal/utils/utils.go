@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -70,6 +71,14 @@ func CamelCase(s string) string {
 	return string(t)
 }
 
+func CamelCaseFullName(name protoreflect.FullName) string {
+	return CamelCase(string(name))
+}
+
+func CamelCaseName(name protoreflect.Name) string {
+	return CamelCase(string(name))
+}
+
 func AppendString(inputs ...string) string {
 	builder := new(strings.Builder)
 	for _, s := range inputs {
@@ -85,4 +94,20 @@ func FirstLowerCase(s string) string {
 	}
 	r, n := utf8.DecodeRuneInString(s)
 	return string(unicode.ToLower(r)) + s[n:]
+}
+
+func FirstLowerCaseName(name protoreflect.Name) string {
+	return FirstLowerCase(string(name))
+}
+
+func MakeIterable(len int) []struct{} {
+	return make([]struct{}, len)
+}
+
+func Counter(initial int) func() int {
+	i := initial
+	return func() int {
+		i++
+		return i
+	}
 }

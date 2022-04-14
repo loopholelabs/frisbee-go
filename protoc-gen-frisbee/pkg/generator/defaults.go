@@ -17,24 +17,11 @@
 package generator
 
 const (
-	extension        = ".frisbee.go"
-	pointer          = "*"
-	tab              = "\t"
-	space            = " "
-	equal            = "="
-	comma            = ","
-	period           = "."
-	mapSuffix        = "Map"
-	parenthesesOpen  = "("
-	parenthesesClose = ")"
-	typeOpen         = "type "
-	typeClose        = "}"
-	slice            = "[]"
-	structOpen       = " struct {"
-	handlerSignature = "func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action)"
-	packetAnyKind    = "packet.AnyKind"
-)
-
-const (
-	operationOffset = 10
+	extension     = ".frisbee.go"
+	pointer       = "*"
+	space         = " "
+	comma         = ","
+	mapSuffix     = "Map"
+	slice         = "[]"
+	packetAnyKind = "packet.AnyKind"
 )

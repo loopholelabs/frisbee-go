@@ -18,14 +18,9 @@ package generator
 
 import (
 	"errors"
+	"fmt"
 	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	"strings"
-)
-
-const (
-	mapOpen  = "map["
-	mapClose = "]"
 )
 
 var (
@@ -146,38 +141,17 @@ func findValue(field protoreflect.FieldDescriptor) string {
 	}
 }
 
-func writeGetFunc(f File, name string, fields protoreflect.FieldDescriptors) {
-	f.P("func New", utils.CamelCase(name), "() *", utils.CamelCase(name), " {")
-	f.P(tab, "return &", utils.CamelCase(name), "{")
-	for i := 0; i < fields.Len(); i++ {
-		field := fields.Get(i)
-		if field.Kind() == protoreflect.MessageKind && field.Cardinality() != protoreflect.Repeated {
-			f.P(tab, tab, utils.CamelCase(string(field.Name())), ": New", utils.CamelCase(string(field.Message().FullName())), "(),")
-		}
-	}
-	f.P(tab, "}")
-	f.P("}")
-	f.P()
+type encodingFields struct {
+	MessageFields []protoreflect.FieldDescriptor
+	SliceFields   []protoreflect.FieldDescriptor
+	Values        []string
 }
 
-func writeError(f File, name string) {
-	f.P("func (x *", utils.CamelCase(name), ") Error(p *packet.Packet, err error) {")
-	f.P(tab, "packet.Encoder(p).Error(err)")
-	f.P("}")
-	f.P()
-}
-
-func writeEncode(f File, name string, fields protoreflect.FieldDescriptors) {
-	f.P("func (x *", utils.CamelCase(name), ") Encode(p *packet.Packet) {")
-	f.P(tab, "if x == nil {")
-	f.P(tab, tab, "packet.Encoder(p).Nil()")
-	f.P(tab, "} else if x.error != nil {")
-	f.P(tab, tab, "packet.Encoder(p).Error(x.error)")
-	f.P(tab, "} else {")
+func getEncodingFields(fields protoreflect.FieldDescriptors) encodingFields {
 	var messageFields []protoreflect.FieldDescriptor
 	var sliceFields []protoreflect.FieldDescriptor
-	builder := new(strings.Builder)
-	builder.WriteString(".Bool(x.ignore)")
+	var values []string
+
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
 		if field.Cardinality() == protoreflect.Repeated && !field.IsMap() {
@@ -191,213 +165,38 @@ func writeEncode(f File, name string, fields protoreflect.FieldDescriptors) {
 					panic(unknownKind)
 				}
 			} else {
-				builder.WriteString(encoder)
 				if field.Kind() == protoreflect.EnumKind {
-					builder.WriteString("(uint32")
-				}
-				builder.WriteString("(x.")
-				builder.WriteString(utils.CamelCase(string(field.Name())))
-				builder.WriteString(")")
-				if field.Kind() == protoreflect.EnumKind {
-					builder.WriteString(")")
+					values = append(values, fmt.Sprintf("%s(uint32(x.%s))", encoder, utils.CamelCase(string(field.Name()))))
+				} else {
+					values = append(values, fmt.Sprintf("%s(x.%s)", encoder, utils.CamelCase(string(field.Name()))))
 				}
 			}
 		}
 	}
-	f.P(tab, tab, "packet.Encoder(p)", builder.String())
-	writeEncodeSlices(f, sliceFields)
-	writeEncodeMessages(f, messageFields)
-	f.P(tab, "}")
-	f.P("}")
-	f.P()
-}
-
-func writeEncodeSlices(f File, sliceFields []protoreflect.FieldDescriptor) {
-	for _, field := range sliceFields {
-		if encoder, ok := encodeLUT[field.Kind()]; !ok {
-			switch field.Kind() {
-			case protoreflect.MessageKind:
-				f.P(tab, tab, "packet.Encoder(p).Slice(uint32(len(x.", utils.CamelCase(string(field.Name())), ")), ", packetAnyKind, ")")
-				f.P(tab, tab, "for _, v := range x.", utils.CamelCase(string(field.Name())), " {")
-				f.P(tab, tab, tab, "v.Encode(p)")
-			default:
-				panic(unknownKind)
-			}
-		} else {
-			f.P(tab, tab, "packet.Encoder(p).Slice(uint32(len(x.", utils.CamelCase(string(field.Name())), ")),", kindLUT[field.Kind()], ")")
-			f.P(tab, tab, "for _, v := range x.", utils.CamelCase(string(field.Name())), " {")
-			f.P(tab, tab, tab, "packet.Encoder(p)", encoder, "(v)")
-		}
-		f.P(tab, tab, "}")
+	return encodingFields{
+		MessageFields: messageFields,
+		SliceFields:   sliceFields,
+		Values:        values,
 	}
 }
 
-func writeEncodeMessages(f File, messageFields []protoreflect.FieldDescriptor) {
-	for _, field := range messageFields {
-		f.P(tab, tab, "x.", utils.CamelCase(string(field.Name())), ".Encode(p)")
-	}
+type decodingFields struct {
+	MessageFields []protoreflect.FieldDescriptor
+	SliceFields   []protoreflect.FieldDescriptor
+	Other         []protoreflect.FieldDescriptor
 }
 
-func writeEncodeMap(f File, field protoreflect.FieldDescriptor) {
-	f.P("func (x ", utils.CamelCase(string(field.FullName())), mapSuffix, ") Encode(p *packet.Packet) {")
-	f.P(tab, "if x == nil {")
-	f.P(tab, tab, "packet.Encoder(p).Nil()")
-	f.P(tab, "} else {")
-	var keyKind string
-	var valKind string
-	var ok bool
-	if keyKind, ok = kindLUT[field.MapKey().Kind()]; !ok {
-		switch field.MapKey().Kind() {
-		case protoreflect.MessageKind:
-			keyKind = packetAnyKind
-		default:
-			panic(unknownKind)
-		}
-	}
-
-	if valKind, ok = kindLUT[field.MapValue().Kind()]; !ok {
-		switch field.MapValue().Kind() {
-		case protoreflect.MessageKind:
-			valKind = packetAnyKind
-		default:
-			panic(unknownKind)
-		}
-	}
-
-	f.P(tab, tab, "packet.Encoder(p).Map(uint32(len(x)), ", keyKind, ", ", valKind, ")")
-	f.P(tab, tab, "for k, v := range x {")
-	if encoder, ok := encodeLUT[field.MapKey().Kind()]; !ok {
-		switch field.MapKey().Kind() {
-		case protoreflect.MessageKind:
-			f.P(tab, tab, tab, "k.Encode(p)")
-		default:
-			panic(unknownKind)
-		}
-	} else {
-		if field.MapKey().Kind() == protoreflect.EnumKind {
-			f.P(tab, tab, tab, "packet.Encoder(p)", encoder, "(uint32(k))")
-		} else {
-			f.P(tab, tab, tab, "packet.Encoder(p)", encoder, "(k)")
-		}
-	}
-
-	if encoder, ok := encodeLUT[field.MapValue().Kind()]; !ok {
-		switch field.MapValue().Kind() {
-		case protoreflect.MessageKind:
-			f.P(tab, tab, tab, "v.Encode(p)")
-		default:
-			panic(unknownKind)
-		}
-	} else {
-		if field.MapValue().Kind() == protoreflect.EnumKind {
-			f.P(tab, tab, tab, "packet.Encoder(p)", encoder, "(uint32(v))")
-		} else {
-			f.P(tab, tab, tab, "packet.Encoder(p)", encoder, "(v)")
-		}
-	}
-	f.P(tab, tab, "}")
-	f.P(tab, tab, tab, "")
-	f.P(tab, "}")
-	f.P("}")
-	f.P()
-}
-
-func writeDecodeMap(f File, field protoreflect.FieldDescriptor) {
-	f.P("func (x ", utils.CamelCase(string(field.FullName())), mapSuffix, ") decode(d *packet.Decoder, size uint32) error {")
-	f.P(tab, "if size == 0 {")
-	f.P(tab, tab, "return nil")
-	f.P(tab, "}")
-	f.P(tab, "var k ", findValue(field.MapKey()))
-	if field.MapKey().Kind() == protoreflect.EnumKind {
-		f.P(tab, tab, "var ", utils.CamelCase(string(field.MapKey().Name())), "Temp uint32")
-	}
-	f.P(tab, "var v ", findValue(field.MapValue()))
-	if field.MapValue().Kind() == protoreflect.EnumKind {
-		f.P(tab, tab, "var ", utils.CamelCase(string(field.MapValue().Name())), "Temp uint32")
-	}
-	f.P(tab, "var err error")
-	f.P(tab, "for i := uint32(0); i < size; i++ {")
-
-	if decoder, ok := decodeLUT[field.MapKey().Kind()]; !ok {
-		switch field.MapKey().Kind() {
-		case protoreflect.MessageKind:
-			f.P(tab, tab, "k = New", utils.CamelCase(string(field.MapKey().Message().FullName())), "()")
-			f.P(tab, tab, "err = k.decode(d)")
-		default:
-			panic(unknownKind)
-		}
-	} else {
-		if field.MapKey().Kind() == protoreflect.EnumKind {
-			f.P(tab, tab, utils.CamelCase(string(field.MapKey().Name())), "Temp, err = d", decoder, "()")
-			f.P(tab, tab, "k = ", findValue(field.MapKey()), "(", utils.CamelCase(string(field.MapKey().Name())), "Temp)")
-		} else {
-			f.P(tab, tab, "k, err = d", decoder, "()")
-		}
-	}
-
-	f.P(tab, tab, "if err != nil {")
-	f.P(tab, tab, tab, "return err")
-	f.P(tab, tab, "}")
-
-	if decoder, ok := decodeLUT[field.MapValue().Kind()]; !ok {
-		switch field.MapValue().Kind() {
-		case protoreflect.MessageKind:
-			f.P(tab, tab, "v = New", utils.CamelCase(string(field.MapValue().Message().FullName())), "()")
-			f.P(tab, tab, "err = v.decode(d)")
-		default:
-			panic(unknownKind)
-		}
-	} else {
-		if field.MapValue().Kind() == protoreflect.EnumKind {
-			f.P(tab, tab, utils.CamelCase(string(field.MapValue().Name())), "Temp, err = d", decoder, "()")
-			f.P(tab, tab, "v = ", findValue(field.MapValue()), "(", utils.CamelCase(string(field.MapValue().Name())), "Temp)")
-		} else {
-			f.P(tab, tab, "v, err = d", decoder, "()")
-		}
-	}
-
-	f.P(tab, tab, "if err != nil {")
-	f.P(tab, tab, tab, "return err")
-	f.P(tab, tab, "}")
-
-	f.P(tab, tab, "x[k] = v")
-	f.P(tab, "}")
-	f.P(tab, "return nil")
-	f.P("}")
-	f.P()
-}
-
-func writeDecode(f File, name string) {
-	f.P("func (x *", utils.CamelCase(name), ") Decode(p *packet.Packet) error {")
-	f.P(tab, "if x == nil {")
-	f.P(tab, tab, "return NilDecode")
-	f.P(tab, "}")
-	f.P(tab, "d := packet.GetDecoder(p)")
-	f.P(tab, "return x.decode(d)")
-	f.P("}")
-	f.P()
-}
-
-func writeInternalDecode(f File, name string, fields protoreflect.FieldDescriptors) {
-	f.P("func (x *", utils.CamelCase(name), ") decode(d *packet.Decoder) error {")
-	f.P(tab, "if d.Nil() {")
-	f.P(tab, tab, "return nil")
-	f.P(tab, "}")
-	f.P(tab, "var err error")
-	f.P(tab, "x.error, err = d.Error()")
-	f.P(tab, "if err != nil {")
-	f.P(tab, tab, "x.ignore, err = d.Bool()")
-	f.P(tab, tab, "if err != nil {")
-	f.P(tab, tab, tab, "return err")
-	f.P(tab, tab, "}")
+func getDecodingFields(fields protoreflect.FieldDescriptors) decodingFields {
 	var messageFields []protoreflect.FieldDescriptor
 	var sliceFields []protoreflect.FieldDescriptor
+	var other []protoreflect.FieldDescriptor
+
 	for i := 0; i < fields.Len(); i++ {
 		field := fields.Get(i)
 		if field.Cardinality() == protoreflect.Repeated && !field.IsMap() {
 			sliceFields = append(sliceFields, field)
 		} else {
-			if decoder, ok := decodeLUT[field.Kind()]; !ok {
+			if _, ok := decodeLUT[field.Kind()]; !ok {
 				switch field.Kind() {
 				case protoreflect.MessageKind:
 					messageFields = append(messageFields, field)
@@ -405,150 +204,40 @@ func writeInternalDecode(f File, name string, fields protoreflect.FieldDescripto
 					panic(unknownKind)
 				}
 			} else {
-				if field.Kind() == protoreflect.BytesKind {
-					decoder += "(nil)"
-				} else {
-					decoder += "()"
-				}
-				if field.Kind() == protoreflect.EnumKind {
-					f.P(tab, tab, "var ", utils.CamelCase(string(field.Name())), "Temp uint32")
-					f.P(tab, tab, utils.CamelCase(string(field.Name())), "Temp, err = d", decoder)
-					f.P(tab, tab, "x.", utils.CamelCase(string(field.Name())), " = ", findValue(field), "(", utils.CamelCase(string(field.Name())), "Temp)")
-				} else {
-					f.P(tab, tab, "x.", utils.CamelCase(string(field.Name())), ", err = d", decoder)
-				}
+				other = append(other, field)
+			}
+		}
+	}
 
-				f.P(tab, tab, "if err != nil {")
-				f.P(tab, tab, tab, "return err")
-				f.P(tab, tab, "}")
-			}
-		}
+	return decodingFields{
+		MessageFields: messageFields,
+		SliceFields:   sliceFields,
+		Other:         other,
 	}
-	if len(sliceFields) > 0 {
-		f.P(tab, tab, "var sliceSize uint32")
-	}
-	for _, field := range sliceFields {
-		var kind string
-		var ok bool
-		if kind, ok = kindLUT[field.Kind()]; !ok {
-			switch field.Kind() {
-			case protoreflect.MessageKind:
-				kind = packetAnyKind
-			default:
-				panic(unknownKind)
-			}
-		}
-		f.P(tab, tab, "sliceSize, err = d.Slice(", kind, ")")
-		f.P(tab, tab, "if err != nil {")
-		f.P(tab, tab, tab, "return err")
-		f.P(tab, tab, "}")
-		f.P(tab, tab, "if uint32(len(x.", utils.CamelCase(string(field.Name())), ")) != sliceSize {")
-		f.P(tab, tab, tab, "x.", utils.CamelCase(string(field.Name())), " = make(", findValue(field), ", sliceSize)")
-		f.P(tab, tab, "}")
-		f.P(tab, tab, "for i := uint32(0); i < sliceSize; i++ {")
-		if decoder, ok := decodeLUT[field.Kind()]; !ok {
-			switch field.Kind() {
-			case protoreflect.MessageKind:
-				f.P(tab, tab, tab, "err = x.", utils.CamelCase(string(field.Name())), "[i].decode(d)")
-			default:
-				panic(unknownKind)
-			}
-		} else {
-			f.P(tab, tab, tab, "x.", utils.CamelCase(string(field.Name())), "[i], err = d", decoder, "()")
-		}
-		f.P(tab, tab, tab, "if err != nil {")
-		f.P(tab, tab, tab, tab, "return err")
-		f.P(tab, tab, tab, "}")
-		f.P(tab, tab, "}")
-	}
-	for _, field := range messageFields {
-		if field.IsMap() {
-			f.P(tab, tab, "if !d.Nil() {")
-			var keyKind string
-			var valKind string
-			var ok bool
-			if keyKind, ok = kindLUT[field.MapKey().Kind()]; !ok {
-				switch field.Kind() {
-				case protoreflect.MessageKind:
-					keyKind = packetAnyKind
-				default:
-					panic(unknownKind)
-				}
-			}
-
-			if valKind, ok = kindLUT[field.MapValue().Kind()]; !ok {
-				switch field.Kind() {
-				case protoreflect.MessageKind:
-					valKind = packetAnyKind
-				default:
-					panic(unknownKind)
-				}
-			}
-			f.P(tab, tab, utils.CamelCase(string(field.Name())), "Size, err := d.Map(", keyKind, ", ", valKind, ")")
-			f.P(tab, tab, "if err != nil {")
-			f.P(tab, tab, tab, "return err")
-			f.P(tab, tab, "}")
-			f.P(tab, tab, "x.", utils.CamelCase(string(field.Name())), " = New", utils.CamelCase(string(field.FullName())), mapSuffix, "(", utils.CamelCase(string(field.Name())), "Size)")
-			f.P(tab, tab, "err = x.", utils.CamelCase(string(field.Name())), ".decode(d, ", utils.CamelCase(string(field.Name())), "Size)")
-			f.P(tab, tab, "if err != nil {")
-			f.P(tab, tab, tab, "return err")
-			f.P(tab, tab, "}")
-			f.P(tab, "}")
-		} else {
-			f.P(tab, tab, "if x.", utils.CamelCase(string(field.Name())), " == nil {")
-			f.P(tab, tab, tab, "x.", utils.CamelCase(string(field.Name())), " = New", utils.CamelCase(string(field.Message().FullName())), "()")
-			f.P(tab, tab, "}")
-			f.P(tab, tab, "err = x.", utils.CamelCase(string(field.Name())), ".decode(d)")
-			f.P(tab, tab, "if err != nil {")
-			f.P(tab, tab, tab, "return err")
-			f.P(tab, tab, "}")
-		}
-	}
-	f.P(tab, "}")
-	f.P(tab, "d.Return()")
-	f.P(tab, "return nil")
-	f.P("}")
-	f.P()
 }
 
-func writeStructs(f File, name string, fields protoreflect.FieldDescriptors, messages protoreflect.MessageDescriptors) {
-	for i := 0; i < messages.Len(); i++ {
-		message := messages.Get(i)
-		if !message.IsMapEntry() {
-			writeStructs(f, string(message.FullName()), message.Fields(), message.Messages())
+func getKind(kind protoreflect.Kind) string {
+	var outKind string
+	var ok bool
+	if outKind, ok = kindLUT[kind]; !ok {
+		switch kind {
+		case protoreflect.MessageKind:
+			outKind = packetAnyKind
+		default:
+			panic(unknownKind)
 		}
 	}
-	for i := 0; i < fields.Len(); i++ {
-		field := fields.Get(i)
-		if field.IsMap() {
-			mapKeyValue := findValue(field.MapKey())
-			mapValueValue := findValue(field.MapValue())
-			f.P(typeOpen, utils.CamelCase(string(field.FullName())), mapSuffix, space, mapOpen, mapKeyValue, mapClose, mapValueValue)
-			f.P()
-			f.P("func New", utils.CamelCase(string(field.FullName())), mapSuffix, "(size uint32) ", mapOpen, mapKeyValue, mapClose, mapValueValue, " {")
-			f.P(tab, "return make(", mapOpen, mapKeyValue, mapClose, mapValueValue, ", size)")
-			f.P("}")
-			f.P()
-			writeEncodeMap(f, field)
-			writeDecodeMap(f, field)
-		}
-	}
-	f.P(typeOpen, utils.CamelCase(name), structOpen)
-	f.P(tab, "error error")
-	f.P(tab, "ignore bool")
-	f.P()
+	return outKind
+}
 
-	for i := 0; i < fields.Len(); i++ {
-		field := fields.Get(i)
-		value := findValue(field)
-		f.P(tab, utils.CamelCase(string(field.Name())), space, value)
-	}
-	f.P(typeClose)
-	f.P()
+func getLUTEncoder(kind protoreflect.Kind) string {
+	return encodeLUT[kind]
+}
 
-	writeGetFunc(f, name, fields)
-	writeError(f, name)
-	writeEncode(f, name, fields)
-	writeDecode(f, name)
-	writeInternalDecode(f, name, fields)
+func getLUTDecoder(kind protoreflect.Kind) string {
+	return decodeLUT[kind]
+}
+
+func getKindLUT(kind protoreflect.Kind) string {
+	return kindLUT[kind]
 }
