@@ -84,7 +84,7 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 		err = temp.ExecuteTemplate(genFile, "base.go.txt", map[string]interface{}{
 			"pluginVersion": version.Version,
 			"sourcePath":    f.Desc.Path(),
-			"package":       f.GoPackageName,
+			"package":       packageName,
 			"imports":       requiredImports,
 			"enums":         f.Desc.Enums(),
 			"messages":      f.Desc.Messages(),
