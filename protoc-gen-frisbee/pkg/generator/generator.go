@@ -19,6 +19,7 @@ package generator
 import (
 	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
 	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/version"
+	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/templates"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
@@ -27,6 +28,27 @@ import (
 
 type Generator struct {
 	options *protogen.Options
+}
+
+var templ *template.Template
+
+func init() {
+	templ = template.Must(template.New("main").Funcs(template.FuncMap{
+		"CamelCase":          utils.CamelCaseFullName,
+		"CamelCaseName":      utils.CamelCaseName,
+		"MakeIterable":       utils.MakeIterable,
+		"Counter":            utils.Counter,
+		"FirstLowerCase":     utils.FirstLowerCase,
+		"FirstLowerCaseName": utils.FirstLowerCaseName,
+		"FindValue":          findValue,
+		"GetKind":            getKind,
+		"GetLUTEncoder":      getLUTEncoder,
+		"GetLUTDecoder":      getLUTDecoder,
+		"GetEncodingFields":  getEncodingFields,
+		"GetDecodingFields":  getDecodingFields,
+		"GetKindLUT":         getKindLUT,
+		"GetServerFields":    getServerFields,
+	}).ParseFS(templates.FS, "*"))
 }
 
 func New() *Generator {
@@ -52,23 +74,6 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 	if err != nil {
 		return nil, err
 	}
-
-	templ := template.Must(template.New("main").Funcs(template.FuncMap{
-		"CamelCase":          utils.CamelCaseFullName,
-		"CamelCaseName":      utils.CamelCaseName,
-		"MakeIterable":       utils.MakeIterable,
-		"Counter":            utils.Counter,
-		"FirstLowerCase":     utils.FirstLowerCase,
-		"FirstLowerCaseName": utils.FirstLowerCaseName,
-		"FindValue":          findValue,
-		"GetKind":            getKind,
-		"GetLUTEncoder":      getLUTEncoder,
-		"GetLUTDecoder":      getLUTDecoder,
-		"GetEncodingFields":  getEncodingFields,
-		"GetDecodingFields":  getDecodingFields,
-		"GetKindLUT":         getKindLUT,
-		"GetServerFields":    getServerFields,
-	}).ParseGlob("protoc-gen-frisbee/templates/*"))
 
 	for _, f := range plugin.Files {
 		if !f.Generate {
