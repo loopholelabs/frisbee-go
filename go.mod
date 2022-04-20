@@ -1,6 +1,6 @@
 module github.com/loopholelabs/frisbee
 
-go 1.15
+go 1.16
 
 require (
 	github.com/loopholelabs/testing v0.2.3
