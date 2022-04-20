@@ -7,6 +7,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.2] - 2022-04-20 (Beta)
+
+## Changes
+
+- Refactored the RPC Generator to use the `text/template`
+  package ([#90](https://github.com/loopholelabs/frisbee/pull/90))
+- Updated `pkg/packet.Decoder` to require only a `[]byte` to create a new decoder, instead of
+  a `*packet.Packet` ([#92](https://github.com/loopholelabs/frisbee/pull/92))
+- Updated Trunk Linter to v0.10.0-beta ([#92](https://github.com/loopholelabs/frisbee/pull/92))
+
 ## [v0.4.1] - 2022-03-24 (Beta)
 
 ## Changes
@@ -209,16 +219,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.1...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.2...HEAD
+
+[v0.4.2]: https://github.com/loopholelabs/frisbee/compare/v0.4.1...v0.4.2
+
 [v0.4.1]: https://github.com/loopholelabs/frisbee/compare/v0.4.0...v0.4.1
+
 [v0.4.0]: https://github.com/loopholelabs/frisbee/compare/v0.3.2...v0.4.0
+
 [v0.3.2]: https://github.com/loopholelabs/frisbee/compare/v0.3.1...v0.3.2
+
 [v0.3.1]: https://github.com/loopholelabs/frisbee/compare/v0.3.0...v0.3.1
+
 [v0.3.0]: https://github.com/loopholelabs/frisbee/compare/v0.2.4...v0.3.0
+
 [v0.2.4]: https://github.com/loopholelabs/frisbee/compare/v0.2.3...v0.2.4
+
 [v0.2.3]: https://github.com/loopholelabs/frisbee/compare/v0.2.2...v0.2.3
+
 [v0.2.2]: https://github.com/loopholelabs/frisbee/compare/v0.2.1...v0.2.2
+
 [v0.2.1]: https://github.com/loopholelabs/frisbee/compare/v0.2.0...v0.2.1
+
 [v0.2.0]: https://github.com/loopholelabs/frisbee/compare/v0.1.6...v0.2.0
 [v0.1.6]: https://github.com/loopholelabs/frisbee/compare/v0.1.5...v0.1.6
 [v0.1.5]: https://github.com/loopholelabs/frisbee/compare/v0.1.4...v0.1.5
