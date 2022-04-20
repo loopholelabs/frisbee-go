@@ -28,7 +28,7 @@ func TestDecoderNil(t *testing.T) {
 	p := Get()
 	Encoder(p).Nil()
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value := d.Nil()
 	assert.True(t, value)
 
@@ -40,7 +40,7 @@ func TestDecoderNil(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Nil()
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value = d.Nil()
 		d.Return()
 		p.Content.Reset()
@@ -64,7 +64,7 @@ func TestDecoderMap(t *testing.T) {
 		e.String(k).Uint32(v)
 	}
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	size, err := d.Map(StringKind, Uint32Kind)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(len(m)), size)
@@ -93,7 +93,7 @@ func TestDecoderMap(t *testing.T) {
 		for k, v = range m {
 			e.String(k).Uint32(v)
 		}
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		size, err = d.Map(StringKind, Uint32Kind)
 		for i := uint32(0); i < size; i++ {
 			_, _ = d.String()
@@ -118,7 +118,7 @@ func TestDecoderSlice(t *testing.T) {
 		e.String(v)
 	}
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	size, err := d.Slice(StringKind)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(len(m)), size)
@@ -143,7 +143,7 @@ func TestDecoderSlice(t *testing.T) {
 		for _, v := range m {
 			e.String(v)
 		}
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		size, err = d.Slice(StringKind)
 		for i := uint32(0); i < size; i++ {
 			_, _ = d.String()
@@ -164,7 +164,7 @@ func TestDecoderBytes(t *testing.T) {
 
 	Encoder(p).Bytes(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Bytes(nil)
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -177,7 +177,7 @@ func TestDecoderBytes(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Bytes(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Bytes(value)
 		d.Return()
 		p.Content.Reset()
@@ -195,7 +195,7 @@ func TestDecoderString(t *testing.T) {
 
 	Encoder(p).String(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.String()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -208,7 +208,7 @@ func TestDecoderString(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).String(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.String()
 		d.Return()
 		p.Content.Reset()
@@ -226,7 +226,7 @@ func TestDecoderError(t *testing.T) {
 
 	Encoder(p).Error(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Error()
 	assert.NoError(t, err)
 	assert.ErrorIs(t, value, v)
@@ -239,7 +239,7 @@ func TestDecoderError(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Error(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Error()
 		d.Return()
 		p.Content.Reset()
@@ -255,7 +255,7 @@ func TestDecoderBool(t *testing.T) {
 	p := Get()
 	Encoder(p).Bool(true)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Bool()
 	assert.NoError(t, err)
 	assert.True(t, value)
@@ -268,7 +268,7 @@ func TestDecoderBool(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Bool(true)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Bool()
 		d.Return()
 		p.Content.Reset()
@@ -286,7 +286,7 @@ func TestDecoderUint8(t *testing.T) {
 
 	Encoder(p).Uint8(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Uint8()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -299,7 +299,7 @@ func TestDecoderUint8(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Uint8(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Uint8()
 		d.Return()
 		p.Content.Reset()
@@ -317,7 +317,7 @@ func TestDecoderUint16(t *testing.T) {
 
 	Encoder(p).Uint16(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Uint16()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -330,7 +330,7 @@ func TestDecoderUint16(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Uint16(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Uint16()
 		d.Return()
 		p.Content.Reset()
@@ -348,7 +348,7 @@ func TestDecoderUint32(t *testing.T) {
 
 	Encoder(p).Uint32(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Uint32()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -361,7 +361,7 @@ func TestDecoderUint32(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Uint32(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Uint32()
 		d.Return()
 		p.Content.Reset()
@@ -379,7 +379,7 @@ func TestDecoderUint64(t *testing.T) {
 
 	Encoder(p).Uint64(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Uint64()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -392,7 +392,7 @@ func TestDecoderUint64(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Uint64(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Uint64()
 		d.Return()
 		p.Content.Reset()
@@ -410,7 +410,7 @@ func TestDecoderInt32(t *testing.T) {
 
 	Encoder(p).Int32(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Int32()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -423,7 +423,7 @@ func TestDecoderInt32(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Int32(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Int32()
 		d.Return()
 		p.Content.Reset()
@@ -441,7 +441,7 @@ func TestDecoderInt64(t *testing.T) {
 
 	Encoder(p).Int64(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Int64()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -454,7 +454,7 @@ func TestDecoderInt64(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Int64(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Int64()
 		d.Return()
 		p.Content.Reset()
@@ -472,7 +472,7 @@ func TestDecoderFloat32(t *testing.T) {
 
 	Encoder(p).Float32(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Float32()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -485,7 +485,7 @@ func TestDecoderFloat32(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Float32(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Float32()
 		d.Return()
 		p.Content.Reset()
@@ -503,7 +503,7 @@ func TestDecoderFloat64(t *testing.T) {
 
 	Encoder(p).Float64(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	value, err := d.Float64()
 	assert.NoError(t, err)
 	assert.Equal(t, v, value)
@@ -516,7 +516,7 @@ func TestDecoderFloat64(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Float64(v)
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		value, err = d.Float64()
 		d.Return()
 		p.Content.Reset()
