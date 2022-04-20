@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.3] - 2022-04-20 (Beta)
+
 ## Fixes
 
 - Version [v0.4.2][v0.4.2] did not embed the templates for RPC generation into frisbee, leading to runtime panics when
