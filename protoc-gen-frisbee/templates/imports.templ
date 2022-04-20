@@ -1,0 +1,7 @@
+{{define "imports"}}
+import (
+{{range $im := .imports -}}
+    "{{$im}}"
+{{end -}}
+)
+{{end}}
