@@ -1,6 +1,6 @@
 version: 0.1
 cli:
-  version: 0.8.1-beta
+  version: 0.10.0-beta
 lint:
   enabled:
     - gitleaks@7.6.1
