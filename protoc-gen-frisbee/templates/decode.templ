@@ -3,7 +3,7 @@ func (x *{{ CamelCase .FullName }}) Decode (p *packet.Packet) error {
     if x == nil {
         return NilDecode
     }
-    d := packet.GetDecoder(p)
+    d := packet.GetDecoder(p.Content.B)
     return x.decode(d)
 }
 {{end}}

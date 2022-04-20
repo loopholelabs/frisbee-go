@@ -23,35 +23,31 @@ import (
 var decoderPool sync.Pool
 
 type Decoder struct {
-	p *Packet
 	b []byte
 }
 
-func GetDecoder(p *Packet) (d *Decoder) {
+func GetDecoder(b []byte) (d *Decoder) {
 	v := decoderPool.Get()
 	if v == nil {
 		d = &Decoder{
-			p: p,
-			b: p.Content.B,
+			b: b,
 		}
 	} else {
 		d = v.(*Decoder)
-		d.p = p
-		d.b = p.Content.B
+		d.b = b
 	}
 	return
 }
 
-func Return(d *Decoder) {
+func ReturnDecoder(d *Decoder) {
 	if d != nil {
-		d.p = nil
 		d.b = nil
 		decoderPool.Put(d)
 	}
 }
 
 func (d *Decoder) Return() {
-	Return(d)
+	ReturnDecoder(d)
 }
 
 func (d *Decoder) Nil() (value bool) {

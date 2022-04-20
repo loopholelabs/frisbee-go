@@ -302,7 +302,7 @@ func TestCompleteChain(t *testing.T) {
 	val := new(testStruct)
 	var err error
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 
 	val.err, err = d.Error()
 	assert.NoError(t, err)
@@ -391,7 +391,7 @@ func TestCompleteChain(t *testing.T) {
 	p.Content.Reset()
 	n := testing.AllocsPerRun(100, func() {
 		Encoder(p).Error(test.err).String(test.test).Bytes(test.b).Uint8(test.num1).Uint16(test.num2).Uint32(test.num3).Uint64(test.num4).Bool(test.truth).Nil()
-		d = GetDecoder(p)
+		d = GetDecoder(p.Content.B)
 		val.err, err = d.Error()
 		val.test, err = d.String()
 		val.b, err = d.Bytes(val.b)
@@ -413,7 +413,7 @@ func TestNilSlice(t *testing.T) {
 	p := Get()
 	Encoder(p).Slice(uint32(len(s)), StringKind)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	j, err := d.Slice(StringKind)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(len(s)), j)
@@ -431,7 +431,7 @@ func TestError(t *testing.T) {
 	p := Get()
 	Encoder(p).Error(v)
 
-	d := GetDecoder(p)
+	d := GetDecoder(p.Content.B)
 	_, err := d.String()
 	assert.ErrorIs(t, err, InvalidString)
 
