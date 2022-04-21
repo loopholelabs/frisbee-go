@@ -7,9 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.4] - 2022-04-21 (Beta)
+
 ## Changes
 
-- Generated RPC Code for decoding objects no longer relies on the `*packet.Packet` structure, and instead works with `[]byte` slices directly
+- Generated RPC Code for decoding objects no longer relies on the `*packet.Packet` structure, and instead works
+  with `[]byte` slices directly
+- Unit test CI actions now run in parallel
+- Benchmark CI actions now run in parallel
+- Buf Build Dockerfile updated to use `v0.4.4`
 
 ## [v0.4.3] - 2022-04-20 (Beta)
 
@@ -231,16 +237,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.3...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.4...HEAD
+
+[v0.4.4]: https://github.com/loopholelabs/frisbee/compare/v0.4.3...v0.4.4
+
 [v0.4.3]: https://github.com/loopholelabs/frisbee/compare/v0.4.2...v0.4.3
+
 [v0.4.2]: https://github.com/loopholelabs/frisbee/compare/v0.4.1...v0.4.2
+
 [v0.4.1]: https://github.com/loopholelabs/frisbee/compare/v0.4.0...v0.4.1
+
 [v0.4.0]: https://github.com/loopholelabs/frisbee/compare/v0.3.2...v0.4.0
+
 [v0.3.2]: https://github.com/loopholelabs/frisbee/compare/v0.3.1...v0.3.2
+
 [v0.3.1]: https://github.com/loopholelabs/frisbee/compare/v0.3.0...v0.3.1
+
 [v0.3.0]: https://github.com/loopholelabs/frisbee/compare/v0.2.4...v0.3.0
+
 [v0.2.4]: https://github.com/loopholelabs/frisbee/compare/v0.2.3...v0.2.4
+
 [v0.2.3]: https://github.com/loopholelabs/frisbee/compare/v0.2.2...v0.2.3
+
 [v0.2.2]: https://github.com/loopholelabs/frisbee/compare/v0.2.1...v0.2.2
 [v0.2.1]: https://github.com/loopholelabs/frisbee/compare/v0.2.0...v0.2.1
 [v0.2.0]: https://github.com/loopholelabs/frisbee/compare/v0.1.6...v0.2.0
