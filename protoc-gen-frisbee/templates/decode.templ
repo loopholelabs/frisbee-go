@@ -1,9 +1,9 @@
 {{define "decode"}}
-func (x *{{ CamelCase .FullName }}) Decode (p *packet.Packet) error {
+func (x *{{ CamelCase .FullName }}) Decode (b []byte) error {
     if x == nil {
         return NilDecode
     }
-    d := packet.GetDecoder(p.Content.B)
+    d := packet.GetDecoder(b)
     return x.decode(d)
 }
 {{end}}
