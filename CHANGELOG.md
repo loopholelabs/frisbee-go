@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Changes
+
+- Generated RPC Code for decoding objects no longer relies on the `*packet.Packet` structure, and instead works with `[]byte` slices directly
+
 ## [v0.4.3] - 2022-04-20 (Beta)
 
 ## Fixes

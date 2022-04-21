@@ -33,7 +33,7 @@ type Server struct {
             {{ $count := call $counter -}}
             table[{{ $count }}] = func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
                 req := New{{ CamelCase $method.Input.FullName  }}()
-                err := req.Decode(incoming)
+                err := req.Decode(incoming.Content.B)
                 if err == nil {
                     if req.ignore {
                         {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(ctx, req)
