@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Fixes
+
+- Fixing issue where packet.Decoder would return the decoder back to the pool before decoding was complete (Issue #102)
+
+## Changes
+
+- Updating Trunk Linter to `v0.10.1-beta`
+
 ## [v0.4.4] - 2022-04-21 (Beta)
 
 ## Changes

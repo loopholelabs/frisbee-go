@@ -4,6 +4,7 @@ func (x *{{ CamelCase .FullName }}) Decode (b []byte) error {
         return NilDecode
     }
     d := packet.GetDecoder(b)
+    defer d.Return()
     return x.decode(d)
 }
 {{end}}
@@ -88,7 +89,6 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
             {{end -}}
         {{end -}}
     }
-    d.Return()
     return nil
 }
 {{end}}
