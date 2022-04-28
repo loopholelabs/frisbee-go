@@ -53,6 +53,9 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
         for i := uint32(0); i < sliceSize; i++ {
             {{ $decoder := GetLUTDecoder $field.Kind -}}
             {{ if eq $field.Kind 11 -}} {{/* protoreflect.MessageKind */ -}}
+            if x.{{ CamelCaseName $field.Name }}[i] == nil {
+                x.{{ CamelCaseName $field.Name }}[i] = New{{ CamelCase $field.Message.FullName }}()
+            }
             err = x.{{ CamelCaseName $field.Name }}[i].decode(d)
             {{ else -}}
             x.{{ CamelCaseName $field.Name }}[i], err = d{{ $decoder }}()
