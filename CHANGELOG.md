@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.4.6] - 2022-04-28 (Beta)
+
 ## Fixes
 
 - Fixing issue where generated `decode` functions for slices would not allocate the proper memory before decoding the slice values (Issue #108)
@@ -255,7 +257,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.5...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.6...HEAD
+[v0.4.6]: https://github.com/loopholelabs/frisbee/compare/v0.4.5...v0.4.6
 [v0.4.5]: https://github.com/loopholelabs/frisbee/compare/v0.4.4...v0.4.5
 [v0.4.4]: https://github.com/loopholelabs/frisbee/compare/v0.4.3...v0.4.4
 [v0.4.3]: https://github.com/loopholelabs/frisbee/compare/v0.4.2...v0.4.3
