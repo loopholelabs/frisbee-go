@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Fixes
+
+- Fixing issue where generated `decode` functions for slices would not allocate the proper memory before decoding the slice values (Issue #108)
+
 ## [v0.4.5] - 2022-04-22 (Beta)
 
 ## Fixes
