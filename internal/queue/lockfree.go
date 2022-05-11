@@ -14,30 +14,32 @@
 package queue
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/packet"
 	"runtime"
 	"sync/atomic"
-	"unsafe"
 )
+
+type Pointer[T any] interface {
+	*T
+}
 
 // node is a struct that keeps track of its own position as well as a piece of data
 // stored as an unsafe.Pointer. Normally we would store the pointer to a packet.Packet
 // directly, however benchmarking shows performance improvements with unsafe.Pointer instead
-type node struct {
+type node[T any, P Pointer[T]] struct {
 	_padding0 [8]uint64 //nolint:structcheck,unused
 	position  uint64
 	_padding1 [8]uint64 //nolint:structcheck,unused
-	data      unsafe.Pointer
+	data      P
 }
 
 // nodes is a struct type containing a slice of node pointers
-type nodes []*node
+type nodes[T any, P Pointer[T]] []*node[T, P]
 
 // LockFree is the struct used to store a blocking or non-blocking FIFO queue of type *packet.Packet
 //
 // In it's non-blocking form it acts as a ringbuffer, overwriting old data when new data arrives. In its blocking
 // form it waits for a space in the queue to open up before it adds the item to the LockFree.
-type LockFree struct {
+type LockFree[T any, P Pointer[T]] struct {
 	_padding0 [8]uint64 //nolint:structcheck,unused
 	head      uint64
 	_padding1 [8]uint64 //nolint:structcheck,unused
@@ -47,33 +49,29 @@ type LockFree struct {
 	_padding3 [8]uint64 //nolint:structcheck,unused
 	closed    uint64
 	_padding4 [8]uint64 //nolint:structcheck,unused
-	nodes     nodes
+	nodes     []*node[T, P]
 	_padding5 [8]uint64 //nolint:structcheck,unused
 	overflow  func() (uint64, error)
 }
 
 // NewLockFree creates a new LockFree with blocking or non-blocking behavior
-func NewLockFree(size uint64, blocking bool) *LockFree {
-	q := new(LockFree)
+func NewLockFree[T any, P Pointer[T]](size uint64) *LockFree[T, P] {
+	q := new(LockFree[T, P])
 	if size < 1 {
 		size = 1
 	}
-	if blocking {
-		q.overflow = q.blocker
-	} else {
-		q.overflow = q.unblocker
-	}
+	q.overflow = q.blocker
 	q.init(size)
 	return q
 }
 
 // init actually initializes a queue and can be used in the future to reuse LockFree structs
 // with their own pool
-func (q *LockFree) init(size uint64) {
+func (q *LockFree[T, P]) init(size uint64) {
 	size = round(size)
-	q.nodes = make(nodes, size)
+	q.nodes = make(nodes[T, P], size)
 	for i := uint64(0); i < size; i++ {
-		q.nodes[i] = &node{position: i}
+		q.nodes[i] = &node[T, P]{position: i}
 	}
 	q.mask = size - 1
 }
@@ -97,7 +95,7 @@ func (q *LockFree) init(size uint64) {
 //				return err
 //			}
 // ```
-func (q *LockFree) blocker() (head uint64, err error) {
+func (q *LockFree[T, P]) blocker() (head uint64, err error) {
 LOOP:
 	head = atomic.LoadUint64(&q.head)
 	if uint64(len(q.nodes)) == head-atomic.LoadUint64(&q.tail) {
@@ -111,31 +109,8 @@ LOOP:
 	return
 }
 
-// unblocker is a LockFree.overflow function that unblocks a Push operation from
-// proceeding if the LockFree is full of data. It does this by adding its own Pop()
-// operation before proceeding with the Push attempt.
-//
-// If two Push operations happen simultaneously, unblocker will unblock them both
-// by running two Pop() operations. This function will also be called whenever there
-// is a Push conflict (when two Push operations attempt to modify the queue concurrently).
-//
-// In highly concurrent situations we may lose more data than we should, however since we will
-// be using this as a SPMC LockFree, this conflict will never arise.
-func (q *LockFree) unblocker() (head uint64, err error) {
-	head = atomic.LoadUint64(&q.head)
-	if uint64(len(q.nodes)) == head-atomic.LoadUint64(&q.tail) {
-		var p *packet.Packet
-		p, err = q.Pop()
-		packet.Put(p)
-		if err != nil {
-			return
-		}
-	}
-	return
-}
-
 // Push appends an item of type *packet.Packet to the LockFree, and will block
-// until the item is pushed successfully (with the blocking function depending
+// until the item is pushed succ›essfully (with the blocking function depending
 // on whether this is a blocking LockFree).
 //
 // This method is not meant to be used concurrently, and the LockFree is meant to operate
@@ -149,8 +124,8 @@ func (q *LockFree) unblocker() (head uint64, err error) {
 //				return err
 //			}
 // ```
-func (q *LockFree) Push(item *packet.Packet) error {
-	var newNode *node
+func (q *LockFree[T, P]) Push(item P) error {
+	var newNode *node[T, P]
 	head, err := q.overflow()
 	if err != nil {
 		return err
@@ -172,7 +147,7 @@ RETRY:
 		}
 		runtime.Gosched()
 	}
-	newNode.data = unsafe.Pointer(item)
+	newNode.data = item
 	atomic.StoreUint64(&newNode.position, head+1)
 	return nil
 }
@@ -183,8 +158,8 @@ RETRY:
 // or the LockFree is closed.
 //
 // This method is safe to be used concurrently and is even optimized for the SPMC use case.
-func (q *LockFree) Pop() (*packet.Packet, error) {
-	var oldNode *node
+func (q *LockFree[T, P]) Pop() (P, error) {
+	var oldNode *node[T, P]
 	var oldPosition = atomic.LoadUint64(&q.tail)
 RETRY:
 	if atomic.LoadUint64(&q.closed) == 1 {
@@ -206,22 +181,22 @@ DONE:
 	data := oldNode.data
 	oldNode.data = nil
 	atomic.StoreUint64(&oldNode.position, oldPosition+q.mask+1)
-	return (*packet.Packet)(data), nil
+	return data, nil
 }
 
 // Close marks the LockFree as closed, returns any waiting Pop() calls,
 // and blocks all future Push calls from occurring.
-func (q *LockFree) Close() {
+func (q *LockFree[T, P]) Close() {
 	atomic.CompareAndSwapUint64(&q.closed, 0, 1)
 }
 
 // IsClosed returns whether the LockFree has been closed
-func (q *LockFree) IsClosed() bool {
+func (q *LockFree[T, P]) IsClosed() bool {
 	return atomic.LoadUint64(&q.closed) == 1
 }
 
 // Length is the current number of items in the LockFree
-func (q *LockFree) Length() int {
+func (q *LockFree[T, P]) Length() int {
 	return int(atomic.LoadUint64(&q.head) - atomic.LoadUint64(&q.tail))
 }
 
@@ -231,11 +206,11 @@ func (q *LockFree) Length() int {
 // and only while there are no producers writing to it. If used incorrectly it has the potential
 // to infinitely block the caller. If used correctly, it allows a single caller to drain any remaining
 // packets in the queue after the queue has been closed.
-func (q *LockFree) Drain() []*packet.Packet {
+func (q *LockFree[T, P]) Drain() []P {
 	length := q.Length()
-	packets := make([]*packet.Packet, 0, length)
+	packets := make([]P, 0, length)
 	for i := 0; i < length; i++ {
-		var oldNode *node
+		var oldNode *node[T, P]
 		var oldPosition = atomic.LoadUint64(&q.tail)
 	RETRY:
 		oldNode = q.nodes[oldPosition&q.mask]
@@ -253,7 +228,7 @@ func (q *LockFree) Drain() []*packet.Packet {
 		data := oldNode.data
 		oldNode.data = nil
 		atomic.StoreUint64(&oldNode.position, oldPosition+q.mask+1)
-		packets = append(packets, (*packet.Packet)(data))
+		packets = append(packets, data)
 	}
 	return packets
 }

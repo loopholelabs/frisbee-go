@@ -17,7 +17,7 @@ import (
 	"sync"
 )
 
-type Circular[T any] struct {
+type Circular[T any, P Pointer[T]] struct {
 	_padding0 [8]uint64 //nolint:structcheck,unused
 	head      uint64
 	_padding1 [8]uint64 //nolint:structcheck,unused
@@ -33,11 +33,11 @@ type Circular[T any] struct {
 	_padding6 [8]uint64 //nolint:structcheck,unused
 	notFull   *sync.Cond
 	_padding7 [8]uint64 //nolint:structcheck,unused
-	nodes     []*T
+	nodes     []P
 }
 
-func NewCircular[T any](maxSize uint64) *Circular[T] {
-	q := &Circular[T]{}
+func NewCircular[T any, P Pointer[T]](maxSize uint64) *Circular[T, P] {
+	q := &Circular[T, P]{}
 	q.lock = &sync.Mutex{}
 	q.notFull = sync.NewCond(q.lock)
 	q.notEmpty = sync.NewCond(q.lock)
@@ -51,58 +51,58 @@ func NewCircular[T any](maxSize uint64) *Circular[T] {
 		q.maxSize = round(maxSize)
 	}
 
-	q.nodes = make([]*T, q.maxSize)
+	q.nodes = make([]P, q.maxSize)
 	return q
 }
 
-func (q *Circular) IsEmpty() (empty bool) {
+func (q *Circular[T, P]) IsEmpty() (empty bool) {
 	q.lock.Lock()
 	empty = q.isEmpty()
 	q.lock.Unlock()
 	return
 }
 
-func (q *Circular) isEmpty() bool {
+func (q *Circular[T, P]) isEmpty() bool {
 	return q.head == q.tail
 }
 
-func (q *Circular) IsFull() (full bool) {
+func (q *Circular[T, P]) IsFull() (full bool) {
 	q.lock.Lock()
 	full = q.isFull()
 	q.lock.Unlock()
 	return
 }
 
-func (q *Circular) isFull() bool {
+func (q *Circular[T, P]) isFull() bool {
 	return q.head == (q.tail+1)%q.maxSize
 }
 
-func (q *Circular) IsClosed() (closed bool) {
+func (q *Circular[T, P]) IsClosed() (closed bool) {
 	q.lock.Lock()
 	closed = q.isClosed()
 	q.lock.Unlock()
 	return
 }
 
-func (q *Circular) isClosed() bool {
+func (q *Circular[T, P]) isClosed() bool {
 	return q.closed
 }
 
-func (q *Circular) Length() (size int) {
+func (q *Circular[T, P]) Length() (size int) {
 	q.lock.Lock()
 	size = q.length()
 	q.lock.Unlock()
 	return
 }
 
-func (q *Circular) length() int {
+func (q *Circular[T, P]) length() int {
 	if q.tail < q.head {
 		return int(q.maxSize - q.head + q.tail)
 	}
 	return int(q.tail - q.head)
 }
 
-func (q *Circular) Close() {
+func (q *Circular[T, P]) Close() {
 	q.lock.Lock()
 	q.closed = true
 	q.notFull.Broadcast()
@@ -110,7 +110,7 @@ func (q *Circular) Close() {
 	q.lock.Unlock()
 }
 
-func (q *Circular[T]) Push(p *T) error {
+func (q *Circular[T, P]) Push(p P) error {
 	q.lock.Lock()
 LOOP:
 	if q.isClosed() {
@@ -129,7 +129,7 @@ LOOP:
 	return nil
 }
 
-func (q *Circular[T]) Pop() (p *T, err error) {
+func (q *Circular[T, P]) Pop() (p P, err error) {
 	q.lock.Lock()
 LOOP:
 	if q.isClosed() {
@@ -148,16 +148,16 @@ LOOP:
 	return
 }
 
-func (q *Circular[T]) Drain() (packets []*T) {
+func (q *Circular[T, P]) Drain() (packets []P) {
 	q.lock.Lock()
 	if q.isEmpty() {
 		q.lock.Unlock()
 		return nil
 	}
 	if size := int(q.head) - int(q.tail); size > 0 {
-		packets = make([]*T, 0, size)
+		packets = make([]P, 0, size)
 	} else {
-		packets = make([]*T, 0, -1*size)
+		packets = make([]P, 0, -1*size)
 	}
 	for i := 0; i < cap(packets); i++ {
 		packets = append(packets, q.nodes[q.head])

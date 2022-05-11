@@ -43,7 +43,7 @@ type Async struct {
 	closed   *atomic.Bool
 	writer   *bufio.Writer
 	flusher  chan struct{}
-	incoming *queue.Circular
+	incoming *queue.Circular[packet.Packet, *packet.Packet]
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
@@ -85,7 +85,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		conn:     c,
 		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
-		incoming: queue.NewCircular(DefaultBufferSize),
+		incoming: queue.NewCircular[packet.Packet, *packet.Packet](DefaultBufferSize),
 		flusher:  make(chan struct{}, 3),
 		logger:   logger,
 		error:    atomic.NewError(nil),
