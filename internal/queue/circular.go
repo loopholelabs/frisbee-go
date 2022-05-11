@@ -14,12 +14,10 @@
 package queue
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/packet"
 	"sync"
-	"unsafe"
 )
 
-type Circular struct {
+type Circular[T any] struct {
 	_padding0 [8]uint64 //nolint:structcheck,unused
 	head      uint64
 	_padding1 [8]uint64 //nolint:structcheck,unused
@@ -35,11 +33,11 @@ type Circular struct {
 	_padding6 [8]uint64 //nolint:structcheck,unused
 	notFull   *sync.Cond
 	_padding7 [8]uint64 //nolint:structcheck,unused
-	nodes     []unsafe.Pointer
+	nodes     []*T
 }
 
-func NewCircular(maxSize uint64) *Circular {
-	q := &Circular{}
+func NewCircular[T any](maxSize uint64) *Circular[T] {
+	q := &Circular[T]{}
 	q.lock = &sync.Mutex{}
 	q.notFull = sync.NewCond(q.lock)
 	q.notEmpty = sync.NewCond(q.lock)
@@ -53,7 +51,7 @@ func NewCircular(maxSize uint64) *Circular {
 		q.maxSize = round(maxSize)
 	}
 
-	q.nodes = make([]unsafe.Pointer, q.maxSize)
+	q.nodes = make([]*T, q.maxSize)
 	return q
 }
 
@@ -112,7 +110,7 @@ func (q *Circular) Close() {
 	q.lock.Unlock()
 }
 
-func (q *Circular) Push(p *packet.Packet) error {
+func (q *Circular[T]) Push(p *T) error {
 	q.lock.Lock()
 LOOP:
 	if q.isClosed() {
@@ -124,14 +122,14 @@ LOOP:
 		goto LOOP
 	}
 
-	q.nodes[q.tail] = unsafe.Pointer(p)
+	q.nodes[q.tail] = p
 	q.tail = (q.tail + 1) % q.maxSize
 	q.notEmpty.Signal()
 	q.lock.Unlock()
 	return nil
 }
 
-func (q *Circular) Pop() (p *packet.Packet, err error) {
+func (q *Circular[T]) Pop() (p *T, err error) {
 	q.lock.Lock()
 LOOP:
 	if q.isClosed() {
@@ -143,26 +141,26 @@ LOOP:
 		goto LOOP
 	}
 
-	p = (*packet.Packet)(q.nodes[q.head])
+	p = q.nodes[q.head]
 	q.head = (q.head + 1) % q.maxSize
 	q.notFull.Signal()
 	q.lock.Unlock()
 	return
 }
 
-func (q *Circular) Drain() (packets []*packet.Packet) {
+func (q *Circular[T]) Drain() (packets []*T) {
 	q.lock.Lock()
 	if q.isEmpty() {
 		q.lock.Unlock()
 		return nil
 	}
 	if size := int(q.head) - int(q.tail); size > 0 {
-		packets = make([]*packet.Packet, 0, size)
+		packets = make([]*T, 0, size)
 	} else {
-		packets = make([]*packet.Packet, 0, -1*size)
+		packets = make([]*T, 0, -1*size)
 	}
 	for i := 0; i < cap(packets); i++ {
-		packets = append(packets, (*packet.Packet)(q.nodes[q.head]))
+		packets = append(packets, q.nodes[q.head])
 		q.head = (q.head + 1) % q.maxSize
 	}
 	q.lock.Unlock()
