@@ -18,8 +18,9 @@ package metadata
 
 import (
 	"encoding/binary"
-	"github.com/pkg/errors"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -64,11 +65,11 @@ func NewHandler() Handler {
 	return Handler{}
 }
 
-func (handler *Handler) Encode(id uint16, operation uint16, contentLength uint32) ([Size]byte, error) {
+func (*Handler) Encode(id, operation uint16, contentLength uint32) ([Size]byte, error) {
 	return Encode(id, operation, contentLength)
 }
 
-func (handler *Handler) Decode(buf []byte) (Metadata, error) {
+func (*Handler) Decode(buf []byte) (Metadata, error) {
 	return Decode(buf)
 }
 
@@ -103,7 +104,7 @@ func (fm *Metadata) Decode(buf [Size]byte) (err error) {
 }
 
 // Encode without a Handler
-func Encode(id uint16, operation uint16, contentLength uint32) ([Size]byte, error) {
+func Encode(id, operation uint16, contentLength uint32) ([Size]byte, error) {
 	metadata := Metadata{
 		Id:            id,
 		Operation:     operation,

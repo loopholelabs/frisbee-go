@@ -19,13 +19,13 @@ package generator
 import (
 	"errors"
 	"fmt"
-	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
+	"github.com/loopholelabs/frisbee/protoc-gen-frpc/internal/utils"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
-	unknownKind        = errors.New("unknown or unsupported protoreflect.Kind")
-	unknownCardinality = errors.New("unknown or unsupported protoreflect.Cardinality")
+	errUnknownKind        = errors.New("unknown or unsupported protoreflect.Kind")
+	errUnknownCardinality = errors.New("unknown or unsupported protoreflect.Cardinality")
 )
 
 var (
@@ -115,7 +115,7 @@ func findValue(field protoreflect.FieldDescriptor) string {
 			case protoreflect.Repeated:
 				return utils.CamelCase(utils.AppendString(slice, string(field.Enum().FullName())))
 			default:
-				panic(unknownCardinality)
+				panic(errUnknownCardinality)
 			}
 		case protoreflect.MessageKind:
 			if field.IsMap() {
@@ -127,11 +127,11 @@ func findValue(field protoreflect.FieldDescriptor) string {
 				case protoreflect.Repeated:
 					return utils.AppendString(slice, pointer, utils.CamelCase(string(field.Message().FullName())))
 				default:
-					panic(unknownCardinality)
+					panic(errUnknownCardinality)
 				}
 			}
 		default:
-			panic(unknownKind)
+			panic(errUnknownKind)
 		}
 	} else {
 		if field.Cardinality() == protoreflect.Repeated {
@@ -162,7 +162,7 @@ func getEncodingFields(fields protoreflect.FieldDescriptors) encodingFields {
 				case protoreflect.MessageKind:
 					messageFields = append(messageFields, field)
 				default:
-					panic(unknownKind)
+					panic(errUnknownKind)
 				}
 			} else {
 				if field.Kind() == protoreflect.EnumKind {
@@ -201,7 +201,7 @@ func getDecodingFields(fields protoreflect.FieldDescriptors) decodingFields {
 				case protoreflect.MessageKind:
 					messageFields = append(messageFields, field)
 				default:
-					panic(unknownKind)
+					panic(errUnknownKind)
 				}
 			} else {
 				other = append(other, field)
@@ -224,7 +224,7 @@ func getKind(kind protoreflect.Kind) string {
 		case protoreflect.MessageKind:
 			outKind = packetAnyKind
 		default:
-			panic(unknownKind)
+			panic(errUnknownKind)
 		}
 	}
 	return outKind

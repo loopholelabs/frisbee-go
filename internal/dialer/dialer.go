@@ -37,7 +37,7 @@ func NewRetry() *Retry {
 }
 
 // Dial calls the underlying *net.Dial to dial a net.Conn, but retries on failure
-func (r *Retry) Dial(network string, address string) (c net.Conn, err error) {
+func (r *Retry) Dial(network, address string) (c net.Conn, err error) {
 	for i := 0; i < r.NumRetries; i++ {
 		c, err = r.Dialer.Dial(network, address)
 		if err == nil {
@@ -48,7 +48,7 @@ func (r *Retry) Dial(network string, address string) (c net.Conn, err error) {
 }
 
 // DialTLS creates a new TLS Dialer using the underlying *net.Dial and uses it to dial a net.Conn, but retries on failure
-func (r *Retry) DialTLS(network string, address string, config *tls.Config) (c net.Conn, err error) {
+func (r *Retry) DialTLS(network, address string, config *tls.Config) (c net.Conn, err error) {
 	d := &tls.Dialer{
 		NetDialer: r.Dialer,
 		Config:    config,

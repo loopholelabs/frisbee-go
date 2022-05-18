@@ -17,8 +17,9 @@
 package packet
 
 import (
-	"github.com/pkg/errors"
 	"math"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -51,7 +52,7 @@ func decodeNil(b []byte) ([]byte, bool) {
 	return b, false
 }
 
-func decodeMap(b []byte, keyKind Kind, valueKind Kind) ([]byte, uint32, error) {
+func decodeMap(b []byte, keyKind, valueKind Kind) ([]byte, uint32, error) {
 	if len(b) > 2 {
 		if b[0] == MapKind[0] && b[1] == keyKind[0] && b[2] == valueKind[0] {
 			var size uint32
@@ -81,7 +82,7 @@ func decodeSlice(b []byte, kind Kind) ([]byte, uint32, error) {
 	return b, 0, InvalidSlice
 }
 
-func decodeBytes(b []byte, ret []byte) ([]byte, []byte, error) {
+func decodeBytes(b, ret []byte) ([]byte, []byte, error) {
 	if len(b) > 0 {
 		if b[0] == BytesKind[0] {
 			var size uint32

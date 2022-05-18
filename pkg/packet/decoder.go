@@ -55,7 +55,7 @@ func (d *Decoder) Nil() (value bool) {
 	return
 }
 
-func (d *Decoder) Map(keyKind Kind, valueKind Kind) (size uint32, err error) {
+func (d *Decoder) Map(keyKind, valueKind Kind) (size uint32, err error) {
 	d.b, size, err = decodeMap(d.b, keyKind, valueKind)
 	return
 }
@@ -75,7 +75,7 @@ func (d *Decoder) String() (value string, err error) {
 	return
 }
 
-func (d *Decoder) Error() (value error, err error) {
+func (d *Decoder) Error() (value, err error) {
 	d.b, value, err = decodeError(d.b)
 	return
 }

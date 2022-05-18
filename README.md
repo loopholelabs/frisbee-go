@@ -7,7 +7,12 @@
 [![go-doc](https://godoc.org/github.com/loopholelabs/frisbee?status.svg)](https://godoc.org/github.com/loopholelabs/frisbee)
 
 This is the [Go](http://golang.org) library for
-[Frisbee](https://loopholelabs.io/docs/frisbee), a bring-your-own protocol messaging framework designed for performance and stability.
+[Frisbee](https://frpc.io/concepts/frisbee), a bring-your-own protocol messaging framework designed for performance and
+stability.
+
+[FRPC](https://frpc.io) is a lightweight, fast, and secure RPC framework for Go that uses Frisbee under the hood. This
+repository houses both projects, with **FRPC** being contained in the
+[protoc-gen-frpc]("/protoc-gen-frpc") folder.
 
 **This library requires Go1.16 or later.**
 
@@ -18,47 +23,34 @@ Beta** and is still considered experimental. Breaking changes of the library wil
 same is true for selected other new features explicitly marked as
 **EXPERIMENTAL** in CHANGELOG.md.
 
-## Usage
+## Usage and Documentation
 
-Documentation and example usage is available at [https://loopholelabs.io/docs/frisbee][homepage].
+Usage instructions and documentation for Frisbee is available
+at [https://frpc.io/concepts/frisbee](https://frpc.io/concepts/frisbee). The Frisbee framework also has great
+documentation coverage using [GoDoc](https://godoc.org/github.com/loopholelabs/frisbee).
 
-## RPC Generator
+## FRPC
 
-The included RPC Generator is still in very early **Alpha**. While it is functional and being used within other products
+The FRPC Generator is still in very early **Alpha**. While it is functional and being used within other products
 we're building at [Loophole Labs][loophomepage], the `proto3` spec has a myriad of edge-cases that make it difficult to
-guarantee validity of generated RPC frameworks.
+guarantee validity of generated RPC frameworks without extensive real-world use.
 
-That being said, as the library matures and usage of the RPC framework grows we'll be able to increase our testing
+That being said, as the library matures and usage of FRPC grows we'll be able to increase our testing
 coverage and fix any edge case bugs. One of the major benefits to the RPC framework is that reading the generated code
 is extremely straight forward, making it easy to debug potential issues down the line.
 
-### Usage
+### Usage and Documentation
 
-Usage of the RPC Framework is very straight forward. You must already have the `protoc` CLI installed and available in
-your path. For instructions on how to install `protoc`, see
-the [Protocol Buffer Compiler Installation](https://grpc.io/docs/protoc-installation/) guide.
-
-Once `protoc` in installed, you need to install the `Frisbee Protoc Generator` plugin. Make sure your `$GOBIN` variable
-is set, and part of your system's `$PATH` variable (`export PATH=$GOBIN:$PATH`), then run the following:
-
-```bash
-go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@latest
-```
-
-To generate RPC code with Frisbee, simply run the following:
-
-```bash
-protoc --frisbee_out=. <path to proto3 file>
-```
+Usage instructions and documentations for FRPC are available at [https://frpc.io/](https://frpc.io).
 
 ### Unsupported Features
 
-The Frisbee RPC Generator currently does not support:
+The Frisbee RPC Generator currently does not support the following features, though they are actively being worked on:
 
 - `OneOf` Message Types
 - Streaming Messages between the client and server
 
-Example `Proto3` files can be found [here](/protoc-gen-frisbee/examples).
+Example `Proto3` files can be found [here](/protoc-gen-frpc/examples).
 
 ## Contributing
 

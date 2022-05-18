@@ -14,19 +14,18 @@
 package queue
 
 import (
+	"testing"
+	"time"
+
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestLockFree(t *testing.T) {
 	t.Parallel()
 
-	testPacket := func() *packet.Packet {
-		return packet.Get()
-	}
+	testPacket := packet.Get
 	testPacket2 := func() *packet.Packet {
 		p := packet.Get()
 		p.Content.Write([]byte{1})
