@@ -17,13 +17,14 @@
 package generator
 
 import (
+	"text/template"
+
 	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
 	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/version"
 	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/templates"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
-	"text/template"
 )
 
 type Generator struct {
@@ -60,12 +61,12 @@ func New() *Generator {
 	}
 }
 
-func (g *Generator) UnmarshalRequest(buf []byte) (*pluginpb.CodeGeneratorRequest, error) {
+func (*Generator) UnmarshalRequest(buf []byte) (*pluginpb.CodeGeneratorRequest, error) {
 	req := new(pluginpb.CodeGeneratorRequest)
 	return req, proto.Unmarshal(buf, req)
 }
 
-func (g *Generator) MarshalResponse(res *pluginpb.CodeGeneratorResponse) ([]byte, error) {
+func (*Generator) MarshalResponse(res *pluginpb.CodeGeneratorResponse) ([]byte, error) {
 	return proto.Marshal(res)
 }
 
