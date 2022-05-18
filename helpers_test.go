@@ -17,16 +17,17 @@
 package frisbee
 
 import (
+	"testing"
+
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"go.uber.org/goleak"
-	"testing"
 )
 
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-func throughputRunner(testSize uint32, packetSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
+func throughputRunner(testSize, packetSize uint32, readerConn, writerConn Conn) func(b *testing.B) {
 	return func(b *testing.B) {
 		b.SetBytes(int64(testSize * packetSize))
 		b.ReportAllocs()

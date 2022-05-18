@@ -27,7 +27,7 @@ func (e *encoder) Nil() *encoder {
 	return e
 }
 
-func (e *encoder) Map(size uint32, keyKind Kind, valueKind Kind) *encoder {
+func (e *encoder) Map(size uint32, keyKind, valueKind Kind) *encoder {
 	encodeMap((*Packet)(e), size, keyKind, valueKind)
 	return e
 }
