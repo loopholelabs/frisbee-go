@@ -100,8 +100,8 @@ func FirstLowerCaseName(name protoreflect.Name) string {
 	return FirstLowerCase(string(name))
 }
 
-func MakeIterable(len int) []struct{} {
-	return make([]struct{}, len)
+func MakeIterable(length int) []struct{} {
+	return make([]struct{}, length)
 }
 
 func Counter(initial int) func() int {
