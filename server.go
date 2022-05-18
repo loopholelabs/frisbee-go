@@ -19,13 +19,14 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
-	"net"
-	"sync"
-	"time"
 )
 
 var (
@@ -35,9 +36,7 @@ var (
 )
 
 var (
-	defaultBaseContext = func() context.Context {
-		return context.Background()
-	}
+	defaultBaseContext = context.Background
 
 	defaultOnClosed = func(_ *Async, _ error) {}
 
