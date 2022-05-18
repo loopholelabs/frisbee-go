@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.5.0] - 2022-05-18 (Beta)
+
+## Changes
+
+- Updating Frisbee RPC references to FRPC
+- Updating documentation site to point to https://frpc.io
+- Updating code quality according to https://deepsource.io
+
 ## [v0.4.6] - 2022-04-28 (Beta)
 
 ## Fixes
