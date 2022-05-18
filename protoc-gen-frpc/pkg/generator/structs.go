@@ -19,7 +19,7 @@ package generator
 import (
 	"errors"
 	"fmt"
-	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
+	"github.com/loopholelabs/frisbee/protoc-gen-frpc/internal/utils"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

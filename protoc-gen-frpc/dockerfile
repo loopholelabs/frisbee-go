@@ -2,7 +2,7 @@ FROM golang as builder
 
 ENV GOOS=linux GOARCH=amd64 CGO_ENABLED=0
 
-RUN go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@v0.4.6
+RUN go install github.com/loopholelabs/frisbee/protoc-gen-frpc@v0.5.0
 
 # Note, the Docker images must be built for amd64. If the host machine architecture is not amd64
 # you need to cross-compile the binary and move it into /go/bin.
@@ -12,8 +12,8 @@ FROM scratch
 
 # Runtime dependencies
 LABEL "build.buf.plugins.runtime_library_versions.0.name"="github.com/loopholelabs/frisbee"
-LABEL "build.buf.plugins.runtime_library_versions.0.version"="v0.4.6"
+LABEL "build.buf.plugins.runtime_library_versions.0.version"="v0.5.0"
 
 COPY --from=builder /go/bin /
 
-ENTRYPOINT ["/protoc-gen-frisbee"]
+ENTRYPOINT ["/protoc-gen-frpc"]

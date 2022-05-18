@@ -9,5 +9,6 @@ require (
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/atomic v1.7.0
 	go.uber.org/goleak v1.1.12
+	google.golang.org/grpc v1.46.0
 	google.golang.org/protobuf v1.27.1
 )

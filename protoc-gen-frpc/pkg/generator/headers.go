@@ -17,7 +17,7 @@
 package generator
 
 import (
-	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
+	"github.com/loopholelabs/frisbee/protoc-gen-frpc/internal/utils"
 )
 
 func fileName(name string) string {
