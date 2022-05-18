@@ -20,16 +20,17 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"io"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/loopholelabs/frisbee/internal/dialer"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
-	"io"
-	"net"
-	"sync"
-	"time"
 )
 
 // Sync is the underlying synchronous frisbee connection which has extremely efficient read and write logic and
@@ -211,7 +212,7 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 			p.Content.B = append(p.Content.B[:cap(p.Content.B)], 0)
 		}
 		p.Content.B = p.Content.B[:p.Metadata.ContentLength]
-		_, err = io.ReadAtLeast(c.conn, p.Content.B[:], int(p.Metadata.ContentLength))
+		_, err = io.ReadAtLeast(c.conn, p.Content.B, int(p.Metadata.ContentLength))
 		if err != nil {
 			if c.closed.Load() {
 				c.Logger().Debug().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
