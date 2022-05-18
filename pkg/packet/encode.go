@@ -31,7 +31,7 @@ func encodeNil(p *Packet) {
 	p.Content.Write(NilKind)
 }
 
-func encodeMap(p *Packet, size uint32, keyKind Kind, valueKind Kind) {
+func encodeMap(p *Packet, size uint32, keyKind, valueKind Kind) {
 	p.Content.Write(MapKind)
 	p.Content.Write(keyKind)
 	p.Content.Write(valueKind)
