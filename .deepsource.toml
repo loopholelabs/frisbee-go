@@ -1,11 +1,13 @@
 version = 1
 
+test_patterns = ["**/*_test.go"]
+
 [[analyzers]]
 name = "go"
 enabled = true
 
-  [analyzers.meta]
-  import_root = "github.com/loopholelabs/frisbee"
+[analyzers.meta]
+import_root = "github.com/loopholelabs/frisbee"
 
 [[transformers]]
 name = "gofmt"
