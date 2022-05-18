@@ -29,8 +29,6 @@ Usage instructions and documentation for Frisbee is available
 at [https://frpc.io/concepts/frisbee](https://frpc.io/concepts/frisbee). The Frisbee framework also has great
 documentation coverage using [GoDoc](https://godoc.org/github.com/loopholelabs/frisbee).
 
-Documentation and example usage is available at [https://loopholelabs.io/docs/frisbee][homepage].
-
 ## FRPC
 
 The FRPC Generator is still in very early **Alpha**. While it is functional and being used within other products
