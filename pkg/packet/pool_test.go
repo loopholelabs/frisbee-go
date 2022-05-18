@@ -17,9 +17,10 @@
 package packet
 
 import (
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRecycle(t *testing.T) {
@@ -58,11 +59,10 @@ func TestRecycle(t *testing.T) {
 
 		if cap(p.Content.B) < len(testData) {
 			continue
-		} else {
-			assert.Equal(t, 0, len(p.Content.B))
-			assert.GreaterOrEqual(t, cap(p.Content.B), len(testData))
-			break
 		}
+		assert.Equal(t, 0, len(p.Content.B))
+		assert.GreaterOrEqual(t, cap(p.Content.B), len(testData))
+		break
 	}
 
 	pool.Put(p)
