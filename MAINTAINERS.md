@@ -1,3 +1,2 @@
 - Shivansh Vij <shivanshvij@loopholelabs.io> @shivanshvij
-- Jonathan Sun <jonathansun@loopholelabs.io> @jspsun
 - Alex Sørlie Glomsaas <alexsorlieglomsaas@loopholelabs.io> @supermanifolds

@@ -14,39 +14,14 @@
 	limitations under the License.
 */
 
-package main
+package generator
 
-import (
-	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/pkg/generator"
-	"io/ioutil"
-	"os"
+const (
+	extension     = ".frpc.go"
+	pointer       = "*"
+	space         = " "
+	comma         = ","
+	mapSuffix     = "Map"
+	slice         = "[]"
+	packetAnyKind = "packet.AnyKind"
 )
-
-func main() {
-	gen := generator.New()
-
-	data, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		panic(err)
-	}
-
-	req, err := gen.UnmarshalRequest(data)
-	if err != nil {
-		panic(err)
-	}
-
-	res, err := gen.Generate(req)
-	if err != nil {
-		panic(err)
-	}
-
-	data, err = gen.MarshalResponse(res)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = os.Stdout.Write(data)
-	if err != nil {
-		panic(err)
-	}
-}
