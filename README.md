@@ -42,7 +42,7 @@ Once `protoc` in installed, you need to install the `Frisbee Protoc Generator` p
 is set, and part of your system's `$PATH` variable (`export PATH=$GOBIN:$PATH`), then run the following:
 
 ```bash
-go install github.com/loopholelabs/frisbee/protoc-gen-frisbee@latest
+go install github.com/loopholelabs/frisbee/protoc-gen-frpc@latest
 ```
 
 To generate RPC code with Frisbee, simply run the following:
@@ -58,7 +58,7 @@ The Frisbee RPC Generator currently does not support:
 - `OneOf` Message Types
 - Streaming Messages between the client and server
 
-Example `Proto3` files can be found [here](/protoc-gen-frisbee/examples).
+Example `Proto3` files can be found [here](/protoc-gen-frpc/examples).
 
 ## Contributing
 

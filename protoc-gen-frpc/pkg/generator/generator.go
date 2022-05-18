@@ -17,9 +17,9 @@
 package generator
 
 import (
-	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/utils"
-	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/internal/version"
-	"github.com/loopholelabs/frisbee/protoc-gen-frisbee/templates"
+	"github.com/loopholelabs/frisbee/protoc-gen-frpc/internal/utils"
+	"github.com/loopholelabs/frisbee/protoc-gen-frpc/internal/version"
+	"github.com/loopholelabs/frisbee/protoc-gen-frpc/templates"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
