@@ -65,11 +65,11 @@ func NewHandler() Handler {
 	return Handler{}
 }
 
-func (handler *Handler) Encode(id, operation uint16, contentLength uint32) ([Size]byte, error) {
+func (*Handler) Encode(id, operation uint16, contentLength uint32) ([Size]byte, error) {
 	return Encode(id, operation, contentLength)
 }
 
-func (handler *Handler) Decode(buf []byte) (Metadata, error) {
+func (*Handler) Decode(buf []byte) (Metadata, error) {
 	return Decode(buf)
 }
 
