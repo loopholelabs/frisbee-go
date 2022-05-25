@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Fixes
+
+- Fixed an issue where if the number of services is 0 the RPC Generator would
+  crash ([#101](https://github.com/loopholelabs/frisbee/issues/101))
+
 ## [v0.5.0] - 2022-05-18 (Beta)
 
 ## Changes
