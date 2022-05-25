@@ -18,12 +18,18 @@ package generator
 
 var (
 	requiredImports = []string{
-		"github.com/loopholelabs/frisbee",
 		"github.com/loopholelabs/frisbee/pkg/packet",
+		"errors",
+	}
+
+	serviceImports = []string{
+		"github.com/loopholelabs/frisbee",
 		"github.com/rs/zerolog",
 		"crypto/tls",
-		"github.com/pkg/errors",
 		"context",
+	}
+
+	methodImports = []string{
 		"sync",
 		"sync/atomic",
 	}
