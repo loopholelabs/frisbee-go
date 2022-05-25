@@ -2,7 +2,8 @@
 type Server struct {
     *frisbee.Server
 }
-    func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *zerolog.Logger) (*Server, error) {
+
+func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *zerolog.Logger) (*Server, error) {
         table := make(frisbee.HandlerTable)
         {{template "serverhandlers" .services -}}
         var s *frisbee.Server
