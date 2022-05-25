@@ -2,9 +2,7 @@
 
 {{template "imports" .}}
 
-var (
-    NilDecode = errors.New("cannot decode into a nil root struct")
-)
+{{template "errors" .}}
 
 {{template "enums" .}}
 
@@ -12,6 +10,8 @@ var (
 
 {{template "interfaces" .}}
 
+{{ if .numServices }}
 {{template "server" .}}
 
 {{template "client" .}}
+{{ end }}

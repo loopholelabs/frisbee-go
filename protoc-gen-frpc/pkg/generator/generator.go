@@ -87,14 +87,25 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 			packageName = string(f.GoPackageName)
 		}
 
+		numServices := f.Desc.Services().Len()
+
+		numMethods := 0
+		for i := 0; i < numServices; i++ {
+			numMethods += f.Desc.Services().Get(i).Methods().Len()
+		}
+
 		err = templ.ExecuteTemplate(genFile, "base.templ", map[string]interface{}{
-			"pluginVersion": version.Version,
-			"sourcePath":    f.Desc.Path(),
-			"package":       packageName,
-			"imports":       requiredImports,
-			"enums":         f.Desc.Enums(),
-			"messages":      f.Desc.Messages(),
-			"services":      f.Desc.Services(),
+			"pluginVersion":   version.Version,
+			"sourcePath":      f.Desc.Path(),
+			"package":         packageName,
+			"requiredImports": requiredImports,
+			"serviceImports":  serviceImports,
+			"methodImports":   methodImports,
+			"enums":           f.Desc.Enums(),
+			"messages":        f.Desc.Messages(),
+			"services":        f.Desc.Services(),
+			"numServices":     numServices,
+			"numMethods":      numMethods,
 		})
 		if err != nil {
 			return nil, err
