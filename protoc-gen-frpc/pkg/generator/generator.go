@@ -17,6 +17,7 @@
 package generator
 
 import (
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"text/template"
 
 	"github.com/loopholelabs/frisbee/protoc-gen-frpc/internal/utils"
@@ -32,6 +33,7 @@ type Generator struct {
 }
 
 var templ *template.Template
+var streamMethods = make(map[protoreflect.FullName]bool)
 
 func init() {
 	templ = template.Must(template.New("main").Funcs(template.FuncMap{
@@ -49,6 +51,9 @@ func init() {
 		"GetDecodingFields":  getDecodingFields,
 		"GetKindLUT":         getKindLUT,
 		"GetServerFields":    getServerFields,
+		"UsedForStreaming": func(typeName protoreflect.FullName) bool {
+			return streamMethods[typeName]
+		},
 	}).ParseFS(templates.FS, "*"))
 }
 
@@ -90,14 +95,17 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 		numServices := f.Desc.Services().Len()
 
 		numMethods := 0
-		numStreamMethods := 0
+		streamMethods = make(map[protoreflect.FullName]bool)
 		for i := 0; i < numServices; i++ {
 			nM := f.Desc.Services().Get(i).Methods().Len()
 			numMethods += nM
 			for m := 0; m < nM; m++ {
 				method := f.Desc.Services().Get(i).Methods().Get(m)
-				if method.IsStreamingServer() || method.IsStreamingClient() {
-					numStreamMethods += 1
+				if method.IsStreamingClient() {
+					streamMethods[method.Input().FullName()] = true
+				}
+				if method.IsStreamingServer() {
+					streamMethods[method.Output().FullName()] = true
 				}
 			}
 		}
@@ -115,7 +123,7 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 			"services":            f.Desc.Services(),
 			"numServices":         numServices,
 			"numMethods":          numMethods,
-			"numStreamMethods":    numStreamMethods,
+			"numStreamMethods":    len(streamMethods),
 		})
 		if err != nil {
 			return nil, err
