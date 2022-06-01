@@ -1,28 +1,106 @@
 {{define "server"}}
 type Server struct {
     *frisbee.Server
+
+    {{ range $i, $v := (MakeIterable .services.Len) -}}
+        {{ $service := $.services.Get $i -}}
+        {{ range $i, $v := (MakeIterable $service.Methods.Len) -}}
+            {{ $method := $service.Methods.Get $i -}}
+            {{ if $method.IsStreamingClient}}
+                next{{ CamelCaseName $method.Name }}       atomic.Value
+                inflight{{ CamelCaseName $method.Name }} map[uint32]*queue.Circular[{{ CamelCase $method.Input.FullName }}, *{{ CamelCase $method.Input.FullName }}]
+            {{end -}}
+        {{end -}}
+    {{end -}}
 }
 
 func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *zerolog.Logger) (*Server, error) {
+        var s *Server
         table := make(frisbee.HandlerTable)
         {{template "serverhandlers" .services -}}
-        var s *frisbee.Server
+        var fsrv *frisbee.Server
         var err error
         if tlsConfig != nil {
-            s, err = frisbee.NewServer(table, frisbee.WithTLS(tlsConfig), frisbee.WithLogger(logger))
+            fsrv, err = frisbee.NewServer(table, frisbee.WithTLS(tlsConfig), frisbee.WithLogger(logger))
             if err != nil {
                 return nil, err
             }
         } else {
-            s, err = frisbee.NewServer(table, frisbee.WithLogger(logger))
+            fsrv, err = frisbee.NewServer(table, frisbee.WithLogger(logger))
             if err != nil {
                 return nil, err
             }
         }
-        return &Server{
-            Server: s,
+
+        fsrv.ConnContext = func (ctx context.Context, conn *frisbee.Async) context.Context {
+            return context.WithValue(ctx, "conn", conn)
+        }
+        s, err = &Server{
+            Server: fsrv,
         }, nil
+
+        {{ range $i, $v := (MakeIterable .services.Len) -}}
+            {{ $service := $.services.Get $i -}}
+            {{ range $i, $v := (MakeIterable $service.Methods.Len) -}}
+                {{ $method := $service.Methods.Get $i -}}
+                {{ if $method.IsStreamingClient -}}
+                s.next{{ CamelCaseName $method.Name }}.Store(uint16(0))
+                s.inflight{{ CamelCaseName $method.Name }} = make(map[uint32]*queue.Circular[{{ CamelCase $method.Input.FullName }}, *{{ CamelCase $method.Input.FullName }}])
+                {{end -}}
+            {{end -}}
+        {{end -}}
+        return s, err
     }
+
+{{template "servermethods" .services }}
+{{end}}
+
+{{define "servermethods"}}
+{{ $counter := Counter 9 -}}
+    {{ range $i, $v := (MakeIterable .Len) -}}
+        {{ $service := $.Get $i -}}
+        {{ range $i, $v := (MakeIterable $service.Methods.Len) }}
+            {{ $method := $service.Methods.Get $i -}}
+            {{ $opIndex := call $counter -}}
+            {{if or $method.IsStreamingClient $method.IsStreamingServer -}}
+                type {{ CamelCaseName $method.Name }}Server struct {
+                    server *Server
+                    context context.Context
+                    id uint32
+                }
+
+                func (x *{{ CamelCaseName $method.Name }}Server) Context() context.Context {
+                    return x.context
+                }
+
+                func (x *{{ CamelCaseName $method.Name }}Server) Recv() (*{{ CamelCase $method.Input.FullName }}, error) {
+                    streamQueue := x.server.inflight{{ CamelCaseName $method.Name }}[x.id]
+                    return streamQueue.Pop()
+                }
+
+                func (x *{{ CamelCaseName $method.Name }}Server) Send(m *{{ CamelCase $method.Output.FullName }}) error {
+                    p := packet.Get()
+                    p.Metadata.Operation = {{ $opIndex }}
+                    LOOP:
+                    p.Metadata.Id = x.server.next{{ CamelCaseName $method.Name }}.Load().(uint16)
+                    if !x.server.next{{ CamelCaseName $method.Name }}.CompareAndSwap(p.Metadata.Id, p.Metadata.Id+1) {
+                        goto LOOP
+                    }
+                    m.streamID = x.id
+                    m.Encode(p)
+                    p.Metadata.ContentLength = uint32(len(p.Content.B))
+                    conn := x.context.Value("conn").(*frisbee.Async)
+                    err := conn.WritePacket(p)
+                    if err != nil {
+                        packet.Put(p)
+                        return err
+                    }
+                packet.Put(p)
+                return nil
+                }
+            {{end -}}
+        {{end -}}
+    {{end -}}
 {{end}}
 
 {{define "serverhandlers"}}
@@ -36,20 +114,36 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                 req := New{{ CamelCase $method.Input.FullName  }}()
                 err := req.Decode(incoming.Content.B)
                 if err == nil {
-                    if req.ignore {
-                        {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(ctx, req)
+                {{ if $method.IsStreamingClient -}}
+                    if q, ok := s.inflight{{ CamelCaseName $method.Name }}[req.streamID]; ok {
+                        q.Push(req)
                     } else {
-                        var res *{{ CamelCase $method.Output.FullName }}
-                        outgoing = incoming
-                        outgoing.Content.Reset()
-                        res, err = {{ FirstLowerCase (CamelCaseName $service.Name) }}.{{ CamelCaseName $method.Name }}(ctx, req)
-                        if err != nil {
-                            res.Error(outgoing, err)
-                        } else {
-                            res.Encode(outgoing)
-                        }
-                        outgoing.Metadata.ContentLength = uint32(len(outgoing.Content.B))
+                        q := queue.NewCircular[{{ CamelCase $method.Input.FullName  }}, *{{ CamelCase $method.Input.FullName  }}](100)
+                        s.inflight{{ CamelCaseName $method.Name }}[req.streamID] = q
+                        q.Push(req)
+
+                        srv := {{ CamelCaseName $method.Name }}Server{server: s, context: ctx, id: req.streamID}
+                        go func() {
+                            err := {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(srv)
+                            if err != nil {
+                                res := {{ CamelCase $method.Output.FullName }}{error: err, status: 1}
+                                srv.Send(&res)
+                            }
+                            s.inflight{{ CamelCaseName $method.Name }}[req.streamID] = nil
+                        }()
                     }
+                {{else -}}
+                    var res *{{ CamelCase $method.Output.FullName }}
+                    outgoing = incoming
+                    outgoing.Content.Reset()
+                    res, err = {{ FirstLowerCase (CamelCaseName $service.Name) }}.{{ CamelCaseName $method.Name }}(ctx, req)
+                    if err != nil {
+                        res.Error(outgoing, err)
+                    } else {
+                        res.Encode(outgoing)
+                    }
+                    outgoing.Metadata.ContentLength = uint32(len(outgoing.Content.B))
+                {{end -}}
                 }
                 return
             }

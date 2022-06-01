@@ -4,12 +4,13 @@ option go_package = "/echo";
 
 service EchoService {
   rpc Echo(Request) returns (Response);
+  rpc EchoStream(stream Request) returns (stream Response);
 }
 
 message Request {
-  string Message = 1;
+  int32 Message = 1;
 }
 
 message Response{
-  string Message = 1;
+  int32 Message = 1;
 }

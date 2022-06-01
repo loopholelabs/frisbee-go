@@ -6,7 +6,8 @@ func (x *{{ CamelCase .FullName }}) Encode (p *packet.Packet) {
         packet.Encoder(p).Error(x.error)
     } else {
         {{ $encoding := GetEncodingFields .Fields -}}
-        packet.Encoder(p).Bool(x.ignore){{ range $val := $encoding.Values -}}{{ $val -}}{{end -}}
+        stream := x.streamID | ((uint32(x.status) << streamIdLength) & streamStatusMask)
+        packet.Encoder(p).Uint32(stream){{ range $val := $encoding.Values -}}{{ $val -}}{{end -}}
         {{ if $encoding.SliceFields -}}
             {{template "encodeSlices" $encoding -}}
         {{end -}}

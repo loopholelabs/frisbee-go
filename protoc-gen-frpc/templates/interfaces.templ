@@ -10,7 +10,11 @@
 type {{ CamelCaseName .Name }} interface {
     {{ range $i, $v := MakeIterable .Methods.Len -}}
     {{ $method := $.Methods.Get $i -}}
-    {{ CamelCaseName $method.Name }} (context.Context, *{{ CamelCase $method.Input.FullName }}) (*{{ CamelCase $method.Output.FullName }}, error)
+    {{ if or $method.IsStreamingClient $method.IsStreamingServer }}
+        {{ CamelCaseName $method.Name }} (srv {{ CamelCaseName $method.Name }}Server) error
+    {{else -}}
+        {{ CamelCaseName $method.Name }} (context.Context, *{{ CamelCase $method.Input.FullName }}) (*{{ CamelCase $method.Output.FullName }}, error)
+    {{end -}}
     {{ end -}}
 }
 {{end}}

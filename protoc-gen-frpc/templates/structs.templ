@@ -21,7 +21,8 @@
     {{end -}}
     type {{ CamelCase .FullName }} struct {
         error error
-        ignore bool
+        streamID uint32
+        status uint8
 
         {{ range $i, $v := (MakeIterable $.Fields.Len) -}}
             {{ $field := $.Fields.Get $i -}}
