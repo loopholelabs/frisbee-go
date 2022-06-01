@@ -90,22 +90,32 @@ func (g *Generator) Generate(req *pluginpb.CodeGeneratorRequest) (res *pluginpb.
 		numServices := f.Desc.Services().Len()
 
 		numMethods := 0
+		numStreamMethods := 0
 		for i := 0; i < numServices; i++ {
-			numMethods += f.Desc.Services().Get(i).Methods().Len()
+			nM := f.Desc.Services().Get(i).Methods().Len()
+			numMethods += nM
+			for m := 0; m < nM; m++ {
+				method := f.Desc.Services().Get(i).Methods().Get(m)
+				if method.IsStreamingServer() || method.IsStreamingClient() {
+					numStreamMethods += 1
+				}
+			}
 		}
 
 		err = templ.ExecuteTemplate(genFile, "base.templ", map[string]interface{}{
-			"pluginVersion":   version.Version,
-			"sourcePath":      f.Desc.Path(),
-			"package":         packageName,
-			"requiredImports": requiredImports,
-			"serviceImports":  serviceImports,
-			"methodImports":   methodImports,
-			"enums":           f.Desc.Enums(),
-			"messages":        f.Desc.Messages(),
-			"services":        f.Desc.Services(),
-			"numServices":     numServices,
-			"numMethods":      numMethods,
+			"pluginVersion":       version.Version,
+			"sourcePath":          f.Desc.Path(),
+			"package":             packageName,
+			"requiredImports":     requiredImports,
+			"serviceImports":      serviceImports,
+			"methodImports":       methodImports,
+			"streamMethodImports": streamMethodImports,
+			"enums":               f.Desc.Enums(),
+			"messages":            f.Desc.Messages(),
+			"services":            f.Desc.Services(),
+			"numServices":         numServices,
+			"numMethods":          numMethods,
+			"numStreamMethods":    numStreamMethods,
 		})
 		if err != nil {
 			return nil, err

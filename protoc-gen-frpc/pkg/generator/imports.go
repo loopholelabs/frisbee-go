@@ -24,10 +24,13 @@ var (
 
 	serviceImports = []string{
 		"github.com/loopholelabs/frisbee",
-		"github.com/loopholelabs/frisbee/internal/queue",
 		"github.com/rs/zerolog",
 		"crypto/tls",
 		"context",
+	}
+
+	streamMethodImports = []string{
+		"github.com/loopholelabs/frisbee/internal/queue",
 	}
 
 	methodImports = []string{
