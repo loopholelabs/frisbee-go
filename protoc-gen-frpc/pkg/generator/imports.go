@@ -35,6 +35,5 @@ var (
 
 	methodImports = []string{
 		"sync",
-		"sync/atomic",
 	}
 )

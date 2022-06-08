@@ -15,19 +15,16 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
         return nil
     }
     var err error
-    {{ if UsedForStreaming .FullName -}}
-    var stream uint32
-    {{ end -}}
+    var flags uint8
+
     x.error, err = d.Error()
     if err != nil {
-        {{ if UsedForStreaming .FullName -}}
-        stream, err = d.Uint32()
+        flags, err = d.Uint8()
         if err != nil {
             return err
         }
-        x.status = uint8(stream >> streamIdLength)
-        x.streamID = (stream << statusLength) >> statusLength
-        {{ end -}}
+        x.flags = flags
+
         {{ $decoding := GetDecodingFields .Fields -}}
         {{ range $field := $decoding.Other -}}
             {{ $decoder := GetLUTDecoder $field.Kind -}}
