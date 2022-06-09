@@ -1,9 +1,9 @@
 {{define "encode"}}
 func (x *{{ CamelCase .FullName }}) Encode (p *packet.Packet) {
     if x == nil {
-        packet.Encoder(p).Nil()
+        packet.Encoder(p).Nil().Uint8(x.flags)
     } else if x.error != nil {
-        packet.Encoder(p).Error(x.error)
+        packet.Encoder(p).Error(x.error).Uint8(x.flags)
     } else {
         {{ $encoding := GetEncodingFields .Fields -}}
         packet.Encoder(p).Uint8(x.flags){{ range $val := $encoding.Values -}}{{ $val -}}{{end -}}
