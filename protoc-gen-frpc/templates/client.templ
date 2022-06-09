@@ -134,6 +134,24 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                     }
                     return p, err
                 }
+                {{ else if $method.IsStreamingClient }}
+                    ch := make(chan *{{ CamelCase $method.Output.FullName }}, 1)
+                    c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
+                    c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = ch
+                    c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
+
+                    recv := func () (res *{{ CamelCase $method.Output.FullName }}, err error) {
+                        select {
+                        case res = <- ch:
+                            err = res.error
+                        case <- ctx.Done():
+                            err = ctx.Err()
+                        }
+                        c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
+                        delete(c.inflight{{ CamelCaseName $method.Name }}, p.Metadata.Id)
+                        c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
+                        return
+                    }
                 {{ end -}}
 
                 {{ if $method.IsStreamingClient -}}
@@ -157,8 +175,10 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
 
                 stream := {{ CamelCaseName $method.Name }}Client{
                     context: ctx,
-                    {{ if $method.IsStreamingServer -}}recv: recv, {{ end -}}
-                    {{ if $method.IsStreamingClient }}send: send, {{ end -}}
+                    recv: recv,
+                    {{ if $method.IsStreamingClient -}}
+                    send: send,
+                    {{ end -}}
                 }
                 go func () {
                     for {
@@ -177,7 +197,10 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
         type {{ CamelCaseName $method.Name }}Client struct {
             context context.Context
             recv func() (*{{ CamelCase $method.Output.FullName }}, error)
+
+            {{ if $method.IsStreamingClient -}}
             send func (*{{ CamelCase $method.Input.FullName }}) error
+            {{ end -}}
         }
 
         {{ if $method.IsStreamingServer -}}

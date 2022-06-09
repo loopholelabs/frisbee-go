@@ -87,7 +87,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                 }
                 {{ end -}}
 
-                {{ if $method.IsStreamingClient -}}
+                {{ if or $method.IsStreamingClient $method.IsStreamingServer -}}
                 func (x *EchoStreamServer) CloseAndSend(m *{{ CamelCase $method.Output.FullName }}) error {
                     m.flags = 1
                     return x.send(m)
@@ -166,10 +166,10 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             err := {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(srv)
                             if err != nil {
                                 res := {{ CamelCase $method.Output.FullName }}{error: err}
-                                srv.Send(&res)
+                                srv.CloseAndSend(&res)
                             } else {
-                                res := {{ CamelCase $method.Output.FullName }}{flags: 1}
-                                srv.Send(&res)
+                                res := {{ CamelCase $method.Output.FullName }}{}
+                                srv.CloseAndSend(&res)
                             }
                             {{ if $method.IsStreamingClient -}}
                             s.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
