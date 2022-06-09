@@ -113,13 +113,13 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                     {{ if $method.IsStreamingClient -}}
                     s.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
                     if q, ok := s.inflight{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
-                        q.Push(req)
                         s.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
+                        q.Push(req)
                     } else {
                         q := queue.NewCircular[{{ CamelCase $method.Input.FullName  }}, *{{ CamelCase $method.Input.FullName  }}](100)
                         s.inflight{{ CamelCaseName $method.Name }}[incoming.Metadata.Id] = q
-                        q.Push(req)
                         s.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
+                        q.Push(req)
                         {{ end -}}
 
 

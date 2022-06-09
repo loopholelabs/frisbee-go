@@ -61,11 +61,11 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
         {{ $method := $service.Methods.Get $i -}}
         {{ $count := call $counter -}}
         table[{{ $count }}] = func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
-            c.inflight{{ CamelCaseName $method.Name }}Mu.RLock()
             {{ if $method.IsStreamingServer -}}
             res := NewResponse()
             err := res.Decode(incoming.Content.B)
             if err == nil {
+                c.inflight{{ CamelCaseName $method.Name }}Mu.RLock()
                 if q, ok := c.inflight{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
                     err := q.Push(res)
                     if err != nil {
@@ -76,6 +76,7 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
             }
             c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
             {{else -}}
+            c.inflight{{ CamelCaseName $method.Name }}Mu.RLock()
             if ch, ok := c.inflight{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
                 c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
                 res := New{{ CamelCase $method.Output.FullName }}()
@@ -105,17 +106,17 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
 
                 c.next{{ CamelCaseName $method.Name }}Mu.Lock()
                 c.next{{ CamelCaseName $method.Name }} += 1
+                c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
                 id := c.next{{ CamelCaseName $method.Name }}
                 p.Metadata.Id = id
-                c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
 
                 req.Encode(p)
                 p.Metadata.ContentLength = uint32(len(p.Content.B))
                 err := c.Client.WritePacket(p)
 
                 {{ if $method.IsStreamingServer -}}
-                c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
                 q := queue.NewCircular[{{ CamelCase $method.Output.FullName }}, *{{ CamelCase $method.Output.FullName }}](100)
+                c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
                 c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = q
                 c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
                 {{ end -}}
