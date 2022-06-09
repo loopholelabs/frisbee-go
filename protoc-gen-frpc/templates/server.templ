@@ -75,13 +75,24 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                     return x.context
                 }
 
+                {{ if $method.IsStreamingClient -}}
                 func (x *{{ CamelCaseName $method.Name }}Server) Recv() (*{{ CamelCase $method.Input.FullName }}, error) {
                     return x.recv()
                 }
+                {{ end -}}
 
+                {{ if $method.IsStreamingServer -}}
                 func (x *{{ CamelCaseName $method.Name }}Server) Send(m *{{ CamelCase $method.Output.FullName }}) error {
                     return x.send(m)
                 }
+                {{ end -}}
+
+                {{ if $method.IsStreamingClient -}}
+                func (x *EchoStreamServer) CloseAndSend(m *{{ CamelCase $method.Output.FullName }}) error {
+                    m.flags = 1
+                    return x.send(m)
+                }
+                {{ end -}}
             {{end -}}
         {{end -}}
     {{end -}}
@@ -155,6 +166,9 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             err := {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(srv)
                             if err != nil {
                                 res := {{ CamelCase $method.Output.FullName }}{error: err}
+                                srv.Send(&res)
+                            } else {
+                                res := {{ CamelCase $method.Output.FullName }}{flags: 1}
                                 srv.Send(&res)
                             }
                             {{ if $method.IsStreamingClient -}}

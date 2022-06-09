@@ -180,10 +180,13 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
             send func (*{{ CamelCase $method.Input.FullName }}) error
         }
 
+        {{ if $method.IsStreamingServer -}}
         func (x *{{ CamelCaseName $method.Name }}Client) Recv() (*{{ CamelCase $method.Output.FullName }}, error) {
             return x.recv()
         }
+       {{ end -}}
 
+       {{ if $method.IsStreamingClient -}}
         func (x *{{ CamelCaseName $method.Name }}Client) Send(m *{{ CamelCase $method.Input.FullName }}) error {
             return x.send(m)
         }
@@ -192,6 +195,13 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
             r := {{ CamelCase $method.Input.FullName }}{flags: 1}
             return x.Send(&r)
         }
+
+        func (x *EchoStreamClient) CloseAndRecv() (*{{ CamelCase $method.Output.FullName }}, error) {
+            r := {{ CamelCase $method.Input.FullName }}{flags: 1}
+            x.Send(&r)
+            return x.recv()
+        }
+        {{ end -}}
         {{else -}}
         func (c *Client) {{ CamelCaseName $method.Name }}(ctx context.Context, req *{{ CamelCase $method.Input.FullName }}) (res *{{ CamelCase $method.Output.FullName }}, err error) {
             ch := make(chan *{{ CamelCase $method.Output.FullName }}, 1)

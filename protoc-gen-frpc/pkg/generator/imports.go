@@ -20,6 +20,7 @@ var (
 	requiredImports = []string{
 		"github.com/loopholelabs/frisbee/pkg/packet",
 		"errors",
+		"io",
 	}
 
 	serviceImports = []string{
