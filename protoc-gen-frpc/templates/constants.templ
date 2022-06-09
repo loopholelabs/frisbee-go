@@ -1,0 +1,9 @@
+{{define "constants"}}
+var CloseFlag = 1
+
+{{ if .numStreamMethods -}}
+    var streamIdLength = 24
+    var statusLength = 8
+    var streamStatusMask uint32 = 0xFF000000
+{{ end -}}
+{{end}}

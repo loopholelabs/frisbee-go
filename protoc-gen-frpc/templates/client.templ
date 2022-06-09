@@ -130,7 +130,7 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                 {{ if $method.IsStreamingServer }}
                 recv := func() (*{{ CamelCase $method.Output.FullName }}, error) {
                     p, err := q.Pop()
-                    if p.flags == 1 {
+                    if p.flags == CloseFlag {
                         return nil, io.EOF
                     }
                     return p, err

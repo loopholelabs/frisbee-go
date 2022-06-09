@@ -131,7 +131,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         {{ if $method.IsStreamingClient -}}
                         recv := func() (*{{ CamelCase $method.Input.FullName }}, error) {
                             p, err := q.Pop()
-                            if p.flags == 1 {
+                            if p.flags == CloseFlag {
                                 return nil, io.EOF
                             }
                             return p, err
