@@ -33,7 +33,7 @@ func TestCircular(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		rb := NewCircular(1)
+		rb := NewCircular[packet.Packet, *packet.Packet](1)
 		p := testPacket()
 		err := rb.Push(p)
 		assert.NoError(t, err)
@@ -42,12 +42,12 @@ func TestCircular(t *testing.T) {
 		assert.Equal(t, p, actual)
 	})
 	t.Run("out of capacity", func(t *testing.T) {
-		rb := NewCircular(0)
+		rb := NewCircular[packet.Packet, *packet.Packet](0)
 		err := rb.Push(testPacket())
 		assert.NoError(t, err)
 	})
 	t.Run("out of capacity with non zero capacity, blocking", func(t *testing.T) {
-		rb := NewCircular(1)
+		rb := NewCircular[packet.Packet, *packet.Packet](1)
 		p1 := testPacket()
 		err := rb.Push(p1)
 		assert.NoError(t, err)
@@ -76,7 +76,7 @@ func TestCircular(t *testing.T) {
 		}
 	})
 	t.Run("length calculations", func(t *testing.T) {
-		rb := NewCircular(1)
+		rb := NewCircular[packet.Packet, *packet.Packet](1)
 		p1 := testPacket()
 
 		err := rb.Push(p1)
@@ -98,7 +98,7 @@ func TestCircular(t *testing.T) {
 		assert.Equal(t, uint64(1), rb.head)
 		assert.Equal(t, uint64(0), rb.tail)
 
-		rb = NewCircular(4)
+		rb = NewCircular[packet.Packet, *packet.Packet](4)
 
 		err = rb.Push(p1)
 		assert.NoError(t, err)
@@ -167,7 +167,7 @@ func TestCircular(t *testing.T) {
 		assert.Equal(t, uint64(5), rb.tail)
 	})
 	t.Run("buffer closed", func(t *testing.T) {
-		rb := NewCircular(1)
+		rb := NewCircular[packet.Packet, *packet.Packet](1)
 		assert.False(t, rb.IsClosed())
 		rb.Close()
 		assert.True(t, rb.IsClosed())
@@ -178,7 +178,7 @@ func TestCircular(t *testing.T) {
 	})
 	t.Run("pop empty", func(t *testing.T) {
 		done := make(chan struct{}, 1)
-		rb := NewCircular(1)
+		rb := NewCircular[packet.Packet, *packet.Packet](1)
 		go func() {
 			_, _ = rb.Pop()
 			done <- struct{}{}
@@ -189,7 +189,7 @@ func TestCircular(t *testing.T) {
 		assert.Equal(t, 0, rb.Length())
 	})
 	t.Run("partial overflow, blocking", func(t *testing.T) {
-		rb := NewCircular(4)
+		rb := NewCircular[packet.Packet, *packet.Packet](4)
 		p1 := testPacket()
 		p1.Metadata.Id = 1
 
@@ -251,7 +251,7 @@ func TestCircular(t *testing.T) {
 		assert.Equal(t, 0, rb.Length())
 	})
 	t.Run("partial overflow, non-blocking", func(t *testing.T) {
-		rb := NewCircular(4)
+		rb := NewCircular[packet.Packet, *packet.Packet](4)
 		p1 := testPacket()
 		p1.Metadata.Id = 1
 
