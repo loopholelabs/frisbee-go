@@ -107,8 +107,8 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
 
                 c.next{{ CamelCaseName $method.Name }}Mu.Lock()
                 c.next{{ CamelCaseName $method.Name }} += 1
-                c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
                 id := c.next{{ CamelCaseName $method.Name }}
+                c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
                 p.Metadata.Id = id
 
                 req.Encode(p)
@@ -183,15 +183,10 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                     {{ end -}}
                 }
                 go func () {
-                    for {
-                        select {
-                        case <-ctx.Done():
-                            c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
-                            c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = nil
-                            c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
-                            break
-                        }
-                    }
+                <-ctx.Done()
+                    c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
+                    c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = nil
+                    c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
                 }()
                 return &stream, nil
             }
@@ -217,12 +212,12 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
         }
 
         func (x *{{ CamelCaseName $method.Name }}Client) CloseSend() error {
-            r := {{ CamelCase $method.Input.FullName }}{flags: 0 & CloseFlag}
+            r := {{ CamelCase $method.Input.FullName }}{flags: 0 | CloseFlag}
             return x.Send(&r)
         }
 
         func (x *{{ CamelCaseName $method.Name }}Client) CloseAndRecv() (*{{ CamelCase $method.Output.FullName }}, error) {
-            r := {{ CamelCase $method.Input.FullName }}{flags: 0 & CloseFlag}
+            r := {{ CamelCase $method.Input.FullName }}{flags: 0 | CloseFlag}
             x.Send(&r)
             return x.recv()
         }
