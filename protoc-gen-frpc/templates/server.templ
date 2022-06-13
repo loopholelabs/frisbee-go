@@ -88,8 +88,8 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                 {{ end -}}
 
                 {{ if or $method.IsStreamingClient $method.IsStreamingServer -}}
-                func (x *EchoStreamServer) CloseAndSend(m *{{ CamelCase $method.Output.FullName }}) error {
-                    m.flags = 1
+                func (x *{{ CamelCaseName $method.Name }}Server) CloseAndSend(m *{{ CamelCase $method.Output.FullName }}) error {
+                    m.flags = m.flags | CloseFlag
                     return x.send(m)
                 }
                 {{ end -}}
@@ -131,7 +131,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         {{ if $method.IsStreamingClient -}}
                         recv := func() (*{{ CamelCase $method.Input.FullName }}, error) {
                             p, err := q.Pop()
-                            if p.flags == CloseFlag {
+                            if p.flags & CloseFlag == 1 {
                                 return nil, io.EOF
                             }
                             return p, err
@@ -163,9 +163,14 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             {{ if $method.IsStreamingServer -}}send: send, {{ end -}}
                         }
                         go func() {
+                            {{ if $method.IsStreamingClient }}
                             err := {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(srv)
+                            {{ else }}
+                            err := {{ FirstLowerCaseName $service.Name }}.{{ CamelCaseName $method.Name }}(req, srv)
+                            {{ end }}
                             if err != nil {
                                 res := {{ CamelCase $method.Output.FullName }}{error: err}
+                                res.flags = res.flags & ErrorFlag
                                 srv.CloseAndSend(&res)
                             } else {
                                 res := {{ CamelCase $method.Output.FullName }}{}

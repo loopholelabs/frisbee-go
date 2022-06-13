@@ -1,5 +1,6 @@
 {{define "constants"}}
-var CloseFlag uint8 = 1
+var CloseFlag uint8 = 0x1
+var ErrorFlag uint8 = 0x2
 
 {{ if .numStreamMethods -}}
     var streamIdLength = 24
