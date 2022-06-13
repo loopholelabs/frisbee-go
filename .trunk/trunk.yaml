@@ -1,9 +1,9 @@
 version: 0.1
 cli:
-  version: 0.13.0-beta
+  version: 0.13.1-beta
 lint:
   enabled:
-    - actionlint@1.6.4
+    - actionlint@1.6.13
     - gitleaks@8.8.7
     - gofmt@1.18.3
     - golangci-lint@1.46.2
