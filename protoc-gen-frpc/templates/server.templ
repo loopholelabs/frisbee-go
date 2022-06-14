@@ -123,10 +123,8 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         {{ end -}}
 
 
-                        {{ if $method.IsStreamingServer -}}
                         id := incoming.Metadata.Id
                         conn := ctx.Value("conn").(*frisbee.Async)
-                        {{ end -}}
 
                         {{ if $method.IsStreamingClient -}}
                         recv := func() (*{{ CamelCase $method.Input.FullName }}, error) {
