@@ -11,8 +11,8 @@ github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORN
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
-github.com/loopholelabs/frpc-utilities v0.0.0-20220614153343-f962178e2937 h1:EG2MtMuTeg5TrSgCQn0rOgGah5/fgEryaZcspCaLuXI=
-github.com/loopholelabs/frpc-utilities v0.0.0-20220614153343-f962178e2937/go.mod h1:Z7L0VF9kjviR1q1vHI60vM68UJ29tB+dxM9TnenH20I=
+github.com/loopholelabs/frpc-utilities v0.1.0 h1:VdBcbWgkLCOp9/ceCZM3ovhAfDmTn4nbUMcwo5FtrWI=
+github.com/loopholelabs/frpc-utilities v0.1.0/go.mod h1:Z7L0VF9kjviR1q1vHI60vM68UJ29tB+dxM9TnenH20I=
 github.com/loopholelabs/testing v0.2.3 h1:4nVuK5ctaE6ua5Z0dYk2l7xTFmcpCYLUeGjRBp8keOA=
 github.com/loopholelabs/testing v0.2.3/go.mod h1:gqtGY91soYD1fQoKQt/6kP14OYpS7gcbcIgq5mc9m8Q=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
