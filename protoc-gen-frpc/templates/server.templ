@@ -138,7 +138,6 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         }
                         {{ end -}}
 
-                        {{ if $method.IsStreamingServer}}
                         send := func (m *{{ CamelCase $method.Output.FullName }}) error {
                             p := packet.Get()
                             p.Metadata.Operation = {{ $count }}
@@ -155,7 +154,6 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             packet.Put(p)
                             return nil
                         }
-                        {{ end -}}
 
                         srv := {{ CamelCaseName $method.Name }}Server{
                             context: ctx,
