@@ -31,7 +31,7 @@ var (
 	}
 
 	streamMethodImports = []string{
-		"github.com/loopholelabs/frpc-utilities/pkg/queue",
+		"github.com/loopholelabs/common/pkg/queue",
 	}
 
 	methodImports = []string{
