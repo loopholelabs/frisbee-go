@@ -156,7 +156,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         srv := {{ CamelCaseName $method.Name }}Server{
                             context: ctx,
                             {{ if $method.IsStreamingClient -}}recv: recv, {{ end -}}
-                            {{ if $method.IsStreamingServer -}}send: send, {{ end -}}
+                            send: send,
                         }
                         go func() {
                             {{ if $method.IsStreamingClient }}
