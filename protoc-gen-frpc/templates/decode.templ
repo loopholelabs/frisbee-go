@@ -15,15 +15,13 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
         return nil
     }
     var err error
-    var flags uint8
 
     x.error, err = d.Error()
     if err != nil {
-        flags, err = d.Uint8()
+        x.flags, err = d.Uint8()
         if err != nil {
             return err
         }
-        x.flags = flags
 
         {{ $decoding := GetDecodingFields .Fields -}}
         {{ range $field := $decoding.Other -}}
@@ -95,6 +93,11 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
                 }
             {{end -}}
         {{end -}}
+    } else {
+        x.flags, err = d.Uint8()
+        if err != nil {
+            return err
+        }
     }
     return nil
 }
