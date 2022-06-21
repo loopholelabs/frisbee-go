@@ -125,6 +125,11 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                 func (x *{{ CamelCaseName $method.Name }}Server) Send(m *{{ CamelCase $method.Output.FullName }}) error {
                     return x.send(m)
                 }
+
+                func (x *{{ CamelCaseName $method.Name }}Server) CloseSend() error {
+                    r := {{ CamelCase $method.Output.FullName }}{error: io.EOF, flags: SetCloseFlag(0, true) }
+                    return x.Send(&r)
+                }
                 {{ end -}}
 
                 {{ if or $method.IsStreamingClient $method.IsStreamingServer -}}
@@ -161,6 +166,9 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         if srv, ok := smap.servers[id].(*{{ CamelCaseName $method.Name }}Server); ok {
                             smap.mu.Unlock()
                             srv.received.Push(req)
+                            if HasCloseFlag(req.flags) {
+                                srv.close()
+                            }
                             return
                         } else {
                             smap.mu.Unlock()
@@ -202,6 +210,9 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                                 var r *Count
                                 r, srv.stale = srv.stale[0], srv.stale[1:]
                                 srv.staleMu.Unlock()
+                                if errors.Is(r.error, io.EOF) {
+                                    return nil, io.EOF
+                                }
                                 return r, nil
                             }
                             srv.staleMu.Unlock()
@@ -220,6 +231,9 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                                 }
                                 srv.staleMu.Unlock()
                             }
+                            return nil, io.EOF
+                        }
+                        if errors.Is(readPacket.error, io.EOF) {
                             return nil, io.EOF
                         }
                         return readPacket, nil
