@@ -125,12 +125,12 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                 func (x *{{ CamelCaseName $method.Name }}Server) Send(m *{{ CamelCase $method.Output.FullName }}) error {
                     return x.send(m)
                 }
+                {{ end -}}
 
                 func (x *{{ CamelCaseName $method.Name }}Server) CloseSend() error {
                     r := {{ CamelCase $method.Output.FullName }}{error: io.EOF, flags: SetCloseFlag(0, true) }
-                    return x.Send(&r)
+                    return x.send(&r)
                 }
-                {{ end -}}
 
                 {{ if or $method.IsStreamingClient $method.IsStreamingServer -}}
                 func (x *{{ CamelCaseName $method.Name }}Server) CloseAndSend(m *{{ CamelCase $method.Output.FullName }}) error {
@@ -268,8 +268,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             res.flags = SetErrorFlag(res.flags, true)
                             srv.CloseAndSend(&res)
                         } else {
-                            res := {{ CamelCase $method.Output.FullName }}{}
-                            srv.CloseAndSend(&res)
+                            srv.CloseSend()
                         }
                         {{ if $method.IsStreamingClient -}}
                         s.streamsMu.RLock()
