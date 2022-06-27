@@ -1,5 +1,5 @@
 {{define "encodeMap"}}
-    func (x {{ CamelCase .FullName }}Map) Encode (p *polyglot.C) {
+    func (x {{ CamelCase .FullName }}Map) Encode (p *polyglot.Buffer) {
         if x == nil {
             polyglot.Encoder(p).Nil()
         } else {

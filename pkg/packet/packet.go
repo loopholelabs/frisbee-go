@@ -36,7 +36,7 @@ import (
 // delivered with the frisbee packet (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
 type Packet struct {
 	Metadata *metadata.Metadata
-	Content  *polyglot.C
+	Content  *polyglot.Buffer
 }
 
 func (p *Packet) Reset() {

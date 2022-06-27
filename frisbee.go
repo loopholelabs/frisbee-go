@@ -86,7 +86,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: HEARTBEAT,
 		},
-		Content: polyglot.CNew(),
+		Content: polyglot.NewBuffer(),
 	}
 
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Packets
@@ -94,7 +94,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PING,
 		},
-		Content: polyglot.CNew(),
+		Content: polyglot.NewBuffer(),
 	}
 
 	// PONGPacket is a pre-allocated Frisbee Packet for PONG Packets
@@ -102,7 +102,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PONG,
 		},
-		Content: polyglot.CNew(),
+		Content: polyglot.NewBuffer(),
 	}
 )
 

@@ -39,7 +39,7 @@ func (p *Pool) Get() (s *Packet) {
 	if v == nil {
 		s = &Packet{
 			Metadata: new(metadata.Metadata),
-			Content:  polyglot.CNew(),
+			Content:  polyglot.NewBuffer(),
 		}
 		return
 	}

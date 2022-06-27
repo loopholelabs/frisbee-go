@@ -15,6 +15,8 @@ github.com/loopholelabs/common v0.1.1 h1:PviqB5c1gOaFup6gUxKBXqPH1je1r3HrHUc1eSW
 github.com/loopholelabs/common v0.1.1/go.mod h1:hB8T0eBGDcZ4cvBfDoD3yUs6bUzeZed9VqhzN4lI7nU=
 github.com/loopholelabs/polyglot-go v0.1.0 h1:jDj51wuxZqtrUItER2ah9YCcshPOsDZIUldoMlPb58I=
 github.com/loopholelabs/polyglot-go v0.1.0/go.mod h1:EbZsdbciEs/IUhfIFkzd8k/0g/82Tv9GYe6X5c5QA7A=
+github.com/loopholelabs/polyglot-go v0.2.0 h1:pHJRHynj4ND1eaWp5agHm5yO3sWPrikF9wXe6BOlw7A=
+github.com/loopholelabs/polyglot-go v0.2.0/go.mod h1:9/Hr1nFO9Al46806vMP3DB2k8blQ3gazBPaoOsdgo34=
 github.com/loopholelabs/testing v0.2.3 h1:4nVuK5ctaE6ua5Z0dYk2l7xTFmcpCYLUeGjRBp8keOA=
 github.com/loopholelabs/testing v0.2.3/go.mod h1:gqtGY91soYD1fQoKQt/6kP14OYpS7gcbcIgq5mc9m8Q=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
