@@ -207,7 +207,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         if srv.closed.Load() {
                             srv.staleMu.Lock()
                             if len(srv.stale) > 0 {
-                                var r *Count
+                                var r *{{ CamelCase $method.Input.FullName  }}
                                 r, srv.stale = srv.stale[0], srv.stale[1:]
                                 srv.staleMu.Unlock()
                                 if errors.Is(r.error, io.EOF) {
@@ -224,7 +224,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             if srv.closed.Load() {
                                 srv.staleMu.Lock()
                                 if len(srv.stale) > 0 {
-                                    var r *Count
+                                    var r *{{ CamelCase $method.Input.FullName  }}
                                     r, srv.stale = srv.stale[0], srv.stale[1:]
                                     srv.staleMu.Unlock()
                                     return r, nil
