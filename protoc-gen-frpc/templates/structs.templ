@@ -51,7 +51,7 @@ func New{{ CamelCase .FullName }}() *{{ CamelCase .FullName }} {
 {{end}}
 
 {{define "error"}}
-func (x *{{CamelCase .FullName}}) Error(p *packet.Packet, err error) {
-    packet.Encoder(p).Error(err)
+func (x *{{CamelCase .FullName}}) Error(p *polyglot.C, err error) {
+    polyglot.Encoder(p).Error(err)
 }
 {{end}}

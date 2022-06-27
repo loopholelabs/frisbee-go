@@ -64,7 +64,7 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
         table[{{ $count }}] = func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
             {{ if $method.IsStreamingServer -}}
             res := New{{ CamelCase $method.Output.FullName }}()
-            err := res.Decode(incoming.Content.B)
+            err := res.Decode(*incoming.Content)
             if err == nil {
                 c.streams{{ CamelCaseName $method.Name }}Mu.RLock()
                 if stream, ok := c.streams{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
@@ -85,7 +85,7 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
             if ch, ok := c.inflight{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
                 c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
                 res := New{{ CamelCase $method.Output.FullName }}()
-                res.Decode(incoming.Content.B)
+                res.Decode(*incoming.Content)
                 ch <- res
             } else {
                 c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
@@ -115,8 +115,8 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                 c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
                 p.Metadata.Id = id
 
-                req.Encode(p)
-                p.Metadata.ContentLength = uint32(len(p.Content.B))
+                req.Encode(p.Content)
+                p.Metadata.ContentLength = uint32(len(*p.Content))
                 err := c.Client.WritePacket(p)
 
                 {{ if $method.IsStreamingServer -}}
@@ -217,8 +217,8 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
 
                     p.Metadata.Id = id
 
-                    m.Encode(p)
-                    p.Metadata.ContentLength = uint32(len(p.Content.B))
+                    m.Encode(p.Content)
+                    p.Metadata.ContentLength = uint32(len(*p.Content))
                     err := c.WritePacket(p)
                     if err != nil {
                         packet.Put(p)
@@ -289,8 +289,8 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
             c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
             p.Metadata.Id = id
 
-            req.Encode(p)
-            p.Metadata.ContentLength = uint32(len(p.Content.B))
+            req.Encode(p.Content)
+            p.Metadata.ContentLength = uint32(len(*p.Content))
             c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
             c.inflight{{ CamelCaseName $method.Name }}[id] = ch
             c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()

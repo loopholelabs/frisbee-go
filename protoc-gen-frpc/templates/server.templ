@@ -152,7 +152,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
             {{ $count := call $counter -}}
             table[{{ $count }}] = func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
                 req := New{{ CamelCase $method.Input.FullName  }}()
-                err := req.Decode(incoming.Content.B)
+                err := req.Decode(*incoming.Content)
                 if err == nil {
                 {{ if or $method.IsStreamingClient $method.IsStreamingServer -}}
                     id := incoming.Metadata.Id
@@ -246,8 +246,8 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
 
                         p.Metadata.Id = id
 
-                        m.Encode(p)
-                        p.Metadata.ContentLength = uint32(len(p.Content.B))
+                        m.Encode(p.Content)
+                        p.Metadata.ContentLength = uint32(len(*p.Content))
                         err := conn.WritePacket(p)
                         if err != nil {
                             packet.Put(p)
@@ -289,11 +289,11 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                     outgoing.Content.Reset()
                     res, err = {{ FirstLowerCase (CamelCaseName $service.Name) }}.{{ CamelCaseName $method.Name }}(ctx, req)
                     if err != nil {
-                        res.Error(outgoing, err)
+                        res.Error(outgoing.Content, err)
                     } else {
-                        res.Encode(outgoing)
+                        res.Encode(outgoing.Content)
                     }
-                    outgoing.Metadata.ContentLength = uint32(len(outgoing.Content.B))
+                    outgoing.Metadata.ContentLength = uint32(len(*outgoing.Content))
                 {{end -}}
                 }
                 return

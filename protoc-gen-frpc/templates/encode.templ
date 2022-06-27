@@ -1,12 +1,12 @@
 {{define "encode"}}
-func (x *{{ CamelCase .FullName }}) Encode (p *packet.Packet) {
+func (x *{{ CamelCase .FullName }}) Encode (p *polyglot.C) {
     if x == nil {
-        packet.Encoder(p).Nil()
+        polyglot.Encoder(p).Nil()
     } else if x.error != nil {
-        packet.Encoder(p).Error(x.error).Uint8(x.flags)
+        polyglot.Encoder(p).Error(x.error).Uint8(x.flags)
     } else {
         {{ $encoding := GetEncodingFields .Fields -}}
-        packet.Encoder(p).Uint8(x.flags){{ range $val := $encoding.Values -}}{{ $val -}}{{end -}}
+        polyglot.Encoder(p).Uint8(x.flags){{ range $val := $encoding.Values -}}{{ $val -}}{{end -}}
         {{ if $encoding.SliceFields -}}
             {{template "encodeSlices" $encoding -}}
         {{end -}}
@@ -21,14 +21,14 @@ func (x *{{ CamelCase .FullName }}) Encode (p *packet.Packet) {
     {{ range $field := .SliceFields -}}
         {{ $encoder := GetLUTEncoder $field.Kind -}}
         {{ if and (eq $encoder "") (eq $field.Kind 11) -}} {{/* protoreflect.MessageKind */ -}}
-        packet.Encoder(p).Slice(uint32(len(x.{{ CamelCaseName $field.Name }})), packet.AnyKind)
+        polyglot.Encoder(p).Slice(uint32(len(x.{{ CamelCaseName $field.Name }})), packet.AnyKind)
         for _, v := range x.{{CamelCaseName $field.Name}} {
             v.Encode(p)
         }
         {{else -}}
-        packet.Encoder(p).Slice(uint32(len(x.{{ CamelCaseName $field.Name }})), {{ GetKindLUT $field.Kind }})
+        polyglot.Encoder(p).Slice(uint32(len(x.{{ CamelCaseName $field.Name }})), {{ GetKindLUT $field.Kind }})
         for _, v := range x.{{ CamelCaseName $field.Name }} {
-            packet.Encoder(p){{$encoder}}(v)
+            polyglot.Encoder(p){{$encoder}}(v)
         }
         {{end -}}
     {{end -}}

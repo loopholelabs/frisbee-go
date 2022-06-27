@@ -1,20 +1,20 @@
 {{define "encodeMap"}}
-    func (x {{ CamelCase .FullName }}Map) Encode (p *packet.Packet) {
+    func (x {{ CamelCase .FullName }}Map) Encode (p *polyglot.C) {
         if x == nil {
-            packet.Encoder(p).Nil()
+            polyglot.Encoder(p).Nil()
         } else {
             {{ $keyKind := GetKind .MapKey.Kind -}}
             {{ $valKind := GetKind .MapValue.Kind -}}
-            packet.Encoder(p).Map(uint32(len(x)), {{$keyKind}}, {{$valKind}})
+            polyglot.Encoder(p).Map(uint32(len(x)), {{$keyKind}}, {{$valKind}})
             for k, v := range x {
                 {{ $keyEncoder := GetLUTEncoder .MapKey.Kind -}}
                 {{ if and (eq $keyEncoder "") (eq .MapKey.Kind 11) -}} {{/* protoreflect.MessageKind */ -}}
                     k.Encode(p)
                 {{else -}}
                     {{ if eq .MapKey.Kind 14 -}}  {{/* protoreflect.EnumKind */ -}}
-                        packet.Encoder(p) {{$keyEncoder}} (uint32(k))
+                        polyglot.Encoder(p) {{$keyEncoder}} (uint32(k))
                     {{else -}}
-                        packet.Encoder(p) {{$keyEncoder}} (k)
+                        polyglot.Encoder(p) {{$keyEncoder}} (k)
                     {{end -}}
                 {{end -}}
                 {{ $valEncoder := GetLUTEncoder .MapValue.Kind -}}
@@ -22,9 +22,9 @@
                     v.Encode(p)
                 {{else -}}
                     {{ if eq .MapValue.Kind 14 -}} {{/* protoreflect.EnumKind */ -}}
-                        packet.Encoder(p) {{$valEncoder}} (uint32(v))
+                        polyglot.Encoder(p) {{$valEncoder}} (uint32(v))
                     {{else -}}
-                        packet.Encoder(p) {{$valEncoder}} (v)
+                        polyglot.Encoder(p) {{$valEncoder}} (v)
                     {{end -}}
                 {{end -}}
             }
