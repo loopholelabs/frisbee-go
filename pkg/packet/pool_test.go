@@ -43,7 +43,7 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, uint16(0), p.Metadata.Id)
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, []byte{}, p.Content)
+		assert.EqualValues(t, []byte{}, *p.Content)
 
 		p.Content.Write(testData)
 		assert.Equal(t, len(testData), len(*p.Content))
