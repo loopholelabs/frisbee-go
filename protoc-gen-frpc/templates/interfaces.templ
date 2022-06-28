@@ -1,7 +1,4 @@
 {{define "interfaces"}}
-type AnyStreamServer interface {
-    close()
-}
 {{range $i, $v := (MakeIterable .services.Len) -}}
 {{ $service := ($.services.Get $i) -}}
 {{template "interface" $service}}

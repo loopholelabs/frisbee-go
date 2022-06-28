@@ -1,12 +1,12 @@
 {{define "server"}}
-type ServerMap struct {
-    servers map[uint16]AnyStreamServer
+type ServerMap[T any] struct {
+    servers map[uint16]*T
     closed bool
     mu sync.Mutex
 }
 
-func NewServerMap() *ServerMap {
-    return &ServerMap{servers: make(map[uint16]AnyStreamServer)}
+func NewServerMap[T any]() *ServerMap[T] {
+    return &ServerMap[T]{servers: make(map[uint16]*T)}
 }
 
 type Server struct {
@@ -19,12 +19,12 @@ type Server struct {
             {{ if $method.IsStreamingClient}}
                 next{{ CamelCaseName $method.Name }}       uint16
                 next{{ CamelCaseName $method.Name }}Mu sync.RWMutex
+
+                streams{{ CamelCaseName $method.Name }} map[string]*ServerMap[{{ CamelCaseName $method.Name }}Server]
+                streams{{ CamelCaseName $method.Name }}Mu sync.RWMutex
             {{end -}}
         {{end -}}
     {{end -}}
-
-    streams map[string]*ServerMap
-    streamsMu sync.RWMutex
 }
 
 func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *zerolog.Logger) (*Server, error) {
@@ -53,15 +53,23 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
         }, nil
 
         fsrv.SetOnClosed(func(async *frisbee.Async, err error) {
-            s.streamsMu.RLock()
-            if streamMap, ok := s.streams[async.RemoteAddr().String()]; ok {
-                s.streamsMu.RUnlock()
-                for _, stream := range streamMap.servers {
-                    stream.close()
-                }
-                return
-            }
-            s.streamsMu.RUnlock()
+            {{ range $i, $v := (MakeIterable .services.Len) -}}
+                {{ $service := $.services.Get $i -}}
+                {{ range $i, $v := (MakeIterable $service.Methods.Len) -}}
+                    {{ $method := $service.Methods.Get $i -}}
+                    {{ if $method.IsStreamingClient -}}
+                        s.streams{{ CamelCaseName $method.Name }}Mu.RLock()
+                        if streamMap, ok := s.streams{{ CamelCaseName $method.Name }}[async.RemoteAddr().String()]; ok {
+                            s.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
+                            for _, stream := range streamMap.servers {
+                                stream.close()
+                            }
+                            return
+                        }
+                        s.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
+                    {{end -}}
+                {{end -}}
+            {{end -}}
         })
 
         {{ range $i, $v := (MakeIterable .services.Len) -}}
@@ -70,10 +78,10 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                 {{ $method := $service.Methods.Get $i -}}
                 {{ if $method.IsStreamingClient -}}
                 s.next{{ CamelCaseName $method.Name }} = 0
+                s.streams{{ CamelCaseName $method.Name }} = make(map[string]*ServerMap[{{ CamelCaseName $method.Name }}Server])
                 {{end -}}
             {{end -}}
         {{end -}}
-        s.streams = make(map[string]*ServerMap)
         return s, err
     }
 
@@ -89,8 +97,6 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
             {{ $opIndex := call $counter -}}
             {{if or $method.IsStreamingClient $method.IsStreamingServer -}}
                 type {{ CamelCaseName $method.Name }}Server struct {
-                    AnyStreamServer
-
                     context context.Context
                     recv func() (*{{ CamelCase $method.Input.FullName }}, error)
                     send func (*{{ CamelCase $method.Output.FullName }}) error
@@ -159,11 +165,11 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                     conn := ctx.Value(connectionContextKey).(*frisbee.Async)
 
                     {{ if $method.IsStreamingClient -}}
-                    s.streamsMu.RLock()
-                    if smap, ok := s.streams[conn.RemoteAddr().String()]; ok {
-                        s.streamsMu.RUnlock()
+                    s.streams{{ CamelCaseName $method.Name }}Mu.RLock()
+                    if smap, ok := s.streams{{ CamelCaseName $method.Name }}[conn.RemoteAddr().String()]; ok {
+                        s.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
                         smap.mu.Lock()
-                        if srv, ok := smap.servers[id].(*{{ CamelCaseName $method.Name }}Server); ok {
+                        if srv, ok := smap.servers[id]; ok {
                             smap.mu.Unlock()
                             srv.received.Push(req)
                             if HasCloseFlag(req.flags) {
@@ -174,7 +180,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             smap.mu.Unlock()
                         }
                     } else {
-                        s.streamsMu.RUnlock()
+                        s.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
                     }
                     q := queue.NewCircular[{{ CamelCase $method.Input.FullName  }}, *{{ CamelCase $method.Input.FullName  }}](100)
                     q.Push(req)
@@ -188,21 +194,23 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         {{ end -}}
                         closed: atomic.NewBool(false),
                     }
-                    s.streamsMu.Lock()
-                    if serverMap, ok := s.streams[conn.RemoteAddr().String()]; ok {
-                        s.streamsMu.Unlock()
+
+                    {{ if $method.IsStreamingClient -}}
+                    s.streams{{ CamelCaseName $method.Name }}Mu.Lock()
+                    if serverMap, ok := s.streams{{ CamelCaseName $method.Name }}[conn.RemoteAddr().String()]; ok {
+                        s.streams{{ CamelCaseName $method.Name }}Mu.Unlock()
                         serverMap.mu.Lock()
                         serverMap.servers[id] = srv
                         serverMap.mu.Unlock()
                     } else {
-                        s.streamsMu.Unlock()
-                        serverMap := NewServerMap()
+                        s.streams{{ CamelCaseName $method.Name }}Mu.Unlock()
+                        serverMap := NewServerMap[{{ CamelCaseName $method.Name }}Server]()
                         serverMap.servers[id] = srv
-                        s.streamsMu.Lock()
-                        s.streams[conn.RemoteAddr().String()] = serverMap
-                        s.streamsMu.Unlock()
+                        s.streams{{ CamelCaseName $method.Name }}Mu.Lock()
+                        s.streams{{ CamelCaseName $method.Name }}[conn.RemoteAddr().String()] = serverMap
+                        s.streams{{ CamelCaseName $method.Name }}Mu.Unlock()
                     }
-                    {{ if $method.IsStreamingClient -}}
+
                     srv.recv = func() (*{{ CamelCase $method.Input.FullName  }}, error) {
                         if srv.closed.Load() {
                             srv.staleMu.Lock()
@@ -271,14 +279,14 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                             srv.CloseSend()
                         }
                         {{ if $method.IsStreamingClient -}}
-                        s.streamsMu.RLock()
-                        if smap, ok := s.streams[conn.RemoteAddr().String()]; ok {
-                            s.streamsMu.RUnlock()
+                        s.streams{{ CamelCaseName $method.Name }}Mu.RLock()
+                        if smap, ok := s.streams{{ CamelCaseName $method.Name }}[conn.RemoteAddr().String()]; ok {
+                            s.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
                             smap.mu.Lock()
                             delete(smap.servers, incoming.Metadata.Id)
                             smap.mu.Unlock()
                         } else {
-                            s.streamsMu.RUnlock()
+                            s.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
                         }
                         {{ end -}}
                     }()
