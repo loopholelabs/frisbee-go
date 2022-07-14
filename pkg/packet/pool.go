@@ -26,40 +26,13 @@ var (
 	pool = NewPool()
 )
 
-type Pool struct {
-	pool cpool.Pool[Packet, *Packet]
-}
-
-func NewPool() *Pool {
-	pool := new(Pool)
-
-	pool.pool.New = func() *Packet {
+func NewPool() *cpool.Pool[Packet, *Packet] {
+	return cpool.NewPool(func() *Packet {
 		return &Packet{
 			Metadata: new(metadata.Metadata),
 			Content:  content.New(),
 		}
-	}
-
-	return new(Pool)
-}
-
-func (p *Pool) Get() (s *Packet) {
-	v := p.pool.Get()
-	if v == nil {
-		s = &Packet{
-			Metadata: new(metadata.Metadata),
-			Content:  content.New(),
-		}
-		return
-	}
-	return v
-}
-
-func (p *Pool) Put(packet *Packet) {
-	if packet != nil {
-		packet.Reset()
-		p.pool.Put(packet)
-	}
+	})
 }
 
 func Get() (s *Packet) {
