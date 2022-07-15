@@ -14,7 +14,7 @@ stability.
 repository houses both projects, with **FRPC** being contained in the
 [protoc-gen-frpc]("/protoc-gen-frpc") folder.
 
-**This library requires Go1.16 or later.**
+**This library requires Go1.18 or later.**
 
 ## Important note about releases and stability
 

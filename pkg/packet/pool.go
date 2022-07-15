@@ -17,40 +17,22 @@
 package packet
 
 import (
+	cpool "github.com/loopholelabs/common/pkg/pool"
 	"github.com/loopholelabs/frisbee/pkg/content"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
-	"sync"
 )
 
 var (
 	pool = NewPool()
 )
 
-type Pool struct {
-	pool sync.Pool
-}
-
-func NewPool() *Pool {
-	return new(Pool)
-}
-
-func (p *Pool) Get() (s *Packet) {
-	v := p.pool.Get()
-	if v == nil {
-		s = &Packet{
+func NewPool() *cpool.Pool[Packet, *Packet] {
+	return cpool.NewPool(func() *Packet {
+		return &Packet{
 			Metadata: new(metadata.Metadata),
 			Content:  content.New(),
 		}
-		return
-	}
-	return v.(*Packet)
-}
-
-func (p *Pool) Put(packet *Packet) {
-	if packet != nil {
-		packet.Reset()
-		p.pool.Put(packet)
-	}
+	})
 }
 
 func Get() (s *Packet) {
