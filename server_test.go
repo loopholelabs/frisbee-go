@@ -212,12 +212,14 @@ func TestServerMultipleConnections(t *testing.T) {
 	const packetSize = 512
 
 	runner := func(t *testing.T, num int) {
-		finished := make(chan struct{}, num)
+		finished := make([]chan struct{}, num)
 		clientTables := make([]HandlerTable, num)
 		for i := 0; i < num; i++ {
+			idx := i
+			finished[idx] = make(chan struct{}, 1)
 			clientTables[i] = make(HandlerTable)
 			clientTables[i][metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-				finished <- struct{}{}
+				finished[idx] <- struct{}{}
 				return
 			}
 		}
@@ -247,15 +249,13 @@ func TestServerMultipleConnections(t *testing.T) {
 
 		clients := make([]*Client, num)
 		for i := 0; i < num; i++ {
-			c, err := NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
+			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
 			assert.NoError(t, err)
-			_, err = c.Raw()
+			_, err = clients[i].Raw()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
 
-			err = c.Connect(s.listener.Addr().String())
+			err = clients[i].Connect(s.listener.Addr().String())
 			require.NoError(t, err)
-
-			clients[i] = c
 		}
 
 		data := make([]byte, packetSize)
@@ -277,7 +277,7 @@ func TestServerMultipleConnections(t *testing.T) {
 					err := clients[idx].WritePacket(p)
 					assert.NoError(t, err)
 				}
-				<-finished
+				<-finished[idx]
 				err = clients[idx].Close()
 				assert.NoError(t, err)
 				clientWg.Done()
