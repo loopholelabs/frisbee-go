@@ -30,7 +30,6 @@ import (
 	"net"
 	"sync"
 	"testing"
-	"time"
 )
 
 // trunk-ignore-all(golangci-lint/staticcheck)
@@ -245,7 +244,8 @@ func TestServerMultipleConnections(t *testing.T) {
 			wg.Done()
 		}()
 
-		time.Sleep(time.Millisecond * time.Duration(50*num))
+		<-s.started()
+		listenAddr := s.listener.Addr().String()
 
 		clients := make([]*Client, num)
 		for i := 0; i < num; i++ {
@@ -254,7 +254,7 @@ func TestServerMultipleConnections(t *testing.T) {
 			_, err = clients[i].Raw()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
 
-			err = clients[i].Connect(s.listener.Addr().String())
+			err = clients[i].Connect(listenAddr)
 			require.NoError(t, err)
 		}
 
