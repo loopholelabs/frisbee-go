@@ -27,8 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
-	"runtime"
-	"sync"
 	"testing"
 )
 
@@ -204,6 +202,103 @@ func TestServerStaleClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestServerMultipleConnections(t *testing.T) {
+	t.Parallel()
+
+	const testSize = 100
+	const packetSize = 512
+	clientHandlerTable := make(HandlerTable)
+	clientHandlerTable2 := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
+
+	finished := make(chan struct{}, 2)
+
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		if incoming.Metadata.Id == testSize-1 {
+			outgoing = incoming
+			action = CLOSE
+		}
+		return
+	}
+
+	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		finished <- struct{}{}
+		return
+	}
+	clientHandlerTable2[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		finished <- struct{}{}
+		return
+	}
+
+	emptyLogger := zerolog.New(ioutil.Discard)
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	require.NoError(t, err)
+
+	var serverConn net.Conn
+	var clientConn net.Conn
+
+	serverConn, clientConn, err = pair.New()
+	require.NoError(t, err)
+
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	assert.NoError(t, err)
+	_, err = c.Raw()
+	assert.ErrorIs(t, ConnectionNotInitialized, err)
+
+	err = c.FromConn(clientConn)
+	require.NoError(t, err)
+
+	c2, err := NewClient(clientHandlerTable2, context.Background(), WithLogger(&emptyLogger))
+	assert.NoError(t, err)
+	_, err = c2.Raw()
+	assert.ErrorIs(t, ConnectionNotInitialized, err)
+
+	serverConn, clientConn, err = pair.New()
+	require.NoError(t, err)
+
+	go s.ServeConn(serverConn)
+
+	err = c2.FromConn(clientConn)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, c.conn, c2.conn)
+
+	data := make([]byte, packetSize)
+	_, _ = rand.Read(data)
+	p := packet.Get()
+	p.Content.Write(data)
+	p.Metadata.ContentLength = packetSize
+	p.Metadata.Operation = metadata.PacketPing
+	assert.Equal(t, data, p.Content.B)
+
+	for q := 0; q < testSize; q++ {
+		p.Metadata.Id = uint16(q)
+		err = c.WritePacket(p)
+		err = c2.WritePacket(p)
+		assert.NoError(t, err)
+	}
+	packet.Put(p)
+	<-finished
+	<-finished
+
+	_, err = c.conn.ReadPacket()
+	assert.ErrorIs(t, err, ConnectionClosed)
+
+	_, err = c2.conn.ReadPacket()
+	assert.ErrorIs(t, err, ConnectionClosed)
+
+	err = c.Close()
+	assert.NoError(t, err)
+
+	err = c2.Close()
+	assert.NoError(t, err)
+
+	err = s.Shutdown()
+	assert.NoError(t, err)
+}
+
 func BenchmarkThroughputServer(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
@@ -345,105 +440,4 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-}
-
-func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
-	const testSize = 100
-
-	throughputRunner := func(testSize uint32, packetSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
-		return func(b *testing.B) {
-			var err error
-
-			randomData := make([]byte, packetSize)
-
-			p := packet.Get()
-			p.Metadata.Id = 64
-			p.Metadata.Operation = 32
-			p.Content.Write(randomData)
-			p.Metadata.ContentLength = packetSize
-			for i := 0; i < b.N; i++ {
-				done := make(chan struct{}, 1)
-				errCh := make(chan error, 1)
-				go func() {
-					for i := uint32(0); i < testSize; i++ {
-						p, err := readerConn.ReadPacket()
-						if err != nil {
-							errCh <- err
-							return
-						}
-						packet.Put(p)
-					}
-					done <- struct{}{}
-				}()
-				for i := uint32(0); i < testSize; i++ {
-					select {
-					case err = <-errCh:
-						b.Fatal(err)
-					default:
-						err = writerConn.WritePacket(p)
-						if err != nil {
-							b.Fatal(err)
-						}
-					}
-				}
-				select {
-				case <-done:
-					continue
-				case err = <-errCh:
-					b.Fatal(err)
-				}
-			}
-
-			packet.Put(p)
-		}
-	}
-
-	runner := func(numClients int, packetSize uint32) func(b *testing.B) {
-		return func(b *testing.B) {
-			var wg sync.WaitGroup
-			wg.Add(numClients)
-			b.SetBytes(int64(testSize * packetSize))
-			b.ReportAllocs()
-			for i := 0; i < numClients; i++ {
-				go func() {
-					emptyLogger := zerolog.New(ioutil.Discard)
-
-					reader, writer, err := pair.New()
-					if err != nil {
-						b.Error(err)
-					}
-
-					readerConn := NewAsync(reader, &emptyLogger)
-					writerConn := NewAsync(writer, &emptyLogger)
-					throughputRunner(testSize, packetSize, readerConn, writerConn)(b)
-
-					_ = readerConn.Close()
-					_ = writerConn.Close()
-					wg.Done()
-				}()
-			}
-			wg.Wait()
-		}
-	}
-
-	b.Run("1 Pair, 32 Bytes", runner(1, 32))
-	b.Run("2 Pair, 32 Bytes", runner(2, 32))
-	b.Run("5 Pair, 32 Bytes", runner(5, 32))
-	b.Run("10 Pair, 32 Bytes", runner(10, 32))
-	b.Run("Half CPU Pair, 32 Bytes", runner(runtime.NumCPU()/2, 32))
-	b.Run("CPU Pair, 32 Bytes", runner(runtime.NumCPU(), 32))
-
-	b.Run("1 Pair, 512 Bytes", runner(1, 512))
-	b.Run("2 Pair, 512 Bytes", runner(2, 512))
-	b.Run("5 Pair, 512 Bytes", runner(5, 512))
-	b.Run("10 Pair, 512 Bytes", runner(10, 512))
-	b.Run("Half CPU Pair, 512 Bytes", runner(runtime.NumCPU()/2, 512))
-	b.Run("CPU Pair, 512 Bytes", runner(runtime.NumCPU(), 512))
-
-	b.Run("1 Pair, 4096 Bytes", runner(1, 4096))
-	b.Run("2 Pair, 4096 Bytes", runner(2, 4096))
-	b.Run("5 Pair, 4096 Bytes", runner(5, 4096))
-	b.Run("10 Pair, 4096 Bytes", runner(10, 4096))
-	b.Run("Half CPU Pair, 4096 Bytes", runner(runtime.NumCPU()/2, 4096))
-	b.Run("CPU Pair, 4096 Bytes", runner(runtime.NumCPU(), 4096))
 }
