@@ -278,7 +278,7 @@ func TestServerMultipleConnections(t *testing.T) {
 					assert.NoError(t, err)
 				}
 				<-finished[idx]
-				err = clients[idx].Close()
+				err := clients[idx].Close()
 				assert.NoError(t, err)
 				clientWg.Done()
 				packet.Put(p)
