@@ -243,7 +243,7 @@ func TestServerMultipleConnections(t *testing.T) {
 			wg.Done()
 		}()
 
-		time.Sleep(time.Millisecond * time.Duration(500*num))
+		time.Sleep(time.Millisecond * time.Duration(50*num))
 
 		clients := make([]*Client, num)
 		for i := 0; i < num; i++ {
