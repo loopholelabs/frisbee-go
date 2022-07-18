@@ -150,10 +150,8 @@ func (s *Server) Start(addr string) error {
 
 func (s *Server) handleListener() error {
 	var backoff time.Duration
-	var newConn net.Conn
-	var err error
 	for {
-		newConn, err = s.listener.Accept()
+		newConn, err := s.listener.Accept()
 		if err != nil {
 			if s.shutdown.Load() {
 				return nil

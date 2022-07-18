@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -56,8 +55,8 @@ func TestServerRaw(t *testing.T) {
 
 	var rawServerConn, rawClientConn net.Conn
 	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		conn := ctx.Value(serverConnContextKey).(*Async)
-		rawServerConn = conn.Raw()
+		c := ctx.Value(serverConnContextKey).(*Async)
+		rawServerConn = c.Raw()
 		serverIsRaw <- struct{}{}
 		return
 	}
@@ -209,7 +208,7 @@ func TestServerStaleClose(t *testing.T) {
 func TestServerMultipleConnections(t *testing.T) {
 	t.Parallel()
 
-	const testSize = 2
+	const testSize = 100
 	const packetSize = 512
 
 	runner := func(t *testing.T, num int) {
@@ -231,7 +230,7 @@ func TestServerMultipleConnections(t *testing.T) {
 			return
 		}
 
-		emptyLogger := zerolog.New(os.Stdout)
+		emptyLogger := zerolog.New(ioutil.Discard)
 		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 		require.NoError(t, err)
 
@@ -244,7 +243,7 @@ func TestServerMultipleConnections(t *testing.T) {
 			wg.Done()
 		}()
 
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * time.Duration(500*num))
 
 		clients := make([]*Client, num)
 		for i := 0; i < num; i++ {
@@ -273,15 +272,12 @@ func TestServerMultipleConnections(t *testing.T) {
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
 				assert.Equal(t, data, p.Content.B)
-				t.Logf("Starting %d", idx)
 				for q := 0; q < testSize; q++ {
 					p.Metadata.Id = uint16(q)
 					err := clients[idx].WritePacket(p)
 					assert.NoError(t, err)
 				}
-				t.Logf("Waiting %d", idx)
 				<-finished
-				t.Logf("Done %d", idx)
 				err = clients[idx].Close()
 				assert.NoError(t, err)
 				clientWg.Done()
@@ -302,7 +298,7 @@ func TestServerMultipleConnections(t *testing.T) {
 	t.Run("3", func(t *testing.T) { runner(t, 3) })
 	t.Run("5", func(t *testing.T) { runner(t, 5) })
 	t.Run("10", func(t *testing.T) { runner(t, 10) })
-
+	t.Run("100", func(t *testing.T) { runner(t, 100) })
 }
 
 func BenchmarkThroughputServer(b *testing.B) {
