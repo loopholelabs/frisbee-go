@@ -271,7 +271,7 @@ func TestServerMultipleConnections(t *testing.T) {
 				p.Content.Write(data)
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
-				assert.Equal(t, data, p.Content.B)
+				assert.EqualValues(t, data, []byte(*p.Content))
 				for q := 0; q < testSize; q++ {
 					p.Metadata.Id = uint16(q)
 					err := clients[idx].WritePacket(p)
