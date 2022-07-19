@@ -17,10 +17,10 @@
 package packet
 
 import (
+	cpool "github.com/loopholelabs/common/pkg/pool"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/polyglot-go"
 	"sync"
-	cpool "github.com/loopholelabs/common/pkg/pool"
 )
 
 var (
