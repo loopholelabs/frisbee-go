@@ -17,8 +17,8 @@
 package packet
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/content"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
+	"github.com/loopholelabs/polyglot-go"
 	"sync"
 )
 
@@ -39,7 +39,7 @@ func (p *Pool) Get() (s *Packet) {
 	if v == nil {
 		s = &Packet{
 			Metadata: new(metadata.Metadata),
-			Content:  content.New(),
+			Content:  polyglot.NewBuffer(),
 		}
 		return
 	}

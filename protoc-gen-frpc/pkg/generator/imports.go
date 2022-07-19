@@ -19,6 +19,7 @@ package generator
 var (
 	requiredImports = []string{
 		"github.com/loopholelabs/frisbee/pkg/packet",
+		"github.com/loopholelabs/polyglot-go",
 		"errors",
 		"io",
 	}
@@ -31,7 +32,8 @@ var (
 	}
 
 	streamMethodImports = []string{
-		"github.com/loopholelabs/frpc-utilities/pkg/queue",
+		"github.com/loopholelabs/common/pkg/queue",
+		"go.uber.org/atomic",
 	}
 
 	methodImports = []string{

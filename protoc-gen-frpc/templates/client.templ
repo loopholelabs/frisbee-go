@@ -7,11 +7,12 @@ type Client struct {
             {{ $method := $service.Methods.Get $i -}}
             next{{ CamelCaseName $method.Name }} uint16
             next{{ CamelCaseName $method.Name }}Mu sync.RWMutex
-            inflight{{ CamelCaseName $method.Name }}Mu sync.RWMutex
             {{ if $method.IsStreamingServer}}
-            inflight{{ CamelCaseName $method.Name }} map[uint16]*queue.Circular[{{ CamelCase $method.Output.FullName }}, *{{ CamelCase $method.Output.FullName }}]
-            {{else -}}
+            streams{{ CamelCaseName $method.Name }} map[uint16]*{{ CamelCaseName $method.Name }}Client
+            streams{{ CamelCaseName $method.Name }}Mu sync.RWMutex
+            {{ else -}}
             inflight{{ CamelCaseName $method.Name }} map[uint16]chan *{{ CamelCase $method.Output.FullName }}
+            inflight{{ CamelCaseName $method.Name }}Mu sync.RWMutex
             {{end -}}
         {{end -}}
     {{end -}}
@@ -41,8 +42,8 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
             {{ $method := $service.Methods.Get $i -}}
                 c.next{{ CamelCaseName $method.Name }} = 0
                 {{ if $method.IsStreamingServer -}}
-                c.inflight{{ CamelCaseName $method.Name }} = make(map[uint16]*queue.Circular[{{ CamelCase $method.Output.FullName }}, *{{ CamelCase $method.Output.FullName }}])
-                {{else -}}
+                c.streams{{ CamelCaseName $method.Name }} = make(map[uint16]*{{ CamelCaseName $method.Name }}Client)
+                {{ else -}}
                 c.inflight{{ CamelCaseName $method.Name }} = make(map[uint16]chan *{{ CamelCase $method.Output.FullName }})
                 {{end -}}
         {{end -}}
@@ -63,17 +64,20 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
         table[{{ $count }}] = func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
             {{ if $method.IsStreamingServer -}}
             res := New{{ CamelCase $method.Output.FullName }}()
-            err := res.Decode(incoming.Content.B)
+            err := res.Decode(*incoming.Content)
             if err == nil {
-                c.inflight{{ CamelCaseName $method.Name }}Mu.RLock()
-                if q, ok := c.inflight{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
-                    c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
-                    err := q.Push(res)
+                c.streams{{ CamelCaseName $method.Name }}Mu.RLock()
+                if stream, ok := c.streams{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
+                    c.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
+                    err := stream.received.Push(res)
+                    if HasCloseFlag(res.flags) {
+                        stream.close()
+                    }
                     if err != nil {
                         return nil, 0
                     }
                 } else {
-                    c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
+                    c.streams{{ CamelCaseName $method.Name }}Mu.RUnlock()
                 }
             }
             {{else -}}
@@ -81,7 +85,7 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
             if ch, ok := c.inflight{{ CamelCaseName $method.Name }}[incoming.Metadata.Id]; ok {
                 c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
                 res := New{{ CamelCase $method.Output.FullName }}()
-                res.Decode(incoming.Content.B)
+                res.Decode(*incoming.Content)
                 ch <- res
             } else {
                 c.inflight{{ CamelCaseName $method.Name }}Mu.RUnlock()
@@ -111,15 +115,14 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                 c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
                 p.Metadata.Id = id
 
-                req.Encode(p)
-                p.Metadata.ContentLength = uint32(len(p.Content.B))
+                req.Encode(p.Content)
+                p.Metadata.ContentLength = uint32(len(*p.Content))
                 err := c.Client.WritePacket(p)
 
                 {{ if $method.IsStreamingServer -}}
                 q := queue.NewCircular[{{ CamelCase $method.Output.FullName }}, *{{ CamelCase $method.Output.FullName }}](100)
-                c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
-                c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = q
-                c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
+                stale := make([]*Count, 0)
+                staleMu := sync.Mutex{}
                 {{ end -}}
 
                 if err != nil {
@@ -128,21 +131,72 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                 }
                 packet.Put(p)
 
-                {{ if $method.IsStreamingServer }}
-                recv := func() (*{{ CamelCase $method.Output.FullName }}, error) {
-                    p, err := q.Pop()
-                    if p.flags & CloseFlag == 1 {
+                stream := {{ CamelCaseName $method.Name }}Client{
+                    context: ctx,
+                    closed: atomic.NewBool(false),
+                    {{ if $method.IsStreamingServer -}}
+                    received: q,
+                    {{ end -}}
+                }
+                {{ if $method.IsStreamingServer -}}
+                c.streams{{ CamelCaseName $method.Name }}Mu.Lock()
+                c.streams{{ CamelCaseName $method.Name }}[id] = &stream
+                c.streams{{ CamelCaseName $method.Name }}Mu.Unlock()
+
+                stream.recv = func() (*{{ CamelCase $method.Output.FullName }}, error) {
+                    if stream.closed.Load() {
+                        staleMu.Lock()
+                        if len(stale) > 0 {
+                            var r *{{ $method.Output.FullName }}
+                            r, stale = stale[0], stale[1:]
+                            staleMu.Unlock()
+                            return r, nil
+                        }
+                        staleMu.Unlock()
+                        return nil, io.EOF
+                    } else if c.Closed() {
+                        stream.close()
+                    }
+
+                    readPacket, err := q.Pop()
+                    if err != nil {
+                        if stream.closed.Load() {
+                            staleMu.Lock()
+                            if len(stale) > 0 {
+                                var r *{{ $method.Output.FullName }}
+                                r, stale = stale[0], stale[1:]
+                                staleMu.Unlock()
+                                if errors.Is(r.error, io.EOF) {
+                                    return nil, io.EOF
+                                }
+                                return r, nil
+                            }
+                            staleMu.Unlock()
+                        }
                         return nil, io.EOF
                     }
-                    return p, err
+                    if errors.Is(readPacket.error, io.EOF) {
+                        return nil, io.EOF
+                    }
+                    return readPacket, nil
+                }
+                stream.close = func () {
+                    if stream.closed.Load() {
+                        return
+                    }
+                    staleMu.Lock()
+                    stream.closed.Store(true)
+                    stale = q.Drain()
+                    staleMu.Unlock()
+                    q.Close()
                 }
                 {{ else if $method.IsStreamingClient }}
                     ch := make(chan *{{ CamelCase $method.Output.FullName }}, 1)
                     c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
-                    c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = ch
+                    c.inflight{{ CamelCaseName $method.Name }}[id] = ch
                     c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
 
-                    recv := func () (res *{{ CamelCase $method.Output.FullName }}, err error) {
+                    stream.recv = func () (res *{{ CamelCase $method.Output.FullName }}, err error) {
                         select {
                         case res = <- ch:
                             err = res.error
@@ -150,21 +204,21 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                             err = ctx.Err()
                         }
                         c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
-                        delete(c.inflight{{ CamelCaseName $method.Name }}, p.Metadata.Id)
+                        delete(c.inflight{{ CamelCaseName $method.Name }}, id)
                         c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
                         return
                     }
                 {{ end -}}
 
                 {{ if $method.IsStreamingClient -}}
-                send := func (m *{{ CamelCase $method.Input.FullName }}) error {
+                stream.send = func (m *{{ CamelCase $method.Input.FullName }}) error {
                     p := packet.Get()
                     p.Metadata.Operation = {{ $opIndex }}
 
                     p.Metadata.Id = id
 
-                    m.Encode(p)
-                    p.Metadata.ContentLength = uint32(len(p.Content.B))
+                    m.Encode(p.Content)
+                    p.Metadata.ContentLength = uint32(len(*p.Content))
                     err := c.WritePacket(p)
                     if err != nil {
                         packet.Put(p)
@@ -174,19 +228,17 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                     return nil
                 }
                 {{ end -}}
-
-                stream := {{ CamelCaseName $method.Name }}Client{
-                    context: ctx,
-                    recv: recv,
-                    {{ if $method.IsStreamingClient -}}
-                    send: send,
-                    {{ end -}}
-                }
                 go func () {
                 <-ctx.Done()
+                    {{ if $method.IsStreamingServer }}
+                        c.streams{{ CamelCaseName $method.Name }}Mu.Lock()
+                        delete(c.streams{{ CamelCaseName $method.Name }}, id)
+                        c.streams{{ CamelCaseName $method.Name }}Mu.Unlock()
+                    {{ else -}}
                     c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
-                    c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = nil
+                    delete(c.inflight{{ CamelCaseName $method.Name }}, id)
                     c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
+                    {{ end -}}
                 }()
                 return &stream, nil
             }
@@ -194,10 +246,13 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
         type {{ CamelCaseName $method.Name }}Client struct {
             context context.Context
             recv func() (*{{ CamelCase $method.Output.FullName }}, error)
+            close func()
+            closed *atomic.Bool
 
             {{ if $method.IsStreamingClient -}}
             send func (*{{ CamelCase $method.Input.FullName }}) error
             {{ end -}}
+            received *queue.Circular[{{ CamelCase $method.Output.FullName }}, *{{ CamelCase $method.Output.FullName }}]
         }
 
         {{ if $method.IsStreamingServer -}}
@@ -212,12 +267,12 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
         }
 
         func (x *{{ CamelCaseName $method.Name }}Client) CloseSend() error {
-            r := {{ CamelCase $method.Input.FullName }}{flags: 0 | CloseFlag}
+            r := {{ CamelCase $method.Input.FullName }}{error: io.EOF, flags: SetCloseFlag(0, true) }
             return x.Send(&r)
         }
 
         func (x *{{ CamelCaseName $method.Name }}Client) CloseAndRecv() (*{{ CamelCase $method.Output.FullName }}, error) {
-            r := {{ CamelCase $method.Input.FullName }}{flags: 0 | CloseFlag}
+            r := {{ CamelCase $method.Input.FullName }}{error: io.EOF, flags: SetCloseFlag(0, true) }
             x.Send(&r)
             return x.recv()
         }
@@ -230,13 +285,14 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
 
             c.next{{ CamelCaseName $method.Name }}Mu.Lock()
             c.next{{ CamelCaseName $method.Name }} += 1
-            p.Metadata.Id = c.next{{ CamelCaseName $method.Name }}
+            id := c.next{{ CamelCaseName $method.Name }}
             c.next{{ CamelCaseName $method.Name }}Mu.Unlock()
+            p.Metadata.Id = id
 
-            req.Encode(p)
-            p.Metadata.ContentLength = uint32(len(p.Content.B))
+            req.Encode(p.Content)
+            p.Metadata.ContentLength = uint32(len(*p.Content))
             c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
-            c.inflight{{ CamelCaseName $method.Name }}[p.Metadata.Id] = ch
+            c.inflight{{ CamelCaseName $method.Name }}[id] = ch
             c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
             err = c.Client.WritePacket(p)
             if err != nil {
@@ -250,7 +306,7 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
                     err = ctx.Err()
             }
             c.inflight{{ CamelCaseName $method.Name }}Mu.Lock()
-            delete(c.inflight{{ CamelCaseName $method.Name }}, p.Metadata.Id)
+            delete(c.inflight{{ CamelCaseName $method.Name }}, id)
             c.inflight{{ CamelCaseName $method.Name }}Mu.Unlock()
             packet.Put(p)
             return

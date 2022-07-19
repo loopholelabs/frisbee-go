@@ -21,10 +21,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"github.com/loopholelabs/common/pkg/queue"
 	"github.com/loopholelabs/frisbee/internal/dialer"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
-	"github.com/loopholelabs/frpc-utilities/pkg/queue"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -174,7 +174,7 @@ func (c *Async) CloseChannel() <-chan struct{} {
 //
 // If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != len(p.Content.B) {
+	if int(p.Metadata.ContentLength) != len(*p.Content) {
 		return InvalidContentLength
 	}
 
@@ -213,7 +213,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 				return c.closeWithError(err)
 			}
 		}
-		_, err = c.writer.Write(p.Content.B[:p.Metadata.ContentLength])
+		_, err = c.writer.Write((*p.Content)[:p.Metadata.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {

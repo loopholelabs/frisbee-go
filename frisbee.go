@@ -18,9 +18,9 @@ package frisbee
 
 import (
 	"context"
-	"github.com/loopholelabs/frisbee/pkg/content"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/polyglot-go"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -86,7 +86,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: HEARTBEAT,
 		},
-		Content: content.New(),
+		Content: polyglot.NewBuffer(),
 	}
 
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Packets
@@ -94,7 +94,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PING,
 		},
-		Content: content.New(),
+		Content: polyglot.NewBuffer(),
 	}
 
 	// PONGPacket is a pre-allocated Frisbee Packet for PONG Packets
@@ -102,7 +102,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PONG,
 		},
-		Content: content.New(),
+		Content: polyglot.NewBuffer(),
 	}
 )
 

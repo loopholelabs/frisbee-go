@@ -1,10 +1,16 @@
 {{define "constants"}}
-var CloseFlag uint8 = 0x1
-var ErrorFlag uint8 = 0x2
+const connectionContextKey int = 1000
 
-{{ if .numStreamMethods -}}
-    var streamIdLength = 24
-    var statusLength = 8
-    var streamStatusMask uint32 = 0xFF000000
-{{ end -}}
+func SetCloseFlag(flags uint8, close bool) uint8 {
+    return flags | 0x1
+}
+func HasCloseFlag(flags uint8) bool {
+    return flags & 1 == 1
+}
+func SetErrorFlag(flags uint8, error bool) uint8 {
+    return flags | 0x2
+}
+func HasErrorFlag(flags uint8) bool {
+    return flags & (1 << 1) == 1
+}
 {{end}}

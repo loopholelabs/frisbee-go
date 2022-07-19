@@ -74,31 +74,31 @@ func (*Handler) Decode(buf []byte) (Metadata, error) {
 }
 
 // Encode Metadata
-func (fm *Metadata) Encode() (result [Size]byte, err error) {
+func (m *Metadata) Encode() (result [Size]byte, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.Wrap(recoveredErr.(error), Encoding.Error())
 		}
 	}()
 
-	binary.BigEndian.PutUint16(result[IdOffset:IdOffset+IdSize], fm.Id)
-	binary.BigEndian.PutUint16(result[OperationOffset:OperationOffset+OperationSize], fm.Operation)
-	binary.BigEndian.PutUint32(result[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], fm.ContentLength)
+	binary.BigEndian.PutUint16(result[IdOffset:IdOffset+IdSize], m.Id)
+	binary.BigEndian.PutUint16(result[OperationOffset:OperationOffset+OperationSize], m.Operation)
+	binary.BigEndian.PutUint32(result[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], m.ContentLength)
 
 	return
 }
 
 // Decode Metadata
-func (fm *Metadata) Decode(buf [Size]byte) (err error) {
+func (m *Metadata) Decode(buf [Size]byte) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.Wrap(recoveredErr.(error), Decoding.Error())
 		}
 	}()
 
-	fm.Id = binary.BigEndian.Uint16(buf[IdOffset : IdOffset+IdSize])
-	fm.Operation = binary.BigEndian.Uint16(buf[OperationOffset : OperationOffset+OperationSize])
-	fm.ContentLength = binary.BigEndian.Uint32(buf[ContentLengthOffset : ContentLengthOffset+ContentLengthSize])
+	m.Id = binary.BigEndian.Uint16(buf[IdOffset : IdOffset+IdSize])
+	m.Operation = binary.BigEndian.Uint16(buf[OperationOffset : OperationOffset+OperationSize])
+	m.ContentLength = binary.BigEndian.Uint32(buf[ContentLengthOffset : ContentLengthOffset+ContentLengthSize])
 
 	return nil
 }

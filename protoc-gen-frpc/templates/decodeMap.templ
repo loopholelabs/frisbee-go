@@ -1,5 +1,5 @@
 {{define "decodeMap"}}
-func (x {{CamelCase .FullName}}Map) decode(d *packet.Decoder, size uint32) error {
+func (x {{CamelCase .FullName}}Map) decode(d *polyglot.Decoder, size uint32) error {
     if size == 0 {
         return nil
     }

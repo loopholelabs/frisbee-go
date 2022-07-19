@@ -3,27 +3,25 @@ func (x *{{ CamelCase .FullName }}) Decode (b []byte) error {
     if x == nil {
         return NilDecode
     }
-    d := packet.GetDecoder(b)
+    d := polyglot.GetDecoder(b)
     defer d.Return()
     return x.decode(d)
 }
 {{end}}
 
 {{define "internalDecode"}}
-func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
+func (x *{{CamelCase .FullName}}) decode(d *polyglot.Decoder) error {
     if d.Nil() {
         return nil
     }
     var err error
-    var flags uint8
 
     x.error, err = d.Error()
     if err != nil {
-        flags, err = d.Uint8()
+        x.flags, err = d.Uint8()
         if err != nil {
             return err
         }
-        x.flags = flags
 
         {{ $decoding := GetDecodingFields .Fields -}}
         {{ range $field := $decoding.Other -}}
@@ -95,6 +93,11 @@ func (x *{{CamelCase .FullName}}) decode(d *packet.Decoder) error {
                 }
             {{end -}}
         {{end -}}
+    } else {
+        x.flags, err = d.Uint8()
+        if err != nil {
+            return err
+        }
     }
     return nil
 }
