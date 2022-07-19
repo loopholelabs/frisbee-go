@@ -21,12 +21,14 @@ import (
 	"crypto/rand"
 	"github.com/loopholelabs/frisbee/pkg/metadata"
 	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/testing/conn"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net"
+	"sync"
 	"testing"
 )
 
@@ -52,8 +54,8 @@ func TestServerRaw(t *testing.T) {
 
 	var rawServerConn, rawClientConn net.Conn
 	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		conn := ctx.Value(serverConnContextKey).(*Async)
-		rawServerConn = conn.Raw()
+		c := ctx.Value(serverConnContextKey).(*Async)
+		rawServerConn = c.Raw()
 		serverIsRaw <- struct{}{}
 		return
 	}
@@ -207,96 +209,96 @@ func TestServerMultipleConnections(t *testing.T) {
 
 	const testSize = 100
 	const packetSize = 512
-	clientHandlerTable := make(HandlerTable)
-	clientHandlerTable2 := make(HandlerTable)
-	serverHandlerTable := make(HandlerTable)
 
-	finished := make(chan struct{}, 2)
-
-	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if incoming.Metadata.Id == testSize-1 {
-			outgoing = incoming
-			action = CLOSE
+	runner := func(t *testing.T, num int) {
+		finished := make([]chan struct{}, num)
+		clientTables := make([]HandlerTable, num)
+		for i := 0; i < num; i++ {
+			idx := i
+			finished[idx] = make(chan struct{}, 1)
+			clientTables[i] = make(HandlerTable)
+			clientTables[i][metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+				finished[idx] <- struct{}{}
+				return
+			}
 		}
-		return
-	}
+		serverHandlerTable := make(HandlerTable)
+		serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+			if incoming.Metadata.Id == testSize-1 {
+				outgoing = incoming
+				action = CLOSE
+			}
+			return
+		}
 
-	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		finished <- struct{}{}
-		return
-	}
-	clientHandlerTable2[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-		finished <- struct{}{}
-		return
-	}
+		emptyLogger := zerolog.New(ioutil.Discard)
+		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+		require.NoError(t, err)
 
-	emptyLogger := zerolog.New(ioutil.Discard)
-	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
-	require.NoError(t, err)
+		var wg sync.WaitGroup
 
-	var serverConn net.Conn
-	var clientConn net.Conn
+		wg.Add(1)
+		go func() {
+			err := s.Start(conn.Listen)
+			require.NoError(t, err)
+			wg.Done()
+		}()
 
-	serverConn, clientConn, err = pair.New()
-	require.NoError(t, err)
+		<-s.started()
+		listenAddr := s.listener.Addr().String()
 
-	go s.ServeConn(serverConn)
+		clients := make([]*Client, num)
+		for i := 0; i < num; i++ {
+			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
+			assert.NoError(t, err)
+			_, err = clients[i].Raw()
+			assert.ErrorIs(t, ConnectionNotInitialized, err)
 
-	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
-	assert.NoError(t, err)
-	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+			err = clients[i].Connect(listenAddr)
+			require.NoError(t, err)
+		}
 
-	err = c.FromConn(clientConn)
-	require.NoError(t, err)
-
-	c2, err := NewClient(clientHandlerTable2, context.Background(), WithLogger(&emptyLogger))
-	assert.NoError(t, err)
-	_, err = c2.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
-
-	serverConn, clientConn, err = pair.New()
-	require.NoError(t, err)
-
-	go s.ServeConn(serverConn)
-
-	err = c2.FromConn(clientConn)
-	require.NoError(t, err)
-
-	assert.NotEqual(t, c.conn, c2.conn)
-
-	data := make([]byte, packetSize)
-	_, _ = rand.Read(data)
-	p := packet.Get()
-	p.Content.Write(data)
-	p.Metadata.ContentLength = packetSize
-	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, data, p.Content.B)
-
-	for q := 0; q < testSize; q++ {
-		p.Metadata.Id = uint16(q)
-		err = c.WritePacket(p)
-		err = c2.WritePacket(p)
+		data := make([]byte, packetSize)
+		_, err = rand.Read(data)
 		assert.NoError(t, err)
+
+		var clientWg sync.WaitGroup
+		for i := 0; i < num; i++ {
+			idx := i
+			clientWg.Add(1)
+			go func() {
+				p := packet.Get()
+				p.Content.Write(data)
+				p.Metadata.ContentLength = packetSize
+				p.Metadata.Operation = metadata.PacketPing
+				assert.Equal(t, data, p.Content.B)
+				for q := 0; q < testSize; q++ {
+					p.Metadata.Id = uint16(q)
+					err := clients[idx].WritePacket(p)
+					assert.NoError(t, err)
+				}
+				<-finished[idx]
+				err := clients[idx].Close()
+				assert.NoError(t, err)
+				clientWg.Done()
+				packet.Put(p)
+			}()
+		}
+
+		clientWg.Wait()
+
+		err = s.Shutdown()
+		assert.NoError(t, err)
+		wg.Wait()
+
 	}
-	packet.Put(p)
-	<-finished
-	<-finished
 
-	_, err = c.conn.ReadPacket()
-	assert.ErrorIs(t, err, ConnectionClosed)
-
-	_, err = c2.conn.ReadPacket()
-	assert.ErrorIs(t, err, ConnectionClosed)
-
-	err = c.Close()
-	assert.NoError(t, err)
-
-	err = c2.Close()
-	assert.NoError(t, err)
-
-	err = s.Shutdown()
-	assert.NoError(t, err)
+	t.Run("1", func(t *testing.T) { runner(t, 1) })
+	t.Run("2", func(t *testing.T) { runner(t, 2) })
+	t.Run("3", func(t *testing.T) { runner(t, 3) })
+	t.Run("5", func(t *testing.T) { runner(t, 5) })
+	t.Run("10", func(t *testing.T) { runner(t, 10) })
+	t.Run("100", func(t *testing.T) { runner(t, 100) })
 }
 
 func BenchmarkThroughputServer(b *testing.B) {

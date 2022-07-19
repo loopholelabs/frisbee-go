@@ -52,6 +52,7 @@ type Server struct {
 	wg            sync.WaitGroup
 	connections   map[*Async]struct{}
 	connectionsMu sync.Mutex
+	startedCh     chan struct{}
 
 	// baseContext is used to define the base context for this Server and all incoming connections
 	baseContext func() context.Context
@@ -97,6 +98,7 @@ func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 		options:      options,
 		shutdown:     atomic.NewBool(false),
 		connections:  make(map[*Async]struct{}),
+		startedCh:    make(chan struct{}),
 		baseContext:  defaultBaseContext,
 		onClosed:     defaultOnClosed,
 		preWrite:     defaultPreWrite,
@@ -144,16 +146,21 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
-
+	close(s.startedCh)
 	return s.handleListener()
+}
+
+// started returns a channel that will be closed when the server has successfully started
+//
+// This is meant to only be used for testing purposes.
+func (s *Server) started() <-chan struct{} {
+	return s.startedCh
 }
 
 func (s *Server) handleListener() error {
 	var backoff time.Duration
-	var newConn net.Conn
-	var err error
 	for {
-		newConn, err = s.listener.Accept()
+		newConn, err := s.listener.Accept()
 		if err != nil {
 			if s.shutdown.Load() {
 				return nil
