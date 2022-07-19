@@ -121,7 +121,7 @@ func NewClient (tlsConfig *tls.Config, logger *zerolog.Logger) (*Client, error) 
 
                 {{ if $method.IsStreamingServer -}}
                 q := queue.NewCircular[{{ CamelCase $method.Output.FullName }}, *{{ CamelCase $method.Output.FullName }}](100)
-                stale := make([]*Count, 0)
+                stale := make([]*{{ CamelCase $method.Output.FullName }}, 0)
                 staleMu := sync.Mutex{}
                 {{ end -}}
 

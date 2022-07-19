@@ -5,6 +5,7 @@ option go_package = "/echo";
 service EchoService {
   rpc Echo(Request) returns (Response);
   rpc EchoStream(stream Request) returns (stream Response);
+  rpc EchoStreamable(stream NonStreamRequest) returns (stream NonStreamResponse);
 }
 
 message Request {
@@ -14,3 +15,14 @@ message Request {
 message Response{
   string Message = 1;
 }
+
+message NonStreamRequest {
+  string Message = 1;
+  Request Request = 2;
+}
+
+message NonStreamResponse {
+  string Message = 1;
+  Response Response = 2;
+}
+

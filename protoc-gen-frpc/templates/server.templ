@@ -190,7 +190,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         context: ctx,
                         {{ if $method.IsStreamingClient -}}
                         received: q,
-                        stale: make([]*Count, 0),
+                        stale: make([]*{{ CamelCase $method.Input.FullName  }}, 0),
                         {{ end -}}
                         closed: atomic.NewBool(false),
                     }
@@ -204,7 +204,7 @@ func NewServer({{ GetServerFields .services }}, tlsConfig *tls.Config, logger *z
                         serverMap.mu.Unlock()
                     } else {
                         s.streams{{ CamelCaseName $method.Name }}Mu.Unlock()
-                        serverMap := NewServerMap[{{ CamelCaseName $method.Name }}Server]()
+                        serverMap = NewServerMap[{{ CamelCaseName $method.Name }}Server]()
                         serverMap.servers[id] = srv
                         s.streams{{ CamelCaseName $method.Name }}Mu.Lock()
                         s.streams{{ CamelCaseName $method.Name }}[conn.RemoteAddr().String()] = serverMap
