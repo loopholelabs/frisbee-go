@@ -45,6 +45,5 @@ Everyone interacting in the Frisbee project’s codebases, issue trackers, chat 
 [![https://loopholelabs.io][loopholelabs]](https://loopholelabs.io)
 
 [gitrepo]: https://github.com/loopholelabs/frisbee-go
-
 [loopholelabs]: https://cdn.loopholelabs.io/loopholelabs/LoopholeLabsLogo.svg
 [loophomepage]: https://loopholelabs.io
