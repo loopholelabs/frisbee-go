@@ -146,6 +146,7 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
+	s.wg.Add(1)
 	close(s.startedCh)
 	return s.handleListener()
 }
@@ -163,6 +164,7 @@ func (s *Server) handleListener() error {
 		newConn, err := s.listener.Accept()
 		if err != nil {
 			if s.shutdown.Load() {
+				s.wg.Done()
 				return nil
 			}
 			if ne, ok := err.(temporary); ok && ne.Temporary() {
@@ -177,10 +179,12 @@ func (s *Server) handleListener() error {
 				s.Logger().Warn().Err(err).Msgf("Temporary Accept Error, retrying in %s", backoff)
 				time.Sleep(backoff)
 				if s.shutdown.Load() {
+					s.wg.Done()
 					return nil
 				}
 				continue
 			}
+			s.wg.Done()
 			return err
 		}
 		backoff = 0
