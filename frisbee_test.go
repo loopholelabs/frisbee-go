@@ -18,8 +18,8 @@ package frisbee_test
 
 import (
 	"context"
-	"github.com/loopholelabs/frisbee"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee-go"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/rs/zerolog"
 	"os"
 )

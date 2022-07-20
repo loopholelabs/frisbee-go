@@ -17,8 +17,8 @@
 package packet
 
 import (
-	"github.com/loopholelabs/frisbee/pkg/content"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
+	"github.com/loopholelabs/frisbee-go/pkg/metadata"
+	"github.com/loopholelabs/polyglot-go"
 )
 
 // Packet is the structured frisbee data packet, and contains the following:
@@ -36,7 +36,7 @@ import (
 // delivered with the frisbee packet (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
 type Packet struct {
 	Metadata *metadata.Metadata
-	Content  *content.Content
+	Content  *polyglot.Buffer
 }
 
 func (p *Packet) Reset() {
@@ -46,26 +46,12 @@ func (p *Packet) Reset() {
 	p.Content.Reset()
 }
 
-type Kind []byte
-
-var (
-	NilKind     = Kind([]byte{0})
-	SliceKind   = Kind([]byte{1})
-	MapKind     = Kind([]byte{2})
-	AnyKind     = Kind([]byte{3})
-	BytesKind   = Kind([]byte{4})
-	StringKind  = Kind([]byte{5})
-	ErrorKind   = Kind([]byte{6})
-	BoolKind    = Kind([]byte{7})
-	Uint8Kind   = Kind([]byte{8})
-	Uint16Kind  = Kind([]byte{9})
-	Uint32Kind  = Kind([]byte{10})
-	Uint64Kind  = Kind([]byte{11})
-	Int32Kind   = Kind([]byte{11})
-	Int64Kind   = Kind([]byte{12})
-	Float32Kind = Kind([]byte{13})
-	Float64Kind = Kind([]byte{14})
-)
+func New() *Packet {
+	return &Packet{
+		Metadata: new(metadata.Metadata),
+		Content:  polyglot.NewBuffer(),
+	}
+}
 
 type Error string
 

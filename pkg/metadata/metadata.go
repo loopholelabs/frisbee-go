@@ -55,41 +55,24 @@ type Metadata struct {
 	ContentLength uint32 // 4 Bytes
 }
 
-type Handler struct{}
-
-func NewDefaultHandler() Handler {
-	return NewHandler()
-}
-
-func NewHandler() Handler {
-	return Handler{}
-}
-
-func (*Handler) Encode(id, operation uint16, contentLength uint32) ([Size]byte, error) {
-	return Encode(id, operation, contentLength)
-}
-
-func (*Handler) Decode(buf []byte) (Metadata, error) {
-	return Decode(buf)
-}
-
 // Encode Metadata
-func (fm *Metadata) Encode() (result [Size]byte, err error) {
+func (fm *Metadata) Encode() (b *Buffer, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.Wrap(recoveredErr.(error), Encoding.Error())
 		}
 	}()
 
-	binary.BigEndian.PutUint16(result[IdOffset:IdOffset+IdSize], fm.Id)
-	binary.BigEndian.PutUint16(result[OperationOffset:OperationOffset+OperationSize], fm.Operation)
-	binary.BigEndian.PutUint32(result[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], fm.ContentLength)
+	b = NewBuffer()
+	binary.BigEndian.PutUint16(b[IdOffset:IdOffset+IdSize], fm.Id)
+	binary.BigEndian.PutUint16(b[OperationOffset:OperationOffset+OperationSize], fm.Operation)
+	binary.BigEndian.PutUint32(b[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], fm.ContentLength)
 
 	return
 }
 
 // Decode Metadata
-func (fm *Metadata) Decode(buf [Size]byte) (err error) {
+func (fm *Metadata) Decode(buf *Buffer) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
 			err = errors.Wrap(recoveredErr.(error), Decoding.Error())
@@ -103,8 +86,7 @@ func (fm *Metadata) Decode(buf [Size]byte) (err error) {
 	return nil
 }
 
-// Encode without a Handler
-func Encode(id, operation uint16, contentLength uint32) ([Size]byte, error) {
+func Encode(id, operation uint16, contentLength uint32) (*Buffer, error) {
 	metadata := Metadata{
 		Id:            id,
 		Operation:     operation,
@@ -114,13 +96,11 @@ func Encode(id, operation uint16, contentLength uint32) ([Size]byte, error) {
 	return metadata.Encode()
 }
 
-// Decode without a Handler
-func Decode(buf []byte) (metadata Metadata, err error) {
+func Decode(buf []byte) (*Metadata, error) {
 	if len(buf) < Size {
-		return Metadata{}, InvalidBufferLength
+		return nil, InvalidBufferLength
 	}
 
-	err = metadata.Decode(*(*[Size]byte)(unsafe.Pointer(&buf[0])))
-
-	return
+	m := new(Metadata)
+	return m, m.Decode((*Buffer)(unsafe.Pointer(&buf[0])))
 }
