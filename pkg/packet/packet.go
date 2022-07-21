@@ -52,13 +52,3 @@ func New() *Packet {
 		Content:  polyglot.NewBuffer(),
 	}
 }
-
-type Error string
-
-func (e Error) Error() string {
-	return string(e)
-}
-
-func (e Error) Is(err error) bool {
-	return e.Error() == err.Error()
-}
