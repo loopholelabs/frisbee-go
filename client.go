@@ -18,7 +18,7 @@ package frisbee
 
 import (
 	"context"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
@@ -198,7 +198,7 @@ LOOP:
 			packetCtx = c.PacketContext(packetCtx, p)
 		}
 		outgoing, action = handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
 			err = c.conn.WritePacket(outgoing)
 			if outgoing != p {
 				packet.Put(outgoing)

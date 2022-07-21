@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -219,7 +219,7 @@ HANDLE:
 			packetCtx = s.PacketContext(packetCtx, p)
 		}
 		outgoing, action = handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
 			s.preWrite()
 			err = frisbeeConn.WritePacket(outgoing)
 			if outgoing != p {

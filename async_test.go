@@ -18,7 +18,8 @@ package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
+	"github.com/loopholelabs/polyglot-go"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -58,7 +59,7 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -77,8 +78,8 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-	assert.Equal(t, len(data), len(p.Content.B))
-	assert.Equal(t, data, p.Content.B)
+	assert.Equal(t, len(data), len(*p.Content))
+	assert.Equal(t, polyglot.Buffer(data), *p.Content)
 
 	packet.Put(p)
 
@@ -124,8 +125,8 @@ func TestAsyncLargeWrite(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, len(randomData[i]), len(p.Content.B))
-		assert.Equal(t, randomData[i], p.Content.B)
+		assert.Equal(t, len(randomData[i]), len(*p.Content))
+		assert.Equal(t, polyglot.Buffer(randomData[i]), *p.Content)
 		packet.Put(p)
 	}
 
@@ -172,8 +173,8 @@ func TestAsyncRawConn(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, packetSize, len(p.Content.B))
-		assert.Equal(t, randomData, p.Content.B)
+		assert.Equal(t, packetSize, len(*p.Content))
+		assert.Equal(t, polyglot.Buffer(randomData), *p.Content)
 	}
 
 	rawReaderConn := readerConn.Raw()
@@ -226,7 +227,7 @@ func TestAsyncReadClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
@@ -277,7 +278,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
@@ -285,7 +286,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	p, err = readerConn.ReadPacket()
 	require.Error(t, err)
@@ -324,7 +325,7 @@ func TestAsyncWriteClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
@@ -377,7 +378,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	time.Sleep(defaultDeadline * 5)
 
@@ -408,7 +409,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	_, err = readerConn.ReadPacket()
 	require.ErrorIs(t, err, ConnectionClosed)

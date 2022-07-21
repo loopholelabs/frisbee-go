@@ -19,8 +19,9 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee-go/pkg/metadata"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
+	"github.com/loopholelabs/polyglot-go"
 	"github.com/loopholelabs/testing/conn"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
@@ -92,7 +93,7 @@ func TestServerRaw(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, data, p.Content.B)
+	assert.Equal(t, polyglot.Buffer(data), *p.Content)
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -101,7 +102,7 @@ func TestServerRaw(t *testing.T) {
 	}
 
 	p.Reset()
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 	p.Metadata.Operation = metadata.PacketProbe
 
 	err = c.WritePacket(p)
@@ -184,7 +185,7 @@ func TestServerStaleClose(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, data, p.Content.B)
+	assert.Equal(t, polyglot.Buffer(data), *p.Content)
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -271,7 +272,7 @@ func TestServerMultipleConnections(t *testing.T) {
 				p.Content.Write(data)
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
-				assert.Equal(t, data, p.Content.B)
+				assert.Equal(t, polyglot.Buffer(data), *p.Content)
 				for q := 0; q < testSize; q++ {
 					p.Metadata.Id = uint16(q)
 					err := clients[idx].WritePacket(p)

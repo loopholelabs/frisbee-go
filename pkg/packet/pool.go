@@ -17,28 +17,21 @@
 package packet
 
 import (
-	cpool "github.com/loopholelabs/common/pkg/pool"
-	"github.com/loopholelabs/frisbee/pkg/content"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
+	"github.com/loopholelabs/common/pkg/pool"
 )
 
 var (
-	pool = NewPool()
+	packetPool = NewPool()
 )
 
-func NewPool() *cpool.Pool[Packet, *Packet] {
-	return cpool.NewPool(func() *Packet {
-		return &Packet{
-			Metadata: new(metadata.Metadata),
-			Content:  content.New(),
-		}
-	})
+func NewPool() *pool.Pool[Packet, *Packet] {
+	return pool.NewPool(New)
 }
 
 func Get() (s *Packet) {
-	return pool.Get()
+	return packetPool.Get()
 }
 
 func Put(p *Packet) {
-	pool.Put(p)
+	packetPool.Put(p)
 }
