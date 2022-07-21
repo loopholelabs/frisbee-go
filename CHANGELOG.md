@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Changes
+
+- Close errors when the connection is already closed will now log at the Debug level
+
 ## [v0.5.1] - 2022-07-20 (Beta)
 
 ## Fixes
