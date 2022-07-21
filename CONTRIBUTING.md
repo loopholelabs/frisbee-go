@@ -7,7 +7,7 @@ Frisbee uses GitHub to manage reviews of pull requests.
   [MAINTAINERS.md](MAINTAINERS.md)) in the description of the pull request.
 
 - If you plan to do something more involved, first discuss your ideas
-  on our [slack](https://join.slack.com/t/loopholelabs/shared_invite/zt-pntffh2t-l6mQJdBDafG3x1JJabMAFA).
+  on our [discord](https://loopholelabs.io/discord).
   This will avoid unnecessary work and surely give you and us a good deal
   of inspiration.
 

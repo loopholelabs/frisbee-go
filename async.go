@@ -21,10 +21,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
-	"github.com/loopholelabs/frisbee/internal/dialer"
-	"github.com/loopholelabs/frisbee/internal/queue"
-	"github.com/loopholelabs/frisbee/pkg/metadata"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/common/pkg/queue"
+	"github.com/loopholelabs/frisbee-go/internal/dialer"
+	"github.com/loopholelabs/frisbee-go/pkg/metadata"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -43,7 +43,7 @@ type Async struct {
 	closed   *atomic.Bool
 	writer   *bufio.Writer
 	flusher  chan struct{}
-	incoming *queue.Circular
+	incoming *queue.Circular[packet.Packet, *packet.Packet]
 	logger   *zerolog.Logger
 	wg       sync.WaitGroup
 	error    *atomic.Error
@@ -85,7 +85,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		conn:     c,
 		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
-		incoming: queue.NewCircular(DefaultBufferSize),
+		incoming: queue.NewCircular[packet.Packet, *packet.Packet](DefaultBufferSize),
 		flusher:  make(chan struct{}, 3),
 		logger:   logger,
 		error:    atomic.NewError(nil),
@@ -174,11 +174,11 @@ func (c *Async) CloseChannel() <-chan struct{} {
 //
 // If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != len(p.Content.B) {
+	if int(p.Metadata.ContentLength) != len(*p.Content) {
 		return InvalidContentLength
 	}
 
-	encodedMetadata := metadata.Get()
+	encodedMetadata := metadata.GetBuffer()
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
 	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
@@ -190,7 +190,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	}
 
 	_, err := c.writer.Write(encodedMetadata[:])
-	metadata.Put(encodedMetadata)
+	metadata.PutBuffer(encodedMetadata)
 	if err != nil {
 		c.Unlock()
 		if c.closed.Load() {
@@ -213,7 +213,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 				return c.closeWithError(err)
 			}
 		}
-		_, err = c.writer.Write(p.Content.B[:p.Metadata.ContentLength])
+		_, err = c.writer.Write((*p.Content)[:p.Metadata.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {

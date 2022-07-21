@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.5.1] - 2022-07-20 (Beta)
+
+## Fixes
+
+- Fixed an issue where new connections in the server would be overwritten sometimes due to a pointer error
+
+## Changes
+
+- FRPC is now called fRPC
+- fRPC has been moved into its own [repository](https://github.com/loopholelabs/frpc-go)
+- We're using the [Common](https://github.com/loopholelabs/common) library for our queues and packets
+- Packets now use the [Polyglot-Go](https://github.com/loopholelabs/polylgot-go) library for serialization
+
 ## [v0.5.0] - 2022-05-18 (Beta)
 
 ## Changes
@@ -265,7 +278,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.4.6...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.5.1...HEAD
+[v0.5.1]: https://github.com/loopholelabs/frisbee/compare/v0.5.0...v0.5.1
+[v0.5.0]: https://github.com/loopholelabs/frisbee/compare/v0.4.6...v0.5.0
 [v0.4.6]: https://github.com/loopholelabs/frisbee/compare/v0.4.5...v0.4.6
 [v0.4.5]: https://github.com/loopholelabs/frisbee/compare/v0.4.4...v0.4.5
 [v0.4.4]: https://github.com/loopholelabs/frisbee/compare/v0.4.3...v0.4.4

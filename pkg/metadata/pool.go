@@ -16,36 +16,26 @@
 
 package metadata
 
-import "sync"
-
-type Pool struct {
-	pool sync.Pool
-}
-
-func NewPool() *Pool {
-	return new(Pool)
-}
-
-func (p *Pool) Get() *[Size]byte {
-	v := p.pool.Get()
-	if v == nil {
-		v = &[Size]byte{}
-	}
-	return v.(*[Size]byte)
-}
-
-func (p *Pool) Put(b *[Size]byte) {
-	p.pool.Put(b)
-}
-
-var (
-	pool = NewPool()
+import (
+	"github.com/loopholelabs/common/pkg/pool"
 )
 
-func Get() *[Size]byte {
-	return pool.Get()
+type Buffer [Size]byte
+
+func NewBuffer() *Buffer {
+	return new(Buffer)
 }
 
-func Put(b *[Size]byte) {
-	pool.Put(b)
+func (b *Buffer) Reset() {}
+
+var (
+	bufferPool = pool.NewPool[Buffer, *Buffer](NewBuffer)
+)
+
+func GetBuffer() *Buffer {
+	return bufferPool.Get()
+}
+
+func PutBuffer(b *Buffer) {
+	bufferPool.Put(b)
 }

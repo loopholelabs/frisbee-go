@@ -18,7 +18,8 @@ package frisbee
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
+	"github.com/loopholelabs/polyglot-go"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,7 @@ import (
 	"io/ioutil"
 	"net"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
@@ -57,7 +59,7 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -76,8 +78,8 @@ func TestNewAsync(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-	assert.Equal(t, len(data), len(p.Content.B))
-	assert.Equal(t, data, p.Content.B)
+	assert.Equal(t, len(data), len(*p.Content))
+	assert.Equal(t, polyglot.Buffer(data), *p.Content)
 
 	packet.Put(p)
 
@@ -123,8 +125,8 @@ func TestAsyncLargeWrite(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, len(randomData[i]), len(p.Content.B))
-		assert.Equal(t, randomData[i], p.Content.B)
+		assert.Equal(t, len(randomData[i]), len(*p.Content))
+		assert.Equal(t, polyglot.Buffer(randomData[i]), *p.Content)
 		packet.Put(p)
 	}
 
@@ -171,8 +173,8 @@ func TestAsyncRawConn(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, packetSize, len(p.Content.B))
-		assert.Equal(t, randomData, p.Content.B)
+		assert.Equal(t, packetSize, len(*p.Content))
+		assert.Equal(t, polyglot.Buffer(randomData), *p.Content)
 	}
 
 	rawReaderConn := readerConn.Raw()
@@ -225,7 +227,7 @@ func TestAsyncReadClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
@@ -276,7 +278,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	p, err = readerConn.ReadPacket()
 	require.NoError(t, err)
@@ -284,7 +286,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	p, err = readerConn.ReadPacket()
 	require.Error(t, err)
@@ -323,7 +325,7 @@ func TestAsyncWriteClose(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	err = writerConn.WritePacket(p)
 	assert.NoError(t, err)
@@ -376,7 +378,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	time.Sleep(defaultDeadline * 5)
 
@@ -407,7 +409,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint16(64), p.Metadata.Id)
 	assert.Equal(t, uint16(32), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, 0, len(p.Content.B))
+	assert.Equal(t, 0, len(*p.Content))
 
 	_, err = readerConn.ReadPacket()
 	require.ErrorIs(t, err, ConnectionClosed)
@@ -467,4 +469,108 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 
 	_ = readerConn.Close()
 	_ = writerConn.Close()
+}
+
+func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
+	const testSize = 100
+
+	throughputRunner := func(testSize uint32, packetSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {
+		return func(b *testing.B) {
+			var err error
+
+			randomData := make([]byte, packetSize)
+
+			p := packet.Get()
+			p.Metadata.Id = 64
+			p.Metadata.Operation = 32
+			p.Content.Write(randomData)
+			p.Metadata.ContentLength = packetSize
+			for i := 0; i < b.N; i++ {
+				done := make(chan struct{}, 1)
+				errCh := make(chan error, 1)
+				go func() {
+					for i := uint32(0); i < testSize; i++ {
+						p, err := readerConn.ReadPacket()
+						if err != nil {
+							errCh <- err
+							return
+						}
+						packet.Put(p)
+					}
+					done <- struct{}{}
+				}()
+				for i := uint32(0); i < testSize; i++ {
+					select {
+					case err = <-errCh:
+						b.Fatal(err)
+					default:
+						err = writerConn.WritePacket(p)
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+				select {
+				case <-done:
+					continue
+				case err = <-errCh:
+					b.Fatal(err)
+				}
+			}
+
+			packet.Put(p)
+		}
+	}
+
+	runner := func(numClients int, packetSize uint32) func(b *testing.B) {
+		return func(b *testing.B) {
+			var wg sync.WaitGroup
+			wg.Add(numClients)
+			b.SetBytes(int64(testSize * packetSize))
+			b.ReportAllocs()
+			for i := 0; i < numClients; i++ {
+				go func() {
+					emptyLogger := zerolog.New(ioutil.Discard)
+
+					reader, writer, err := pair.New()
+					if err != nil {
+						b.Error(err)
+					}
+
+					readerConn := NewAsync(reader, &emptyLogger)
+					writerConn := NewAsync(writer, &emptyLogger)
+					throughputRunner(testSize, packetSize, readerConn, writerConn)(b)
+
+					_ = readerConn.Close()
+					_ = writerConn.Close()
+					wg.Done()
+				}()
+			}
+			wg.Wait()
+		}
+	}
+
+	b.Run("1 Pair, 32 Bytes", runner(1, 32))
+	b.Run("2 Pair, 32 Bytes", runner(2, 32))
+	b.Run("5 Pair, 32 Bytes", runner(5, 32))
+	b.Run("10 Pair, 32 Bytes", runner(10, 32))
+	b.Run("Half CPU Pair, 32 Bytes", runner(runtime.NumCPU()/2, 32))
+	b.Run("CPU Pair, 32 Bytes", runner(runtime.NumCPU(), 32))
+	b.Run("Double CPU Pair, 32 Bytes", runner(runtime.NumCPU()*2, 32))
+
+	b.Run("1 Pair, 512 Bytes", runner(1, 512))
+	b.Run("2 Pair, 512 Bytes", runner(2, 512))
+	b.Run("5 Pair, 512 Bytes", runner(5, 512))
+	b.Run("10 Pair, 512 Bytes", runner(10, 512))
+	b.Run("Half CPU Pair, 512 Bytes", runner(runtime.NumCPU()/2, 512))
+	b.Run("CPU Pair, 512 Bytes", runner(runtime.NumCPU(), 512))
+	b.Run("Double CPU Pair, 512 Bytes", runner(runtime.NumCPU()*2, 512))
+
+	b.Run("1 Pair, 4096 Bytes", runner(1, 4096))
+	b.Run("2 Pair, 4096 Bytes", runner(2, 4096))
+	b.Run("5 Pair, 4096 Bytes", runner(5, 4096))
+	b.Run("10 Pair, 4096 Bytes", runner(10, 4096))
+	b.Run("Half CPU Pair, 4096 Bytes", runner(runtime.NumCPU()/2, 4096))
+	b.Run("CPU Pair, 4096 Bytes", runner(runtime.NumCPU(), 4096))
+	b.Run("Double CPU Pair, 4096 Bytes", runner(runtime.NumCPU()*2, 4096))
 }

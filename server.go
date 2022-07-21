@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/loopholelabs/frisbee/pkg/packet"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -52,6 +52,7 @@ type Server struct {
 	wg            sync.WaitGroup
 	connections   map[*Async]struct{}
 	connectionsMu sync.Mutex
+	startedCh     chan struct{}
 
 	// baseContext is used to define the base context for this Server and all incoming connections
 	baseContext func() context.Context
@@ -97,6 +98,7 @@ func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 		options:      options,
 		shutdown:     atomic.NewBool(false),
 		connections:  make(map[*Async]struct{}),
+		startedCh:    make(chan struct{}),
 		baseContext:  defaultBaseContext,
 		onClosed:     defaultOnClosed,
 		preWrite:     defaultPreWrite,
@@ -144,18 +146,25 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
-
+	s.wg.Add(1)
+	close(s.startedCh)
 	return s.handleListener()
+}
+
+// started returns a channel that will be closed when the server has successfully started
+//
+// This is meant to only be used for testing purposes.
+func (s *Server) started() <-chan struct{} {
+	return s.startedCh
 }
 
 func (s *Server) handleListener() error {
 	var backoff time.Duration
-	var newConn net.Conn
-	var err error
 	for {
-		newConn, err = s.listener.Accept()
+		newConn, err := s.listener.Accept()
 		if err != nil {
 			if s.shutdown.Load() {
+				s.wg.Done()
 				return nil
 			}
 			if ne, ok := err.(temporary); ok && ne.Temporary() {
@@ -170,10 +179,12 @@ func (s *Server) handleListener() error {
 				s.Logger().Warn().Err(err).Msgf("Temporary Accept Error, retrying in %s", backoff)
 				time.Sleep(backoff)
 				if s.shutdown.Load() {
+					s.wg.Done()
 					return nil
 				}
 				continue
 			}
+			s.wg.Done()
 			return err
 		}
 		backoff = 0
@@ -212,7 +223,7 @@ HANDLE:
 			packetCtx = s.PacketContext(packetCtx, p)
 		}
 		outgoing, action = handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(outgoing.Content.B)) {
+		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
 			s.preWrite()
 			err = frisbeeConn.WritePacket(outgoing)
 			if outgoing != p {
