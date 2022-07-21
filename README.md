@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/loopholelabs/frisbee-go)](https://goreportcard.com/report/github.com/loopholelabs/frisbee-go)
 [![go-doc](https://godoc.org/github.com/loopholelabs/frisbee-go?status.svg)](https://godoc.org/github.com/loopholelabs/frisbee-go)
 
-This is the [Go](http://golang.org) implementation of [Frisbee](https://frpc.io/concepts/frisbee), a bring-your-own
+This is the [Go](http://golang.org) implementation of [Frisbee](https://frpc.io/frisbee), a bring-your-own
 protocol messaging framework designed for performance and
 stability.
 
@@ -22,7 +22,7 @@ same is true for selected other new features explicitly marked as
 ## Usage and Documentation
 
 Usage instructions and documentation for Frisbee is available
-at [https://frpc.io/concepts/frisbee](https://frpc.io/concepts/frisbee). The Frisbee framework also has great
+at [https://frpc.io/frisbee](https://frpc.io/frisbee). The Frisbee framework also has great
 documentation coverage using [GoDoc](https://godoc.org/github.com/loopholelabs/frisbee-go).
 
 ## Contributing
