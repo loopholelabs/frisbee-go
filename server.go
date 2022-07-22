@@ -121,6 +121,8 @@ func (s *Server) SetPreWrite(f func()) error {
 }
 
 // SetHandlerTable sets the handler table for the server.
+//
+// This function should not be called once the server has started.
 func (s *Server) SetHandlerTable(handlerTable HandlerTable) error {
 	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := handlerTable[i]; ok {

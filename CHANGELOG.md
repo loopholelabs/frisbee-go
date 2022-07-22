@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Features
+
+- Adding the `SetHandlerTable` function to the server which allows us to modify the handler table in the server
+
 ## Changes
 
 - Close errors when the connection is already closed will now log at the Debug level
