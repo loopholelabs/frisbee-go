@@ -79,30 +79,18 @@ type Server struct {
 // NewServer returns an uninitialized frisbee Server with the registered HandlerTable.
 // The Start method must then be called to start the server and listen for connections.
 func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
-	for i := uint16(0); i < RESERVED9; i++ {
-		if _, ok := handlerTable[i]; ok {
-			return nil, InvalidHandlerTable
-		}
-	}
-
 	options := loadOptions(opts...)
-	if options.Heartbeat > time.Duration(0) {
-		handlerTable[HEARTBEAT] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			outgoing = incoming
-			return
-		}
+	s := &Server{
+		options:     options,
+		shutdown:    atomic.NewBool(false),
+		connections: make(map[*Async]struct{}),
+		startedCh:   make(chan struct{}),
+		baseContext: defaultBaseContext,
+		onClosed:    defaultOnClosed,
+		preWrite:    defaultPreWrite,
 	}
 
-	return &Server{
-		handlerTable: handlerTable,
-		options:      options,
-		shutdown:     atomic.NewBool(false),
-		connections:  make(map[*Async]struct{}),
-		startedCh:    make(chan struct{}),
-		baseContext:  defaultBaseContext,
-		onClosed:     defaultOnClosed,
-		preWrite:     defaultPreWrite,
-	}, nil
+	return s, s.SetHandlerTable(handlerTable)
 }
 
 // SetBaseContext sets the baseContext function for the server. If f is nil, it returns an error.
@@ -129,6 +117,25 @@ func (s *Server) SetPreWrite(f func()) error {
 		return PreWriteNil
 	}
 	s.preWrite = f
+	return nil
+}
+
+// SetHandlerTable sets the handler table for the server.
+func (s *Server) SetHandlerTable(handlerTable HandlerTable) error {
+	for i := uint16(0); i < RESERVED9; i++ {
+		if _, ok := handlerTable[i]; ok {
+			return InvalidHandlerTable
+		}
+	}
+
+	if s.options.Heartbeat > time.Duration(0) {
+		handlerTable[HEARTBEAT] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+			outgoing = incoming
+			return
+		}
+	}
+
+	s.handlerTable = handlerTable
 	return nil
 }
 
