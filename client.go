@@ -186,7 +186,7 @@ LOOP:
 	}
 	p, err = c.conn.ReadPacket()
 	if err != nil {
-		c.Logger().Error().Err(err).Msg("error while getting packet frisbee connection")
+		c.Logger().Debug().Err(err).Msg("error while getting packet frisbee connection")
 		c.wg.Done()
 		_ = c.Close()
 		return
