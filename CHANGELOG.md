@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Features
+
+- Adding the `GetHandlerTable` function to the server which allows us to retrieve the handler table from the server
+
 ## [v0.5.2] - 2022-07-22 (Beta)
 
 ## Features
