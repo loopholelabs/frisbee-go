@@ -141,6 +141,13 @@ func (s *Server) SetHandlerTable(handlerTable HandlerTable) error {
 	return nil
 }
 
+// GetHandlerTable gets the handler table for the server.
+//
+// This function should not be called once the server has started.
+func (s *Server) GetHandlerTable() HandlerTable {
+	return s.handlerTable
+}
+
 // Start will start the frisbee server and its reactor goroutines
 // to receive and handle incoming connections. If the baseContext, ConnContext,
 // onClosed, OnShutdown, or preWrite functions have not been defined, it will
