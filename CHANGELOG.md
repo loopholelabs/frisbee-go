@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.5.3] - 2022-07-27 (Beta)
+
 ## Features
 
 - Adding the `GetHandlerTable` function to the server which allows us to retrieve the handler table from the server
@@ -292,16 +294,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.5.2...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.5.3...HEAD
+
+[v0.5.3]: https://github.com/loopholelabs/frisbee/compare/v0.5.2...v0.5.3
+
 [v0.5.2]: https://github.com/loopholelabs/frisbee/compare/v0.5.1...v0.5.2
+
 [v0.5.1]: https://github.com/loopholelabs/frisbee/compare/v0.5.0...v0.5.1
+
 [v0.5.0]: https://github.com/loopholelabs/frisbee/compare/v0.4.6...v0.5.0
+
 [v0.4.6]: https://github.com/loopholelabs/frisbee/compare/v0.4.5...v0.4.6
+
 [v0.4.5]: https://github.com/loopholelabs/frisbee/compare/v0.4.4...v0.4.5
+
 [v0.4.4]: https://github.com/loopholelabs/frisbee/compare/v0.4.3...v0.4.4
+
 [v0.4.3]: https://github.com/loopholelabs/frisbee/compare/v0.4.2...v0.4.3
+
 [v0.4.2]: https://github.com/loopholelabs/frisbee/compare/v0.4.1...v0.4.2
+
 [v0.4.1]: https://github.com/loopholelabs/frisbee/compare/v0.4.0...v0.4.1
+
 [v0.4.0]: https://github.com/loopholelabs/frisbee/compare/v0.3.2...v0.4.0
 [v0.3.2]: https://github.com/loopholelabs/frisbee/compare/v0.3.1...v0.3.2
 [v0.3.1]: https://github.com/loopholelabs/frisbee/compare/v0.3.0...v0.3.1
