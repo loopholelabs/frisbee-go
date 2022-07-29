@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.5.4] - 2022-07-28 (Beta)
+
+## Features
+
+- Renaming the `defaultDeadline` to `DefaultDeadline` and increasing the value to 5 seconds from 1 second
+
 ## [v0.5.3] - 2022-07-27 (Beta)
 
 ## Features
@@ -294,7 +300,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.5.3...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.5.4...HEAD
+[v0.5.4]: https://github.com/loopholelabs/frisbee/compare/v0.5.3...v0.5.4
 [v0.5.3]: https://github.com/loopholelabs/frisbee/compare/v0.5.2...v0.5.3
 [v0.5.2]: https://github.com/loopholelabs/frisbee/compare/v0.5.1...v0.5.2
 [v0.5.1]: https://github.com/loopholelabs/frisbee/compare/v0.5.0...v0.5.1
