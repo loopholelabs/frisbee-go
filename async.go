@@ -202,7 +202,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	}
 	if p.Metadata.ContentLength != 0 {
 		if int(p.Metadata.ContentLength) > c.writer.Size() {
-			err = c.SetWriteDeadline(time.Now().Add(defaultDeadline))
+			err = c.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 			if err != nil {
 				c.Unlock()
 				if c.closed.Load() {
@@ -351,7 +351,7 @@ func (c *Async) flush() error {
 		return ConnectionClosed
 	}
 	if c.writer.Buffered() > 0 {
-		err := c.SetWriteDeadline(time.Now().Add(defaultDeadline))
+		err := c.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 		if err != nil {
 			c.Unlock()
 			return err
@@ -389,7 +389,7 @@ func (c *Async) close() error {
 		c.staleMu.Unlock()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
-			_ = c.conn.SetWriteDeadline(time.Now().Add(defaultDeadline))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 			_ = c.writer.Flush()
 			_ = c.conn.SetWriteDeadline(emptyTime)
 		}
@@ -428,7 +428,7 @@ func (c *Async) flushLoop() {
 }
 
 func (c *Async) waitForPONG() {
-	timer := time.NewTimer(defaultDeadline)
+	timer := time.NewTimer(DefaultDeadline)
 	defer timer.Stop()
 	select {
 	case <-c.closeCh:
@@ -482,7 +482,7 @@ func (c *Async) readLoop() {
 		var err error
 		for n < metadata.Size {
 			var nn int
-			err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+			err = c.SetReadDeadline(time.Now().Add(DefaultDeadline))
 			if err != nil {
 				c.Logger().Debug().Err(err).Msg("error setting read deadline during read loop, calling closeWithError")
 				c.wg.Done()
@@ -586,7 +586,7 @@ func (c *Async) readLoop() {
 				n = 0
 				for n < metadata.Size {
 					var nn int
-					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+					err = c.SetReadDeadline(time.Now().Add(DefaultDeadline))
 					if err != nil {
 						c.wg.Done()
 						_ = c.closeWithError(err)
@@ -627,7 +627,7 @@ func (c *Async) readLoop() {
 				n = 0
 				for n < min {
 					var nn int
-					err = c.SetReadDeadline(time.Now().Add(defaultDeadline))
+					err = c.SetReadDeadline(time.Now().Add(DefaultDeadline))
 					if err != nil {
 						c.wg.Done()
 						_ = c.closeWithError(err)
