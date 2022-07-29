@@ -288,7 +288,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(*p.Content))
 
-	p, err = readerConn.ReadPacket()
+	_, err = readerConn.ReadPacket()
 	require.Error(t, err)
 
 	err = readerConn.Close()
