@@ -33,7 +33,7 @@ const DefaultBufferSize = 1 << 16
 var (
 	defaultLogger = zerolog.New(ioutil.Discard)
 
-	defaultDeadline = time.Second
+	DefaultDeadline = time.Second * 5
 
 	emptyTime = time.Time{}
 	pastTime  = time.Unix(1, 0)

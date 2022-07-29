@@ -100,7 +100,7 @@ func BenchmarkTCPThroughput(b *testing.B) {
 				errCh := make(chan error, 1)
 				go func() {
 					for i := uint32(0); i < testSize; i++ {
-						err := readerConn.SetReadDeadline(time.Now().Add(defaultDeadline))
+						err := readerConn.SetReadDeadline(time.Now().Add(DefaultDeadline))
 						if err != nil {
 							errCh <- err
 							return
@@ -118,7 +118,7 @@ func BenchmarkTCPThroughput(b *testing.B) {
 					case err = <-errCh:
 						b.Fatal(err)
 					default:
-						err = writerConn.SetWriteDeadline(time.Now().Add(defaultDeadline))
+						err = writerConn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 						if err != nil {
 							b.Fatal(err)
 						}
@@ -128,7 +128,7 @@ func BenchmarkTCPThroughput(b *testing.B) {
 						}
 					}
 				}
-				err = writerConn.SetWriteDeadline(time.Now().Add(defaultDeadline))
+				err = writerConn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 				if err != nil {
 					b.Fatal(err)
 				}
