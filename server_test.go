@@ -121,14 +121,14 @@ func TestServerRaw(t *testing.T) {
 
 	write, err := rawServerConn.Write(serverBytes)
 	assert.NoError(t, err)
-	assert.Equal(t, len(serverBytes), write)
+	assert.Equal(t, cap(serverBytes), write)
 
-	clientBuffer := make([]byte, len(serverBytes))
-	read, err := rawClientConn.Read(clientBuffer)
+	clientBuffer := make([]byte, cap(serverBytes))
+	read, err := rawClientConn.Read(clientBuffer[:])
 	assert.NoError(t, err)
-	assert.Equal(t, len(serverBytes), read)
+	assert.Equal(t, cap(serverBytes), read)
 
-	assert.Equal(t, serverBytes, clientBuffer)
+	assert.Equal(t, serverBytes, clientBuffer[:read])
 
 	err = c.Close()
 	assert.NoError(t, err)
@@ -513,6 +513,109 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 		require.NoError(t, err)
 
 		s.SetConcurrency(0)
+
+		var wg sync.WaitGroup
+
+		wg.Add(1)
+		go func() {
+			err := s.Start(conn.Listen)
+			require.NoError(t, err)
+			wg.Done()
+		}()
+
+		<-s.started()
+		listenAddr := s.listener.Addr().String()
+
+		clients := make([]*Client, num)
+		for i := 0; i < num; i++ {
+			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
+			assert.NoError(t, err)
+			_, err = clients[i].Raw()
+			assert.ErrorIs(t, ConnectionNotInitialized, err)
+
+			err = clients[i].Connect(listenAddr)
+			require.NoError(t, err)
+		}
+
+		data := make([]byte, packetSize)
+		_, err = rand.Read(data)
+		assert.NoError(t, err)
+
+		var clientWg sync.WaitGroup
+		for i := 0; i < num; i++ {
+			idx := i
+			clientWg.Add(1)
+			go func() {
+				p := packet.Get()
+				p.Content.Write(data)
+				p.Metadata.ContentLength = packetSize
+				p.Metadata.Operation = metadata.PacketPing
+				assert.Equal(t, polyglot.Buffer(data), *p.Content)
+				for q := 0; q < testSize; q++ {
+					p.Metadata.Id = uint16(q)
+					err := clients[idx].WritePacket(p)
+					assert.NoError(t, err)
+				}
+				<-finished[idx]
+				err := clients[idx].Close()
+				assert.NoError(t, err)
+				clientWg.Done()
+				packet.Put(p)
+			}()
+		}
+
+		clientWg.Wait()
+
+		err = s.Shutdown()
+		assert.NoError(t, err)
+		wg.Wait()
+
+	}
+
+	t.Run("1", func(t *testing.T) { runner(t, 1) })
+	t.Run("2", func(t *testing.T) { runner(t, 2) })
+	t.Run("3", func(t *testing.T) { runner(t, 3) })
+	t.Run("5", func(t *testing.T) { runner(t, 5) })
+	t.Run("10", func(t *testing.T) { runner(t, 10) })
+	t.Run("100", func(t *testing.T) { runner(t, 100) })
+}
+
+func TestServerMultipleConnectionsLimited(t *testing.T) {
+	t.Parallel()
+
+	const testSize = 100
+	const packetSize = 512
+
+	runner := func(t *testing.T, num int) {
+		finished := make([]chan struct{}, num)
+		clientTables := make([]HandlerTable, num)
+		for i := 0; i < num; i++ {
+			idx := i
+			finished[idx] = make(chan struct{}, 1)
+			clientTables[i] = make(HandlerTable)
+			clientTables[i][metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+				finished[idx] <- struct{}{}
+				return
+			}
+		}
+		count := atomic.NewUint32(0)
+
+		serverHandlerTable := make(HandlerTable)
+		serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+			if count.Load() == testSize-1 {
+				outgoing = incoming
+				action = CLOSE
+			} else {
+				count.Inc()
+			}
+			return
+		}
+
+		emptyLogger := zerolog.New(io.Discard)
+		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+		require.NoError(t, err)
+
+		s.SetConcurrency(10)
 
 		var wg sync.WaitGroup
 

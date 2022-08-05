@@ -19,7 +19,6 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -181,7 +180,6 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("adding 1 to wg\n")
 	s.wg.Add(1)
 	close(s.startedCh)
 	return s.handleListener()
@@ -332,7 +330,6 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 			packet.Put(p)
 		}
 		wg.Done()
-		return
 	}
 HANDLE:
 	wg.Add(1)
@@ -404,7 +401,6 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 		}
 		<-s.limiter
 		wg.Done()
-		return
 	}
 HANDLE:
 	select {
