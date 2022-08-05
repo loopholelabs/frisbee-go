@@ -153,7 +153,11 @@ func (s *Server) GetHandlerTable() HandlerTable {
 }
 
 // SetConcurrency sets the maximum number of concurrent goroutines that will be created
-// to handle incoming packets from connections on a per-connection basis.
+// by the server to handle incoming packets.
+//
+// An important caveat of this is that handlers must always thread-safe if they share resources
+// between connections. If the concurrency is set to a value != 1, then the handlers
+// must also be thread-safe if they share resources per connection.
 //
 // This function should not be called once the server has started.
 func (s *Server) SetConcurrency(concurrency uint64) {
