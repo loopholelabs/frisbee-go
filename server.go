@@ -54,6 +54,7 @@ type Server struct {
 	connections   map[*Async]struct{}
 	connectionsMu sync.Mutex
 	startedCh     chan struct{}
+	concurrency   uint64
 
 	// baseContext is used to define the base context for this Server and all incoming connections
 	baseContext func() context.Context
@@ -89,6 +90,7 @@ func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 		baseContext: defaultBaseContext,
 		onClosed:    defaultOnClosed,
 		preWrite:    defaultPreWrite,
+		concurrency: 1,
 	}
 
 	return s, s.SetHandlerTable(handlerTable)
@@ -147,6 +149,14 @@ func (s *Server) SetHandlerTable(handlerTable HandlerTable) error {
 // This function should not be called once the server has started.
 func (s *Server) GetHandlerTable() HandlerTable {
 	return s.handlerTable
+}
+
+// SetConcurrency sets the maximum number of concurrent goroutines that will be created
+// to handle incoming packets from connections on a per-connection basis.
+//
+// This function should not be called once the server has started.
+func (s *Server) SetConcurrency(concurrency uint64) {
+	s.concurrency = concurrency
 }
 
 // Start will start the frisbee server and its reactor goroutines
@@ -261,6 +271,160 @@ HANDLE:
 	goto LOOP
 }
 
+func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Context) {
+	p, err := frisbeeConn.ReadPacket()
+	if err != nil {
+		_ = frisbeeConn.Close()
+		s.onClosed(frisbeeConn, err)
+		return
+	}
+	if s.ConnContext != nil {
+		connCtx = s.ConnContext(connCtx, frisbeeConn)
+	}
+	wg := new(sync.WaitGroup)
+	closed := atomic.NewBool(false)
+	connCtx, cancel := context.WithCancel(connCtx)
+	handler := func(p *packet.Packet) {
+		handlerFunc := s.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := connCtx
+			if s.PacketContext != nil {
+				packetCtx = s.PacketContext(packetCtx, p)
+			}
+			outgoing, action := handlerFunc(packetCtx, p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+				s.preWrite()
+				err := frisbeeConn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
+				if err != nil {
+					_ = frisbeeConn.Close()
+					if closed.CAS(false, true) {
+						s.onClosed(frisbeeConn, err)
+					}
+					cancel()
+					wg.Done()
+					return
+				}
+			} else {
+				packet.Put(p)
+			}
+			switch action {
+			case NONE:
+			case CLOSE:
+				_ = frisbeeConn.Close()
+				if closed.CAS(false, true) {
+					s.onClosed(frisbeeConn, nil)
+				}
+				cancel()
+			}
+		} else {
+			packet.Put(p)
+		}
+		wg.Done()
+		return
+	}
+HANDLE:
+	wg.Add(1)
+	go handler(p)
+	p, err = frisbeeConn.ReadPacket()
+	if err != nil {
+		_ = frisbeeConn.Close()
+		if closed.CAS(false, true) {
+			s.onClosed(frisbeeConn, err)
+		}
+		cancel()
+		wg.Wait()
+		return
+	}
+	goto HANDLE
+}
+
+func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context) {
+	p, err := frisbeeConn.ReadPacket()
+	if err != nil {
+		_ = frisbeeConn.Close()
+		s.onClosed(frisbeeConn, err)
+	}
+	if s.ConnContext != nil {
+		connCtx = s.ConnContext(connCtx, frisbeeConn)
+	}
+	wg := new(sync.WaitGroup)
+	closed := atomic.NewBool(false)
+	connCtx, cancel := context.WithCancel(connCtx)
+	concurrency := make(chan struct{}, s.concurrency)
+	handler := func(p *packet.Packet) {
+		handlerFunc := s.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := connCtx
+			if s.PacketContext != nil {
+				packetCtx = s.PacketContext(packetCtx, p)
+			}
+			outgoing, action := handlerFunc(packetCtx, p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+				s.preWrite()
+				err := frisbeeConn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
+				if err != nil {
+					_ = frisbeeConn.Close()
+					if closed.CAS(false, true) {
+						s.onClosed(frisbeeConn, err)
+					}
+					cancel()
+					<-concurrency
+					wg.Done()
+					return
+				}
+			} else {
+				packet.Put(p)
+			}
+			switch action {
+			case NONE:
+			case CLOSE:
+				_ = frisbeeConn.Close()
+				if closed.CAS(false, true) {
+					s.onClosed(frisbeeConn, nil)
+				}
+				cancel()
+			}
+		} else {
+			packet.Put(p)
+		}
+		<-concurrency
+		wg.Done()
+		return
+	}
+HANDLE:
+	select {
+	case concurrency <- struct{}{}:
+		wg.Add(1)
+		go handler(p)
+		p, err = frisbeeConn.ReadPacket()
+		if err != nil {
+			_ = frisbeeConn.Close()
+			if closed.CAS(false, true) {
+				s.onClosed(frisbeeConn, err)
+			}
+			cancel()
+			wg.Wait()
+			return
+		}
+		goto HANDLE
+	case <-connCtx.Done():
+		_ = frisbeeConn.Close()
+		if closed.CAS(false, true) {
+			s.onClosed(frisbeeConn, err)
+		}
+		wg.Wait()
+		return
+	}
+}
+
 // ServeConn takes a net.Conn and starts a goroutine to handle it using the Server.
 func (s *Server) ServeConn(conn net.Conn) {
 	s.wg.Add(1)
@@ -299,15 +463,30 @@ func (s *Server) serveConn(newConn net.Conn) {
 	}
 	s.connections[frisbeeConn] = struct{}{}
 	s.connectionsMu.Unlock()
-
-	err = s.handlePacket(frisbeeConn, connCtx)
-	_ = frisbeeConn.Close()
-	s.onClosed(frisbeeConn, err)
-	s.connectionsMu.Lock()
-	if !s.shutdown.Load() {
-		delete(s.connections, frisbeeConn)
+	if s.concurrency == 0 {
+		s.handleUnlimitedPacket(frisbeeConn, connCtx)
+		s.connectionsMu.Lock()
+		if !s.shutdown.Load() {
+			delete(s.connections, frisbeeConn)
+		}
+		s.connectionsMu.Unlock()
+	} else if s.concurrency == 1 {
+		err = s.handlePacket(frisbeeConn, connCtx)
+		_ = frisbeeConn.Close()
+		s.onClosed(frisbeeConn, err)
+		s.connectionsMu.Lock()
+		if !s.shutdown.Load() {
+			delete(s.connections, frisbeeConn)
+		}
+		s.connectionsMu.Unlock()
+	} else {
+		s.handleLimitedPacket(frisbeeConn, connCtx)
+		s.connectionsMu.Lock()
+		if !s.shutdown.Load() {
+			delete(s.connections, frisbeeConn)
+		}
+		s.connectionsMu.Unlock()
 	}
-	s.connectionsMu.Unlock()
 	s.wg.Done()
 }
 
