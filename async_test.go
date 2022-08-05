@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
-	"io/ioutil"
 	"net"
 	"runtime"
 	"sync"
@@ -38,7 +37,7 @@ func TestNewAsync(t *testing.T) {
 
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer := net.Pipe()
 
@@ -95,7 +94,7 @@ func TestAsyncLargeWrite(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer := net.Pipe()
 
@@ -142,7 +141,7 @@ func TestAsyncRawConn(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 32
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
@@ -204,7 +203,7 @@ func TestAsyncReadClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
@@ -252,7 +251,7 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
@@ -302,7 +301,7 @@ func TestAsyncWriteClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
@@ -352,7 +351,7 @@ func TestAsyncWriteClose(t *testing.T) {
 func TestAsyncTimeout(t *testing.T) {
 	t.Parallel()
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
@@ -431,7 +430,7 @@ func TestAsyncTimeout(t *testing.T) {
 func BenchmarkAsyncThroughputPipe(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer := net.Pipe()
 
@@ -451,7 +450,7 @@ func BenchmarkAsyncThroughputPipe(b *testing.B) {
 func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer, err := pair.New()
 	if err != nil {
@@ -530,7 +529,7 @@ func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < numClients; i++ {
 				go func() {
-					emptyLogger := zerolog.New(ioutil.Discard)
+					emptyLogger := zerolog.New(io.Discard)
 
 					reader, writer, err := pair.New()
 					if err != nil {

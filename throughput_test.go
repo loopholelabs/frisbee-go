@@ -24,7 +24,6 @@ import (
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"io"
-	"io/ioutil"
 	"net"
 	"testing"
 	"time"
@@ -33,7 +32,7 @@ import (
 func BenchmarkAsyncThroughputLarge(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer, err := pair.New()
 	if err != nil {
@@ -56,7 +55,7 @@ func BenchmarkAsyncThroughputLarge(b *testing.B) {
 func BenchmarkSyncThroughputLarge(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer, err := pair.New()
 	if err != nil {

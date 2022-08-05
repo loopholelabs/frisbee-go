@@ -25,7 +25,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
+	"io"
 	"net"
 	"testing"
 )
@@ -63,7 +63,7 @@ func TestClientRaw(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
@@ -156,7 +156,7 @@ func TestClientStaleClose(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
@@ -214,7 +214,7 @@ func BenchmarkThroughputClient(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
@@ -297,7 +297,7 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)

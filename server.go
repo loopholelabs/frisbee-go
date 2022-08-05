@@ -55,6 +55,7 @@ type Server struct {
 	connectionsMu sync.Mutex
 	startedCh     chan struct{}
 	concurrency   uint64
+	limiter       chan struct{}
 
 	// baseContext is used to define the base context for this Server and all incoming connections
 	baseContext func() context.Context
@@ -157,6 +158,9 @@ func (s *Server) GetHandlerTable() HandlerTable {
 // This function should not be called once the server has started.
 func (s *Server) SetConcurrency(concurrency uint64) {
 	s.concurrency = concurrency
+	if s.concurrency > 1 {
+		s.limiter = make(chan struct{}, s.concurrency)
+	}
 }
 
 // Start will start the frisbee server and its reactor goroutines
@@ -354,7 +358,6 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
-	concurrency := make(chan struct{}, s.concurrency)
 	handler := func(p *packet.Packet) {
 		handlerFunc := s.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
@@ -376,7 +379,7 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 						s.onClosed(frisbeeConn, err)
 					}
 					cancel()
-					<-concurrency
+					<-s.limiter
 					wg.Done()
 					return
 				}
@@ -395,13 +398,13 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 		} else {
 			packet.Put(p)
 		}
-		<-concurrency
+		<-s.limiter
 		wg.Done()
 		return
 	}
 HANDLE:
 	select {
-	case concurrency <- struct{}{}:
+	case s.limiter <- struct{}{}:
 		wg.Add(1)
 		go handler(p)
 		p, err = frisbeeConn.ReadPacket()

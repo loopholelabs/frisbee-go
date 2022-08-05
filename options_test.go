@@ -20,7 +20,7 @@ import (
 	"crypto/tls"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
+	"io"
 	"testing"
 	"time"
 )
@@ -73,7 +73,7 @@ func TestDisableOptions(t *testing.T) {
 func TestIndividualOptions(t *testing.T) {
 	t.Parallel()
 
-	logger := zerolog.New(ioutil.Discard)
+	logger := zerolog.New(io.Discard)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 	}

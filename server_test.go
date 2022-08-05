@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
-	"io/ioutil"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -67,7 +67,7 @@ func TestServerRaw(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
@@ -164,7 +164,7 @@ func TestServerStaleClose(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
@@ -234,7 +234,7 @@ func TestServerMultipleConnections(t *testing.T) {
 			return
 		}
 
-		emptyLogger := zerolog.New(ioutil.Discard)
+		emptyLogger := zerolog.New(io.Discard)
 		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 		require.NoError(t, err)
 
@@ -330,7 +330,7 @@ func TestServerRawUnlimited(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
@@ -432,7 +432,7 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
@@ -508,7 +508,7 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 			return
 		}
 
-		emptyLogger := zerolog.New(ioutil.Discard)
+		emptyLogger := zerolog.New(io.Discard)
 		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 		require.NoError(t, err)
 
@@ -590,7 +590,7 @@ func BenchmarkThroughputServer(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
@@ -652,7 +652,7 @@ func BenchmarkThroughputServerUnlimited(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
@@ -716,7 +716,7 @@ func BenchmarkThroughputServerLimited(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
@@ -790,7 +790,7 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
@@ -873,7 +873,7 @@ func BenchmarkThroughputResponseServerSlow(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
@@ -945,21 +945,19 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 
 	handlerTable := make(HandlerTable)
 
-	count := atomic.NewUint32(0)
+	count := atomic.NewUint64(0)
 	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 		time.Sleep(time.Microsecond * 50)
-		if count.Load() == testSize-1 {
+		if count.Inc() == testSize-1 {
 			incoming.Reset()
 			incoming.Metadata.Id = testSize
 			incoming.Metadata.Operation = metadata.PacketPong
 			outgoing = incoming
-		} else {
-			count.Inc()
 		}
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
@@ -1004,6 +1002,97 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 			if readPacket.Metadata.Operation != metadata.PacketPong {
 				b.Fatal("invalid decoded operation", readPacket.Metadata.Operation)
 			}
+
+			count.Store(0)
+
+			packet.Put(readPacket)
+		}
+
+	})
+	b.StopTimer()
+
+	packet.Put(p)
+
+	err = frisbeeConn.Close()
+	if err != nil {
+		b.Fatal(err)
+	}
+	err = server.Shutdown()
+	if err != nil {
+		b.Fatal(err)
+	}
+}
+
+func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
+	const testSize = 1<<16 - 1
+	const packetSize = 512
+
+	serverConn, clientConn, err := pair.New()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	handlerTable := make(HandlerTable)
+
+	count := atomic.NewUint64(0)
+	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		time.Sleep(time.Microsecond * 50)
+		if count.Inc() == testSize-1 {
+			incoming.Reset()
+			incoming.Metadata.Id = testSize
+			incoming.Metadata.Operation = metadata.PacketPong
+			outgoing = incoming
+		}
+		return
+	}
+
+	emptyLogger := zerolog.New(io.Discard)
+	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	server.SetConcurrency(100)
+
+	go server.ServeConn(serverConn)
+
+	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+
+	data := make([]byte, packetSize)
+	_, _ = rand.Read(data)
+
+	p := packet.Get()
+	p.Metadata.Operation = metadata.PacketPing
+
+	p.Content.Write(data)
+	p.Metadata.ContentLength = packetSize
+
+	b.Run("test", func(b *testing.B) {
+		b.SetBytes(testSize * packetSize)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			for q := 0; q < testSize; q++ {
+				p.Metadata.Id = uint16(q)
+				err = frisbeeConn.WritePacket(p)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			readPacket, err := frisbeeConn.ReadPacket()
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			if readPacket.Metadata.Id != testSize {
+				b.Fatal("invalid decoded metadata id", readPacket.Metadata.Id)
+			}
+
+			if readPacket.Metadata.Operation != metadata.PacketPong {
+				b.Fatal("invalid decoded operation", readPacket.Metadata.Operation)
+			}
+
+			count.Store(0)
 			packet.Put(readPacket)
 		}
 
