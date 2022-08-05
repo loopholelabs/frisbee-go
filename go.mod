@@ -3,7 +3,7 @@ module github.com/loopholelabs/frisbee-go
 go 1.18
 
 require (
-	github.com/loopholelabs/common v0.2.0
+	github.com/loopholelabs/common v0.4.2
 	github.com/loopholelabs/polyglot-go v0.3.0
 	github.com/loopholelabs/testing v0.2.3
 	github.com/pkg/errors v0.9.1

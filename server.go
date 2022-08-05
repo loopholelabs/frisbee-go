@@ -19,6 +19,7 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -162,6 +163,7 @@ func (s *Server) Start(addr string) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("adding 1 to wg\n")
 	s.wg.Add(1)
 	close(s.startedCh)
 	return s.handleListener()
@@ -205,11 +207,7 @@ func (s *Server) handleListener() error {
 		}
 		backoff = 0
 
-		s.wg.Add(1)
-		go func() {
-			s.ServeConn(newConn)
-			s.wg.Done()
-		}()
+		s.ServeConn(newConn)
 	}
 }
 
@@ -254,10 +252,6 @@ HANDLE:
 		}
 		switch action {
 		case NONE:
-		case UPDATE:
-			if s.UpdateContext != nil {
-				connCtx = s.UpdateContext(connCtx, frisbeeConn)
-			}
 		case CLOSE:
 			return
 		}
@@ -267,8 +261,15 @@ HANDLE:
 	goto LOOP
 }
 
-// ServeConn takes a TCP net.Conn and serves it using the Server
-func (s *Server) ServeConn(newConn net.Conn) {
+// ServeConn takes a net.Conn and starts a goroutine to handle it using the Server.
+func (s *Server) ServeConn(conn net.Conn) {
+	s.wg.Add(1)
+	go s.serveConn(conn)
+}
+
+// serveConn takes a net.Conn and serves it using the Server
+// and assumes that the server's wait group has been incremented by 1.
+func (s *Server) serveConn(newConn net.Conn) {
 	var err error
 	switch v := newConn.(type) {
 	case *net.TCPConn:
@@ -276,12 +277,14 @@ func (s *Server) ServeConn(newConn net.Conn) {
 		if err != nil {
 			s.Logger().Error().Err(err).Msg("Error while setting TCP Keepalive")
 			_ = v.Close()
+			s.wg.Done()
 			return
 		}
 		err = v.SetKeepAlivePeriod(s.options.KeepAlive)
 		if err != nil {
 			s.Logger().Error().Err(err).Msg("Error while setting TCP Keepalive Period")
 			_ = v.Close()
+			s.wg.Done()
 			return
 		}
 	}
@@ -291,6 +294,7 @@ func (s *Server) ServeConn(newConn net.Conn) {
 
 	s.connectionsMu.Lock()
 	if s.shutdown.Load() {
+		s.wg.Done()
 		return
 	}
 	s.connections[frisbeeConn] = struct{}{}
@@ -304,6 +308,7 @@ func (s *Server) ServeConn(newConn net.Conn) {
 		delete(s.connections, frisbeeConn)
 	}
 	s.connectionsMu.Unlock()
+	s.wg.Done()
 }
 
 // Logger returns the server's logger (useful for ServerRouter functions)

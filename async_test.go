@@ -380,7 +380,7 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(*p.Content))
 
-	time.Sleep(DefaultDeadline * 5)
+	time.Sleep(DefaultDeadline * 2)
 
 	err = writerConn.Error()
 	require.NoError(t, err)
@@ -400,7 +400,7 @@ func TestAsyncTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	runtime.Gosched()
-	time.Sleep(DefaultDeadline * 5)
+	time.Sleep(DefaultDeadline * 2)
 	runtime.Gosched()
 
 	p, err = readerConn.ReadPacket()
@@ -417,7 +417,7 @@ func TestAsyncTimeout(t *testing.T) {
 	err = readerConn.Error()
 	if err == nil {
 		runtime.Gosched()
-		time.Sleep(DefaultDeadline * 10)
+		time.Sleep(DefaultDeadline * 3)
 		runtime.Gosched()
 	}
 	require.Error(t, readerConn.Error())

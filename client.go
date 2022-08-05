@@ -215,10 +215,6 @@ LOOP:
 		}
 		switch action {
 		case NONE:
-		case UPDATE:
-			if c.UpdateContext != nil {
-				c.ctx = c.UpdateContext(c.ctx, c.conn)
-			}
 		case CLOSE:
 			c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.conn.RemoteAddr())
 			c.wg.Done()

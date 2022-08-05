@@ -31,7 +31,7 @@ var (
 	ConnectionClosed         = errors.New("connection closed")
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferLength      = errors.New("invalid buffer length")
-	InvalidHandlerTable      = errors.New("invalid handlePacket table configuration, a reserved value may have been used")
+	InvalidHandlerTable      = errors.New("invalid handler table configuration, a reserved value may have been used")
 )
 
 // Action is an ENUM used to modify the state of the client or server from a Handler function
@@ -45,9 +45,6 @@ type Action int
 const (
 	// NONE is used to do nothing (default)
 	NONE = Action(iota)
-
-	// UPDATE is used to trigger an UpdateContext call on the Server or Client
-	UPDATE
 
 	// CLOSE is used to close the frisbee connection
 	CLOSE
