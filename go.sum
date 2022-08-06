@@ -8,8 +8,8 @@ github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORN
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
-github.com/loopholelabs/common v0.4.2 h1:agyKRjPU9dwxgVgEh2ME+GlTw2ktlb/uqmxw4SEovbI=
-github.com/loopholelabs/common v0.4.2/go.mod h1:OoB+RYcKNb3/TkwK5K29LVaJMBT606aBs+FUv8piW2g=
+github.com/loopholelabs/common v0.4.4 h1:Ge+1v1WiLYgR/4pziOQoJAwUqUm1c9j6nQvnkiFFBsk=
+github.com/loopholelabs/common v0.4.4/go.mod h1:YKnljczr4jgxkHhhAwIHh3CJXaff89YBd8Vp3pwpG3k=
 github.com/loopholelabs/polyglot-go v0.3.0 h1:iOqPw5B3krCMYfgDaPgPoh1A87ACE8lKdbpbERM58pY=
 github.com/loopholelabs/polyglot-go v0.3.0/go.mod h1:9/Hr1nFO9Al46806vMP3DB2k8blQ3gazBPaoOsdgo34=
 github.com/loopholelabs/testing v0.2.3 h1:4nVuK5ctaE6ua5Z0dYk2l7xTFmcpCYLUeGjRBp8keOA=
