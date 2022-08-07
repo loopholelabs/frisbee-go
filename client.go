@@ -179,33 +179,44 @@ func (c *Client) handleConn() {
 	var action Action
 	var err error
 	var handlerFunc Handler
-LOOP:
-	if c.closed.Load() {
-		c.wg.Done()
-		return
-	}
-	p, err = c.conn.ReadPacket()
-	if err != nil {
-		c.Logger().Debug().Err(err).Msg("error while getting packet frisbee connection")
-		c.wg.Done()
-		_ = c.Close()
-		return
-	}
-	handlerFunc = c.handlerTable[p.Metadata.Operation]
-	if handlerFunc != nil {
-		packetCtx := c.ctx
-		if c.PacketContext != nil {
-			packetCtx = c.PacketContext(packetCtx, p)
+	for {
+		if c.closed.Load() {
+			c.wg.Done()
+			return
 		}
-		outgoing, action = handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
-			err = c.conn.WritePacket(outgoing)
-			if outgoing != p {
-				packet.Put(outgoing)
+		p, err = c.conn.ReadPacket()
+		if err != nil {
+			c.Logger().Debug().Err(err).Msg("error while getting packet frisbee connection")
+			c.wg.Done()
+			_ = c.Close()
+			return
+		}
+		handlerFunc = c.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := c.ctx
+			if c.PacketContext != nil {
+				packetCtx = c.PacketContext(packetCtx, p)
 			}
-			packet.Put(p)
-			if err != nil {
-				c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+			outgoing, action = handlerFunc(packetCtx, p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+				err = c.conn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
+				if err != nil {
+					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
+					c.wg.Done()
+					_ = c.Close()
+					return
+				}
+			} else {
+				packet.Put(p)
+			}
+			switch action {
+			case NONE:
+			case CLOSE:
+				c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.conn.RemoteAddr())
 				c.wg.Done()
 				_ = c.Close()
 				return
@@ -213,18 +224,7 @@ LOOP:
 		} else {
 			packet.Put(p)
 		}
-		switch action {
-		case NONE:
-		case CLOSE:
-			c.Logger().Debug().Msgf("Closing connection %s because of CLOSE action", c.conn.RemoteAddr())
-			c.wg.Done()
-			_ = c.Close()
-			return
-		}
-	} else {
-		packet.Put(p)
 	}
-	goto LOOP
 }
 
 func (c *Client) heartbeat() {
