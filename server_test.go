@@ -424,11 +424,10 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 
 	count := atomic.NewUint32(0)
 	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if count.Load() == testSize-1 {
+		if count.Inc() == testSize-1 {
 			outgoing = incoming
 			action = CLOSE
-		} else {
-			count.Inc()
+			count.Store(0)
 		}
 		return
 	}
@@ -501,15 +500,17 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 				return
 			}
 		}
-		count := atomic.NewUint32(0)
+		clientCounts := make([]*atomic.Uint32, num)
+		for i := 0; i < num; i++ {
+			clientCounts[i] = atomic.NewUint32(0)
+		}
 
 		serverHandlerTable := make(HandlerTable)
 		serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			if count.Load() == testSize-1 {
+			if clientCounts[incoming.Metadata.Id].Inc() == testSize-1 {
 				outgoing = incoming
 				action = CLOSE
-			} else {
-				count.Inc()
+				clientCounts[incoming.Metadata.Id].Store(0)
 			}
 			return
 		}
@@ -556,9 +557,9 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 				p.Content.Write(data)
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
+				p.Metadata.Id = uint16(idx)
 				assert.Equal(t, polyglot.Buffer(data), *p.Content)
 				for q := 0; q < testSize; q++ {
-					p.Metadata.Id = uint16(q)
 					err := clients[idx].WritePacket(p)
 					assert.NoError(t, err)
 				}
@@ -586,6 +587,178 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 	t.Run("100", func(t *testing.T) { runner(t, 100) })
 }
 
+func TestServerRawLimited(t *testing.T) {
+	t.Parallel()
+
+	const testSize = 100
+	const packetSize = 512
+	clientHandlerTable := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
+
+	serverIsRaw := make(chan struct{}, 1)
+
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		return
+	}
+
+	var rawServerConn, rawClientConn net.Conn
+	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		c := ctx.Value(serverConnContextKey).(*Async)
+		rawServerConn = c.Raw()
+		serverIsRaw <- struct{}{}
+		return
+	}
+
+	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		return
+	}
+
+	emptyLogger := zerolog.New(io.Discard)
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	require.NoError(t, err)
+
+	s.SetConcurrency(10)
+
+	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
+		return context.WithValue(ctx, serverConnContextKey, c)
+	}
+
+	serverConn, clientConn, err := pair.New()
+	require.NoError(t, err)
+
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	assert.NoError(t, err)
+
+	_, err = c.Raw()
+	assert.ErrorIs(t, ConnectionNotInitialized, err)
+
+	err = c.FromConn(clientConn)
+	assert.NoError(t, err)
+
+	data := make([]byte, packetSize)
+	_, _ = rand.Read(data)
+	p := packet.Get()
+	p.Content.Write(data)
+	p.Metadata.ContentLength = packetSize
+	p.Metadata.Operation = metadata.PacketPing
+	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+
+	for q := 0; q < testSize; q++ {
+		p.Metadata.Id = uint16(q)
+		err = c.WritePacket(p)
+		assert.NoError(t, err)
+	}
+
+	p.Reset()
+	assert.Equal(t, 0, len(*p.Content))
+	p.Metadata.Operation = metadata.PacketProbe
+
+	err = c.WritePacket(p)
+	require.NoError(t, err)
+
+	packet.Put(p)
+
+	rawClientConn, err = c.Raw()
+	require.NoError(t, err)
+
+	<-serverIsRaw
+
+	serverBytes := []byte("SERVER WRITE")
+
+	write, err := rawServerConn.Write(serverBytes)
+	assert.NoError(t, err)
+	assert.Equal(t, len(serverBytes), write)
+
+	clientBuffer := make([]byte, len(serverBytes))
+	read, err := rawClientConn.Read(clientBuffer)
+	assert.NoError(t, err)
+	assert.Equal(t, len(serverBytes), read)
+
+	assert.Equal(t, serverBytes, clientBuffer)
+
+	err = c.Close()
+	assert.NoError(t, err)
+	err = rawClientConn.Close()
+	assert.NoError(t, err)
+
+	err = s.Shutdown()
+	assert.NoError(t, err)
+	err = rawServerConn.Close()
+	assert.NoError(t, err)
+}
+
+func TestServerStaleCloseLimited(t *testing.T) {
+	t.Parallel()
+
+	const testSize = 100
+	const packetSize = 512
+	clientHandlerTable := make(HandlerTable)
+	serverHandlerTable := make(HandlerTable)
+
+	finished := make(chan struct{}, 1)
+
+	count := atomic.NewUint32(0)
+	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
+		if count.Inc() == testSize-1 {
+			outgoing = incoming
+			action = CLOSE
+			count.Store(0)
+		}
+		return
+	}
+
+	clientHandlerTable[metadata.PacketPing] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
+		finished <- struct{}{}
+		return
+	}
+
+	emptyLogger := zerolog.New(io.Discard)
+	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	require.NoError(t, err)
+
+	s.SetConcurrency(10)
+
+	serverConn, clientConn, err := pair.New()
+	require.NoError(t, err)
+
+	go s.ServeConn(serverConn)
+
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	assert.NoError(t, err)
+	_, err = c.Raw()
+	assert.ErrorIs(t, ConnectionNotInitialized, err)
+
+	err = c.FromConn(clientConn)
+	require.NoError(t, err)
+
+	data := make([]byte, packetSize)
+	_, _ = rand.Read(data)
+	p := packet.Get()
+	p.Content.Write(data)
+	p.Metadata.ContentLength = packetSize
+	p.Metadata.Operation = metadata.PacketPing
+	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+
+	for q := 0; q < testSize; q++ {
+		p.Metadata.Id = uint16(q)
+		err = c.WritePacket(p)
+		assert.NoError(t, err)
+	}
+	packet.Put(p)
+	<-finished
+
+	_, err = c.conn.ReadPacket()
+	assert.ErrorIs(t, err, ConnectionClosed)
+
+	err = c.Close()
+	assert.NoError(t, err)
+
+	err = s.Shutdown()
+	assert.NoError(t, err)
+}
+
 func TestServerMultipleConnectionsLimited(t *testing.T) {
 	t.Parallel()
 
@@ -604,15 +777,18 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 				return
 			}
 		}
-		count := atomic.NewUint32(0)
+
+		clientCounts := make([]*atomic.Uint32, num)
+		for i := 0; i < num; i++ {
+			clientCounts[i] = atomic.NewUint32(0)
+		}
 
 		serverHandlerTable := make(HandlerTable)
 		serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			if count.Load() == testSize-1 {
+			if clientCounts[incoming.Metadata.Id].Inc() == testSize-1 {
 				outgoing = incoming
 				action = CLOSE
-			} else {
-				count.Inc()
+				clientCounts[incoming.Metadata.Id].Store(0)
 			}
 			return
 		}
@@ -659,9 +835,9 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 				p.Content.Write(data)
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
+				p.Metadata.Id = uint16(idx)
 				assert.Equal(t, polyglot.Buffer(data), *p.Content)
 				for q := 0; q < testSize; q++ {
-					p.Metadata.Id = uint16(q)
 					err := clients[idx].WritePacket(p)
 					assert.NoError(t, err)
 				}
@@ -1068,6 +1244,7 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 			incoming.Metadata.Id = testSize
 			incoming.Metadata.Operation = metadata.PacketPong
 			outgoing = incoming
+			count.Store(0)
 		}
 		return
 	}
@@ -1118,8 +1295,6 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 				b.Fatal("invalid decoded operation", readPacket.Metadata.Operation)
 			}
 
-			count.Store(0)
-
 			packet.Put(readPacket)
 		}
 
@@ -1157,6 +1332,7 @@ func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
 			incoming.Metadata.Id = testSize
 			incoming.Metadata.Operation = metadata.PacketPong
 			outgoing = incoming
+			count.Store(0)
 		}
 		return
 	}
@@ -1207,7 +1383,6 @@ func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
 				b.Fatal("invalid decoded operation", readPacket.Metadata.Operation)
 			}
 
-			count.Store(0)
 			packet.Put(readPacket)
 		}
 
