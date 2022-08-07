@@ -41,7 +41,7 @@ const (
 	serverConnContextKey = "conn"
 )
 
-func TestServerRaw(t *testing.T) {
+func TestServerRawSingle(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100
@@ -70,6 +70,8 @@ func TestServerRaw(t *testing.T) {
 	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
+
+	s.SetConcurrency(1)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
 		return context.WithValue(ctx, serverConnContextKey, c)
@@ -141,7 +143,7 @@ func TestServerRaw(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestServerStaleClose(t *testing.T) {
+func TestServerStaleCloseSingle(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100
@@ -167,6 +169,8 @@ func TestServerStaleClose(t *testing.T) {
 	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
+
+	s.SetConcurrency(1)
 
 	serverConn, clientConn, err := pair.New()
 	require.NoError(t, err)
@@ -207,7 +211,7 @@ func TestServerStaleClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestServerMultipleConnections(t *testing.T) {
+func TestServerMultipleConnectionsSingle(t *testing.T) {
 	t.Parallel()
 
 	const testSize = 100
@@ -237,6 +241,8 @@ func TestServerMultipleConnections(t *testing.T) {
 		emptyLogger := zerolog.New(io.Discard)
 		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 		require.NoError(t, err)
+
+		s.SetConcurrency(1)
 
 		var wg sync.WaitGroup
 
@@ -683,7 +689,7 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 	t.Run("100", func(t *testing.T) { runner(t, 100) })
 }
 
-func BenchmarkThroughputServer(b *testing.B) {
+func BenchmarkThroughputServerSingle(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -698,6 +704,8 @@ func BenchmarkThroughputServer(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	server.SetConcurrency(1)
 
 	serverConn, clientConn, err := pair.New()
 	if err != nil {
@@ -872,7 +880,7 @@ func BenchmarkThroughputServerLimited(b *testing.B) {
 	}
 }
 
-func BenchmarkThroughputResponseServer(b *testing.B) {
+func BenchmarkThroughputResponseServerSingle(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -898,6 +906,8 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	server.SetConcurrency(1)
 
 	go server.ServeConn(serverConn)
 
@@ -954,7 +964,7 @@ func BenchmarkThroughputResponseServer(b *testing.B) {
 	}
 }
 
-func BenchmarkThroughputResponseServerSlow(b *testing.B) {
+func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -981,6 +991,8 @@ func BenchmarkThroughputResponseServerSlow(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	server.SetConcurrency(1)
 
 	go server.ServeConn(serverConn)
 

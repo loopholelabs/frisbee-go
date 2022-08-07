@@ -90,7 +90,6 @@ func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 		baseContext: defaultBaseContext,
 		onClosed:    defaultOnClosed,
 		preWrite:    defaultPreWrite,
-		concurrency: 1,
 	}
 
 	return s, s.SetHandlerTable(handlerTable)
@@ -227,54 +226,105 @@ func (s *Server) handleListener() error {
 	}
 }
 
-func (s *Server) handlePacket(frisbeeConn *Async, connCtx context.Context) (err error) {
+func (s *Server) handleSinglePacket(frisbeeConn *Async, connCtx context.Context) {
 	var p *packet.Packet
 	var outgoing *packet.Packet
 	var action Action
 	var handlerFunc Handler
+	var err error
 	p, err = frisbeeConn.ReadPacket()
 	if err != nil {
+		_ = frisbeeConn.Close()
+		s.onClosed(frisbeeConn, err)
 		return
 	}
 	if s.ConnContext != nil {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
-	goto HANDLE
-LOOP:
-	p, err = frisbeeConn.ReadPacket()
-	if err != nil {
-		return
-	}
-HANDLE:
-	handlerFunc = s.handlerTable[p.Metadata.Operation]
-	if handlerFunc != nil {
-		packetCtx := connCtx
-		if s.PacketContext != nil {
-			packetCtx = s.PacketContext(packetCtx, p)
-		}
-		outgoing, action = handlerFunc(packetCtx, p)
-		if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
-			s.preWrite()
-			err = frisbeeConn.WritePacket(outgoing)
-			if outgoing != p {
-				packet.Put(outgoing)
+	for {
+		handlerFunc = s.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := connCtx
+			if s.PacketContext != nil {
+				packetCtx = s.PacketContext(packetCtx, p)
 			}
-			packet.Put(p)
-			if err != nil {
+			outgoing, action = handlerFunc(packetCtx, p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+				s.preWrite()
+				err = frisbeeConn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
+				if err != nil {
+					_ = frisbeeConn.Close()
+					s.onClosed(frisbeeConn, err)
+					return
+				}
+			} else {
+				packet.Put(p)
+			}
+			switch action {
+			case NONE:
+			case CLOSE:
+				_ = frisbeeConn.Close()
+				s.onClosed(frisbeeConn, nil)
 				return
 			}
 		} else {
 			packet.Put(p)
 		}
-		switch action {
-		case NONE:
-		case CLOSE:
+		p, err = frisbeeConn.ReadPacket()
+		if err != nil {
+			_ = frisbeeConn.Close()
+			s.onClosed(frisbeeConn, err)
 			return
 		}
-	} else {
-		packet.Put(p)
 	}
-	goto LOOP
+}
+
+func (s *Server) handler(conn *Async, closed *atomic.Bool, wg *sync.WaitGroup, ctx context.Context, cancel context.CancelFunc) func(*packet.Packet) {
+	return func(p *packet.Packet) {
+		handlerFunc := s.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := ctx
+			if s.PacketContext != nil {
+				packetCtx = s.PacketContext(packetCtx, p)
+			}
+			outgoing, action := handlerFunc(packetCtx, p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+				s.preWrite()
+				err := conn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
+				if err != nil {
+					_ = conn.Close()
+					if closed.CAS(false, true) {
+						s.onClosed(conn, err)
+					}
+					cancel()
+					wg.Done()
+					return
+				}
+			} else {
+				packet.Put(p)
+			}
+			switch action {
+			case NONE:
+			case CLOSE:
+				_ = conn.Close()
+				if closed.CAS(false, true) {
+					s.onClosed(conn, nil)
+				}
+				cancel()
+			}
+		} else {
+			packet.Put(p)
+		}
+		wg.Done()
+	}
 }
 
 func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Context) {
@@ -290,61 +340,21 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
-	handler := func(p *packet.Packet) {
-		handlerFunc := s.handlerTable[p.Metadata.Operation]
-		if handlerFunc != nil {
-			packetCtx := connCtx
-			if s.PacketContext != nil {
-				packetCtx = s.PacketContext(packetCtx, p)
+	handler := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
+	for {
+		wg.Add(1)
+		go handler(p)
+		p, err = frisbeeConn.ReadPacket()
+		if err != nil {
+			_ = frisbeeConn.Close()
+			if closed.CAS(false, true) {
+				s.onClosed(frisbeeConn, err)
 			}
-			outgoing, action := handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
-				s.preWrite()
-				err := frisbeeConn.WritePacket(outgoing)
-				if outgoing != p {
-					packet.Put(outgoing)
-				}
-				packet.Put(p)
-				if err != nil {
-					_ = frisbeeConn.Close()
-					if closed.CAS(false, true) {
-						s.onClosed(frisbeeConn, err)
-					}
-					cancel()
-					wg.Done()
-					return
-				}
-			} else {
-				packet.Put(p)
-			}
-			switch action {
-			case NONE:
-			case CLOSE:
-				_ = frisbeeConn.Close()
-				if closed.CAS(false, true) {
-					s.onClosed(frisbeeConn, nil)
-				}
-				cancel()
-			}
-		} else {
-			packet.Put(p)
+			cancel()
+			wg.Wait()
+			return
 		}
-		wg.Done()
 	}
-HANDLE:
-	wg.Add(1)
-	go handler(p)
-	p, err = frisbeeConn.ReadPacket()
-	if err != nil {
-		_ = frisbeeConn.Close()
-		if closed.CAS(false, true) {
-			s.onClosed(frisbeeConn, err)
-		}
-		cancel()
-		wg.Wait()
-		return
-	}
-	goto HANDLE
 }
 
 func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context) {
@@ -359,72 +369,34 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
+	uHandler := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
 	handler := func(p *packet.Packet) {
-		handlerFunc := s.handlerTable[p.Metadata.Operation]
-		if handlerFunc != nil {
-			packetCtx := connCtx
-			if s.PacketContext != nil {
-				packetCtx = s.PacketContext(packetCtx, p)
-			}
-			outgoing, action := handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
-				s.preWrite()
-				err := frisbeeConn.WritePacket(outgoing)
-				if outgoing != p {
-					packet.Put(outgoing)
-				}
-				packet.Put(p)
-				if err != nil {
-					_ = frisbeeConn.Close()
-					if closed.CAS(false, true) {
-						s.onClosed(frisbeeConn, err)
-					}
-					cancel()
-					<-s.limiter
-					wg.Done()
-					return
-				}
-			} else {
-				packet.Put(p)
-			}
-			switch action {
-			case NONE:
-			case CLOSE:
+		uHandler(p)
+		<-s.limiter
+	}
+	for {
+		select {
+		case s.limiter <- struct{}{}:
+			wg.Add(1)
+			go handler(p)
+			p, err = frisbeeConn.ReadPacket()
+			if err != nil {
 				_ = frisbeeConn.Close()
 				if closed.CAS(false, true) {
-					s.onClosed(frisbeeConn, nil)
+					s.onClosed(frisbeeConn, err)
 				}
 				cancel()
+				wg.Wait()
+				return
 			}
-		} else {
-			packet.Put(p)
-		}
-		<-s.limiter
-		wg.Done()
-	}
-HANDLE:
-	select {
-	case s.limiter <- struct{}{}:
-		wg.Add(1)
-		go handler(p)
-		p, err = frisbeeConn.ReadPacket()
-		if err != nil {
+		case <-connCtx.Done():
 			_ = frisbeeConn.Close()
 			if closed.CAS(false, true) {
 				s.onClosed(frisbeeConn, err)
 			}
-			cancel()
 			wg.Wait()
 			return
 		}
-		goto HANDLE
-	case <-connCtx.Done():
-		_ = frisbeeConn.Close()
-		if closed.CAS(false, true) {
-			s.onClosed(frisbeeConn, err)
-		}
-		wg.Wait()
-		return
 	}
 }
 
@@ -468,28 +440,16 @@ func (s *Server) serveConn(newConn net.Conn) {
 	s.connectionsMu.Unlock()
 	if s.concurrency == 0 {
 		s.handleUnlimitedPacket(frisbeeConn, connCtx)
-		s.connectionsMu.Lock()
-		if !s.shutdown.Load() {
-			delete(s.connections, frisbeeConn)
-		}
-		s.connectionsMu.Unlock()
 	} else if s.concurrency == 1 {
-		err = s.handlePacket(frisbeeConn, connCtx)
-		_ = frisbeeConn.Close()
-		s.onClosed(frisbeeConn, err)
-		s.connectionsMu.Lock()
-		if !s.shutdown.Load() {
-			delete(s.connections, frisbeeConn)
-		}
-		s.connectionsMu.Unlock()
+		s.handleSinglePacket(frisbeeConn, connCtx)
 	} else {
 		s.handleLimitedPacket(frisbeeConn, connCtx)
-		s.connectionsMu.Lock()
-		if !s.shutdown.Load() {
-			delete(s.connections, frisbeeConn)
-		}
-		s.connectionsMu.Unlock()
 	}
+	s.connectionsMu.Lock()
+	if !s.shutdown.Load() {
+		delete(s.connections, frisbeeConn)
+	}
+	s.connectionsMu.Unlock()
 	s.wg.Done()
 }
 

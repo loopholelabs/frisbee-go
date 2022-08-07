@@ -67,6 +67,8 @@ func TestClientRaw(t *testing.T) {
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
+	s.SetConcurrency(1)
+
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
 		return context.WithValue(ctx, clientConnContextKey, c)
 	}
@@ -160,6 +162,8 @@ func TestClientStaleClose(t *testing.T) {
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
 
+	s.SetConcurrency(1)
+
 	serverConn, clientConn, err := pair.New()
 	require.NoError(t, err)
 
@@ -219,6 +223,8 @@ func BenchmarkThroughputClient(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	s.SetConcurrency(1)
 
 	serverConn, clientConn, err := pair.New()
 	if err != nil {
@@ -302,6 +308,8 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	s.SetConcurrency(1)
 
 	serverConn, clientConn, err := pair.New()
 	if err != nil {
