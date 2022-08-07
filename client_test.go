@@ -25,7 +25,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
+	"io"
 	"net"
 	"testing"
 )
@@ -63,9 +63,11 @@ func TestClientRaw(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
+
+	s.SetConcurrency(1)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
 		return context.WithValue(ctx, clientConnContextKey, c)
@@ -156,9 +158,11 @@ func TestClientStaleClose(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	require.NoError(t, err)
+
+	s.SetConcurrency(1)
 
 	serverConn, clientConn, err := pair.New()
 	require.NoError(t, err)
@@ -214,11 +218,13 @@ func BenchmarkThroughputClient(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	s.SetConcurrency(1)
 
 	serverConn, clientConn, err := pair.New()
 	if err != nil {
@@ -297,11 +303,13 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
+
+	s.SetConcurrency(1)
 
 	serverConn, clientConn, err := pair.New()
 	if err != nil {

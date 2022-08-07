@@ -24,60 +24,60 @@
 //
 // In depth documentation and examples can be found at https://loopholelabs.io/docs/frisbee
 //
-//
-// An Echo Example
+// # An Echo Example
 //
 // As a starting point, a very basic echo server:
 //
-//	package main
+//		package main
 //
-//	import (
-//		"github.com/loopholelabs/frisbee"
-//      "github.com/loopholelabs/frisbee/pkg/packet"
-//		"github.com/rs/zerolog/log"
-//		"os"
-//		"os/signal"
-//	)
+//		import (
+//			"github.com/loopholelabs/frisbee-go"
+//	     "github.com/loopholelabs/frisbee-go/pkg/packet"
+//			"github.com/rs/zerolog/log"
+//			"os"
+//			"os/signal"
+//		)
 //
-//	const PING = uint16(10)
-//	const PONG = uint16(11)
+//		const PING = uint16(10)
+//		const PONG = uint16(11)
 //
-//	func handlePing(_ *frisbee.Async, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
-//		if incoming.Metadata.ContentLength > 0 {
-//			log.Printf("Server Received Metadata: %s\n", incoming.Content)
-//          incoming.Metadata.Operation = PONG
-//			outgoing = incoming
+//		func handlePing(_ *frisbee.Async, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
+//			if incoming.Metadata.ContentLength > 0 {
+//				log.Printf("Server Received Metadata: %s\n", incoming.Content)
+//	         incoming.Metadata.Operation = PONG
+//				outgoing = incoming
+//			}
+//
+//			return
 //		}
 //
-//		return
-//	}
+//		func main() {
+//			handlerTable := make(frisbee.ServerRouter)
+//			handlerTable[PING] = handlePing
+//			exit := make(chan os.Signal)
+//			signal.Notify(exit, os.Interrupt)
 //
-//	func main() {
-//		handlerTable := make(frisbee.ServerRouter)
-//		handlerTable[PING] = handlePing
-//		exit := make(chan os.Signal)
-//		signal.Notify(exit, os.Interrupt)
+//			s := frisbee.NewServer(":8192", handlerTable, 0)
+//			err := s.Start()
+//			if err != nil {
+//				panic(err)
+//			}
 //
-//		s := frisbee.NewServer(":8192", handlerTable, 0)
-//		err := s.Start()
-//		if err != nil {
-//			panic(err)
+//			<-exit
+//			err = s.Shutdown()
+//			if err != nil {
+//				panic(err)
+//			}
 //		}
-//
-//		<-exit
-//		err = s.Shutdown()
-//		if err != nil {
-//			panic(err)
-//		}
-//	}
 //
 // And an accompanying echo client:
+//
 //	package main
 //
 //	import (
 //		"fmt"
-//		"github.com/loopholelabs/frisbee"
-//		"github.com/loopholelabs/frisbee/pkg/packet"
+//		"github.com/loopholelabs/frisbee-go"
+//		"github.com/loopholelabs/frisbee-go/pkg/packet"
 //		"github.com/rs/zerolog/log"
 //		"os"
 //		"os/signal"

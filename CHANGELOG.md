@@ -7,6 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## Changes
+
+- The `server` now concurrently process incoming packets from connections by calling handler functions in a goroutine.
+  This is done to avoid blocking the main packet processing loop when the handler for an incoming packet is slow.
+- The `UPDATE` Action has been completely removed from the `server` and the `client` - the context can no longer be
+  updated from a handler function.
+- The `SetConcurrency` function has been added to the `server` to set the concurrency of the packet processing
+  goroutines.
+
 ## [v0.5.4] - 2022-07-28 (Beta)
 
 ## Features

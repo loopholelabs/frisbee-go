@@ -19,7 +19,7 @@ package frisbee
 import (
 	"crypto/tls"
 	"github.com/rs/zerolog"
-	"io/ioutil"
+	"io"
 	"time"
 )
 
@@ -27,11 +27,12 @@ import (
 type Option func(opts *Options)
 
 // DefaultLogger is the default logger used within frisbee
-var DefaultLogger = zerolog.New(ioutil.Discard)
+var DefaultLogger = zerolog.New(io.Discard)
 
 // Options is used to provide the frisbee client and server with configuration options.
 //
 // Default Values:
+//
 //	options := Options {
 //		KeepAlive: time.Minute * 3,
 //		Logger: &DefaultLogger,
