@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
-	"io/ioutil"
 	"net"
 	"testing"
 )
@@ -34,7 +33,7 @@ func TestNewSync(t *testing.T) {
 	t.Parallel()
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer := net.Pipe()
 
@@ -105,7 +104,7 @@ func TestSyncLargeWrite(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer := net.Pipe()
 
@@ -163,7 +162,7 @@ func TestSyncRawConn(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 32
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
@@ -236,7 +235,7 @@ func TestSyncReadClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
@@ -286,7 +285,7 @@ func TestSyncWriteClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	readerConn := NewSync(reader, &emptyLogger)
 	writerConn := NewSync(writer, &emptyLogger)
@@ -334,7 +333,7 @@ func TestSyncWriteClose(t *testing.T) {
 func BenchmarkSyncThroughputPipe(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer := net.Pipe()
 
@@ -354,7 +353,7 @@ func BenchmarkSyncThroughputPipe(b *testing.B) {
 func BenchmarkSyncThroughputNetwork(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(ioutil.Discard)
+	emptyLogger := zerolog.New(io.Discard)
 
 	reader, writer, err := pair.New()
 	if err != nil {

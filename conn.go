@@ -22,7 +22,7 @@ import (
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"io/ioutil"
+	"io"
 	"net"
 	"time"
 )
@@ -31,7 +31,7 @@ import (
 const DefaultBufferSize = 1 << 16
 
 var (
-	defaultLogger = zerolog.New(ioutil.Discard)
+	defaultLogger = zerolog.New(io.Discard)
 
 	DefaultDeadline = time.Second * 5
 

@@ -7,6 +7,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.6.0] - 2022-08-07 (Beta)
+
+## Changes
+
+- **[BREAKING]** The `server` now concurrently process incoming packets from connections by calling handler functions in a goroutine.
+  This is done to avoid blocking the main packet processing loop when the handler for an incoming packet is slow.
+- The `UPDATE` Action has been completely removed from the `server` and the `client` - the context can no longer be
+  updated from a handler function.
+- The `SetConcurrency` function has been added to the `server` to set the concurrency of the packet processing
+  goroutines.
+- `io/ioutil.Discard` has been replaced with `io.Discard` because it was being deprecated
+- The `README.md` file has been updated to reflect the `frisbee-go` package name, and better direct users to the `frpc.io` website.
+- @jimmyaxod has been added as a maintainer for the `frisbee-go` package.
+
 ## [v0.5.4] - 2022-07-28 (Beta)
 
 ## Features
@@ -300,7 +314,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.5.4...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.6.0...HEAD
+[v0.6.0]: https://github.com/loopholelabs/frisbee/compare/v0.5.4...v0.6.0
 [v0.5.4]: https://github.com/loopholelabs/frisbee/compare/v0.5.3...v0.5.4
 [v0.5.3]: https://github.com/loopholelabs/frisbee/compare/v0.5.2...v0.5.3
 [v0.5.2]: https://github.com/loopholelabs/frisbee/compare/v0.5.1...v0.5.2

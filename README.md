@@ -21,8 +21,8 @@ same is true for selected other new features explicitly marked as
 
 ## Usage and Documentation
 
-Usage instructions and documentation for Frisbee is available
-at [https://frpc.io/frisbee](https://frpc.io/frisbee). The Frisbee framework also has great
+Usage instructions and documentation for `frisbee-go` are available
+at [https://frpc.io/frisbee](https://frpc.io/frisbee). This library also has great
 documentation coverage using [GoDoc](https://godoc.org/github.com/loopholelabs/frisbee-go).
 
 ## Contributing
