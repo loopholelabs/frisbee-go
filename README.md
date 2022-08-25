@@ -22,7 +22,7 @@ same is true for selected other new features explicitly marked as
 ## Usage and Documentation
 
 Usage instructions and documentation for `frisbee-go` are available
-on [GoDoc]](https://godoc.org/github.com/loopholelabs/frisbee-go).
+on [GoDoc](https://godoc.org/github.com/loopholelabs/frisbee-go).
 
 ## Contributing
 
