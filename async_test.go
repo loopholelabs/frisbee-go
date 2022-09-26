@@ -231,7 +231,7 @@ func TestAsyncReadClose(t *testing.T) {
 	err = readerConn.conn.Close()
 	assert.NoError(t, err)
 
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(DefaultPingInterval * 2)
 
 	err = writerConn.WritePacket(p)
 	if err == nil {

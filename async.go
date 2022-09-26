@@ -29,7 +29,6 @@ import (
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 	"net"
-	"os"
 	"sync"
 	"time"
 )
@@ -97,9 +96,10 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		conn.logger = &defaultLogger
 	}
 
-	conn.wg.Add(2)
+	conn.wg.Add(3)
 	go conn.flushLoop()
 	go conn.readLoop()
+	go conn.pingLoop()
 
 	return
 }
@@ -371,11 +371,11 @@ func (c *Async) killGoroutines() {
 	c.Lock()
 	c.incoming.Close()
 	close(c.flusher)
+	close(c.closeCh)
 	c.Unlock()
 	_ = c.conn.SetDeadline(pastTime)
 	c.wg.Wait()
 	_ = c.conn.SetDeadline(emptyTime)
-	close(c.closeCh)
 	c.Logger().Debug().Msg("error channel closed, goroutines killed")
 
 	c.stale = c.incoming.Drain()
@@ -427,43 +427,24 @@ func (c *Async) flushLoop() {
 	}
 }
 
-func (c *Async) waitForPONG() {
-	timer := time.NewTimer(DefaultDeadline)
-	defer timer.Stop()
-	select {
-	case <-c.closeCh:
-		c.wg.Done()
-	case <-timer.C:
-		c.Logger().Debug().Err(os.ErrDeadlineExceeded).Msg("timed out waiting for PONG, connection is not alive")
-		c.wg.Done()
-		_ = c.closeWithError(os.ErrDeadlineExceeded)
-	case <-c.pongCh:
-		c.wg.Done()
-		c.Logger().Debug().Msg("PONG packet received on time, connection is alive")
+func (c *Async) pingLoop() {
+	ticker := time.NewTicker(DefaultPingInterval)
+	defer ticker.Stop()
+	var err error
+	for {
+		select {
+		case <-c.closeCh:
+			c.wg.Done()
+			return
+		case <-ticker.C:
+			err = c.WritePacket(PINGPacket)
+			if err != nil {
+				c.wg.Done()
+				_ = c.closeWithError(err)
+				return
+			}
+		}
 	}
-}
-
-func (c *Async) handleTimeout() error {
-	if c.closed.Load() {
-		return ConnectionClosed
-	}
-
-	c.Logger().Debug().Msg("Handling Timeout Using PING Packet")
-	err := c.WritePacket(PINGPacket)
-	if err != nil {
-		return err
-	}
-
-	err = c.flush()
-	if err != nil {
-		return err
-	}
-
-	c.Logger().Debug().Msg("PING Packet sent successfully, will wait for PONG in a separate thread")
-	c.wg.Add(1)
-	go c.waitForPONG()
-
-	return nil
 }
 
 func (c *Async) readLoop() {
@@ -493,15 +474,6 @@ func (c *Async) readLoop() {
 			n += nn
 			if err != nil {
 				if n < metadata.Size {
-					if errors.Is(err, os.ErrDeadlineExceeded) {
-						err = c.handleTimeout()
-						if err != nil {
-							c.wg.Done()
-							_ = c.closeWithError(err)
-							return
-						}
-						continue
-					}
 					c.wg.Done()
 					_ = c.closeWithError(err)
 					return
@@ -527,12 +499,10 @@ func (c *Async) readLoop() {
 					_ = c.closeWithError(err)
 					return
 				}
+				packet.Put(p)
 			case PONG:
 				c.Logger().Debug().Msg("PONG Packet received by read loop")
-				select {
-				case c.pongCh <- struct{}{}:
-				default:
-				}
+				packet.Put(p)
 			default:
 				if p.Metadata.ContentLength > 0 {
 					if n-index < int(p.Metadata.ContentLength) {
@@ -596,15 +566,6 @@ func (c *Async) readLoop() {
 					n += nn
 					if err != nil {
 						if n < metadata.Size {
-							if errors.Is(err, os.ErrDeadlineExceeded) {
-								err = c.handleTimeout()
-								if err != nil {
-									c.wg.Done()
-									_ = c.closeWithError(err)
-									return
-								}
-								continue
-							}
 							c.wg.Done()
 							_ = c.closeWithError(err)
 							return
@@ -637,15 +598,6 @@ func (c *Async) readLoop() {
 					n += nn
 					if err != nil {
 						if n < min {
-							if errors.Is(err, os.ErrDeadlineExceeded) {
-								err = c.handleTimeout()
-								if err != nil {
-									c.wg.Done()
-									_ = c.closeWithError(err)
-									return
-								}
-								continue
-							}
 							c.wg.Done()
 							_ = c.closeWithError(err)
 							return

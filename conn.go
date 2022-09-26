@@ -33,7 +33,8 @@ const DefaultBufferSize = 1 << 16
 var (
 	defaultLogger = zerolog.New(io.Discard)
 
-	DefaultDeadline = time.Second * 5
+	DefaultDeadline     = time.Second * 5
+	DefaultPingInterval = time.Millisecond * 500
 
 	emptyTime = time.Time{}
 	pastTime  = time.Unix(1, 0)
