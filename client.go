@@ -23,7 +23,6 @@ import (
 	"go.uber.org/atomic"
 	"net"
 	"sync"
-	"time"
 )
 
 // Client connects to a frisbee Server and can send and receive frisbee packets
@@ -56,13 +55,6 @@ func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (
 
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
-	if options.Heartbeat > time.Duration(0) {
-		heartbeatChannel = make(chan struct{}, 1)
-		handlerTable[HEARTBEAT] = func(_ context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
-			heartbeatChannel <- struct{}{}
-			return
-		}
-	}
 
 	return &Client{
 		handlerTable:     handlerTable,
@@ -89,13 +81,6 @@ func (c *Client) Connect(addr string) error {
 	c.wg.Add(1)
 	go c.handleConn()
 	c.Logger().Debug().Msgf("Connection handler started for %s", addr)
-
-	if c.options.Heartbeat > time.Duration(0) {
-		c.wg.Add(1)
-		go c.heartbeat()
-		c.Logger().Debug().Msgf("Heartbeat started for %s", addr)
-	}
-
 	return nil
 }
 
@@ -106,13 +91,6 @@ func (c *Client) FromConn(conn net.Conn) error {
 	c.wg.Add(1)
 	go c.handleConn()
 	c.Logger().Debug().Msgf("Connection handler started for %s", c.conn.RemoteAddr())
-
-	if c.options.Heartbeat > time.Duration(0) {
-		c.wg.Add(1)
-		go c.heartbeat()
-		c.Logger().Debug().Msgf("Heartbeat started for %s", c.conn.RemoteAddr())
-	}
-
 	return nil
 }
 
@@ -223,46 +201,6 @@ func (c *Client) handleConn() {
 			}
 		} else {
 			packet.Put(p)
-		}
-	}
-}
-
-func (c *Client) heartbeat() {
-	for {
-		select {
-		case <-c.CloseChannel():
-			c.wg.Done()
-			return
-		case <-time.After(c.options.Heartbeat):
-			if c.closed.Load() {
-				c.wg.Done()
-				return
-			}
-			if c.conn.WriteBufferSize() == 0 {
-				err := c.WritePacket(HEARTBEATPacket)
-				if err != nil {
-					c.Logger().Error().Err(err).Msg("error while writing to frisbee conn")
-					c.wg.Done()
-					_ = c.Close()
-					return
-				}
-				start := time.Now()
-				c.Logger().Debug().Msgf("Heartbeat sent at %s", start)
-				select {
-				case <-c.heartbeatChannel:
-					c.Logger().Debug().Msgf("Heartbeat Received with RTT: %d", time.Since(start))
-				case <-time.After(c.options.Heartbeat):
-					c.Logger().Error().Msg("Heartbeat not received within timeout period")
-					c.wg.Done()
-					_ = c.Close()
-					return
-				case <-c.CloseChannel():
-					c.wg.Done()
-					return
-				}
-			} else {
-				c.Logger().Debug().Msgf("Skipping heartbeat because write buffer size > 0")
-			}
 		}
 	}
 }

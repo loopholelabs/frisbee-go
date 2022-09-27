@@ -36,11 +36,9 @@ var DefaultLogger = zerolog.New(io.Discard)
 //	options := Options {
 //		KeepAlive: time.Minute * 3,
 //		Logger: &DefaultLogger,
-//		Heartbeat: time.Second * 5,
 //	}
 type Options struct {
 	KeepAlive time.Duration
-	Heartbeat time.Duration
 	Logger    *zerolog.Logger
 	TLSConfig *tls.Config
 }
@@ -57,10 +55,6 @@ func loadOptions(options ...Option) *Options {
 
 	if opts.KeepAlive == 0 {
 		opts.KeepAlive = time.Minute * 3
-	}
-
-	if opts.Heartbeat == 0 {
-		opts.Heartbeat = time.Second * 5
 	}
 
 	return opts
@@ -84,15 +78,6 @@ func WithKeepAlive(keepAlive time.Duration) Option {
 func WithLogger(logger *zerolog.Logger) Option {
 	return func(opts *Options) {
 		opts.Logger = logger
-	}
-}
-
-// WithHeartbeat sets the minimum time between heartbeat packets. By default, packets are only sent if
-// no packets have been sent since the last heartbeat packet - to change this behaviour you can disable heartbeats
-// (by passing in -1), and implementing your own logic.
-func WithHeartbeat(heartbeat time.Duration) Option {
-	return func(opts *Options) {
-		opts.Heartbeat = heartbeat
 	}
 }
 

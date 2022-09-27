@@ -132,13 +132,6 @@ func (s *Server) SetHandlerTable(handlerTable HandlerTable) error {
 		}
 	}
 
-	if s.options.Heartbeat > time.Duration(0) {
-		handlerTable[HEARTBEAT] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			outgoing = incoming
-			return
-		}
-	}
-
 	s.handlerTable = handlerTable
 	return nil
 }
