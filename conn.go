@@ -30,6 +30,8 @@ import (
 // DefaultBufferSize is the size of the default buffer
 const DefaultBufferSize = 1 << 16
 
+const DefaultStreamBufferSize = 1 << 12
+
 var (
 	defaultLogger = zerolog.New(io.Discard)
 

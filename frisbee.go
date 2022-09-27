@@ -65,7 +65,10 @@ const (
 	// PONG is used to respond to a PING packets
 	PONG
 
-	RESERVED2
+	// STREAM is used to request that a new stream be created by the receiver to
+	// receive packets with the same packet ID until a packet with a ContentLength of 0 is received
+	STREAM
+
 	RESERVED3
 	RESERVED4
 	RESERVED5

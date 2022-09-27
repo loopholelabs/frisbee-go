@@ -333,10 +333,10 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
-	handler := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
+	handle := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
 	for {
 		wg.Add(1)
-		go handler(p)
+		go handle(p)
 		p, err = frisbeeConn.ReadPacket()
 		if err != nil {
 			_ = frisbeeConn.Close()
@@ -362,16 +362,16 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
-	uHandler := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
-	handler := func(p *packet.Packet) {
-		uHandler(p)
+	handler := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
+	handle := func(p *packet.Packet) {
+		handler(p)
 		<-s.limiter
 	}
 	for {
 		select {
 		case s.limiter <- struct{}{}:
 			wg.Add(1)
-			go handler(p)
+			go handle(p)
 			p, err = frisbeeConn.ReadPacket()
 			if err != nil {
 				_ = frisbeeConn.Close()

@@ -38,19 +38,20 @@ import (
 // meant to be used by frisbee client and server implementations
 type Async struct {
 	sync.Mutex
-	conn     net.Conn
-	closed   *atomic.Bool
-	writer   *bufio.Writer
-	flusher  chan struct{}
-	closeCh  chan struct{}
-	incoming *queue.Circular[packet.Packet, *packet.Packet]
-	logger   *zerolog.Logger
-	wg       sync.WaitGroup
-	error    *atomic.Error
-	staleMu  sync.Mutex
-	stale    []*packet.Packet
-	ctxMu    sync.RWMutex
-	ctx      context.Context
+	conn      net.Conn
+	closed    *atomic.Bool
+	writer    *bufio.Writer
+	flusher   chan struct{}
+	closeCh   chan struct{}
+	streamCh  chan *Stream
+	incoming  *queue.Circular[packet.Packet, *packet.Packet]
+	staleMu   sync.Mutex
+	stale     []*packet.Packet
+	logger    *zerolog.Logger
+	wg        sync.WaitGroup
+	error     *atomic.Error
+	streamsMu sync.RWMutex
+	streams   map[uint16]*Stream
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -86,6 +87,8 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		incoming: queue.NewCircular[packet.Packet, *packet.Packet](DefaultBufferSize),
 		flusher:  make(chan struct{}, 3),
 		closeCh:  make(chan struct{}),
+		streamCh: make(chan *Stream, 10),
+		streams:  make(map[uint16]*Stream),
 		logger:   logger,
 		error:    atomic.NewError(nil),
 	}
@@ -278,21 +281,6 @@ func (c *Async) Flush() error {
 	return nil
 }
 
-// SetContext allows users to save a context within a connection
-func (c *Async) SetContext(ctx context.Context) {
-	c.ctxMu.Lock()
-	c.ctx = ctx
-	c.ctxMu.Unlock()
-}
-
-// Context returns the saved context within the connection
-func (c *Async) Context() (ctx context.Context) {
-	c.ctxMu.RLock()
-	ctx = c.ctx
-	c.ctxMu.RUnlock()
-	return
-}
-
 // WriteBufferSize returns the size of the underlying write buffer (used for internal packet handling and for heartbeat logic)
 func (c *Async) WriteBufferSize() int {
 	c.Lock()
@@ -329,7 +317,7 @@ func (c *Async) Raw() net.Conn {
 // Close closes the frisbee connection gracefully
 func (c *Async) Close() error {
 	err := c.close()
-	if errors.Is(err, ConnectionClosed) {
+	if err != nil && errors.Is(err, ConnectionClosed) {
 		return nil
 	}
 	_ = c.conn.Close()
@@ -445,6 +433,8 @@ func (c *Async) pingLoop() {
 func (c *Async) readLoop() {
 	buf := make([]byte, DefaultBufferSize)
 	var index int
+	var stream *Stream
+	var isStream bool
 	for {
 		buf = buf[:cap(buf)]
 		if len(buf) < metadata.Size {
@@ -498,6 +488,13 @@ func (c *Async) readLoop() {
 			case PONG:
 				c.Logger().Debug().Msg("PONG Packet received by read loop")
 				packet.Put(p)
+			case STREAM:
+				c.Logger().Debug().Msg("STREAM Packet received by read loop")
+				isStream = true
+				c.streamsMu.RLock()
+				stream = c.streams[p.Metadata.Id]
+				c.streamsMu.RUnlock()
+				fallthrough
 			default:
 				if p.Metadata.ContentLength > 0 {
 					if n-index < int(p.Metadata.ContentLength) {
@@ -532,12 +529,37 @@ func (c *Async) readLoop() {
 						index += p.Content.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
 				}
-				err = c.incoming.Push(p)
-				if err != nil {
-					c.Logger().Debug().Err(err).Msg("error while pushing to incoming packet queue")
-					c.wg.Done()
-					_ = c.closeWithError(err)
-					return
+				if !isStream {
+					err = c.incoming.Push(p)
+					if err != nil {
+						c.Logger().Debug().Err(err).Msg("error while pushing to incoming packet queue")
+						c.wg.Done()
+						_ = c.closeWithError(err)
+						return
+					}
+				} else {
+					if p.Metadata.ContentLength == 0 {
+						// End of Stream
+					}
+					if stream == nil {
+						stream = NewStream(p.Metadata.Id, c)
+						c.streamsMu.Lock()
+						c.streams[p.Metadata.Id] = stream
+						c.streamsMu.Unlock()
+						select {
+						case c.streamCh <- stream:
+						default:
+						}
+					}
+					err = stream.push(p)
+					if err != nil {
+						c.Logger().Debug().Err(err).Msg("error while pushing to a stream queue packet queue")
+						c.wg.Done()
+						_ = c.closeWithError(err)
+						return
+					}
+					stream = nil
+					isStream = false
 				}
 			}
 			if n == index {
