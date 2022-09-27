@@ -67,11 +67,11 @@ func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (
 
 // Connect actually connects to the given frisbee server, and starts the reactor goroutines
 // to receive and handle incoming packets. If this function is called, FromConn should not be called.
-func (c *Client) Connect(addr string) error {
+func (c *Client) Connect(addr string, streamHandler ...NewStreamHandler) error {
 	c.Logger().Debug().Msgf("Connecting to %s", addr)
 	var frisbeeConn *Async
 	var err error
-	frisbeeConn, err = ConnectAsync(addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig)
+	frisbeeConn, err = ConnectAsync(addr, c.options.KeepAlive, c.Logger(), c.options.TLSConfig, streamHandler...)
 	if err != nil {
 		return err
 	}
@@ -86,8 +86,8 @@ func (c *Client) Connect(addr string) error {
 
 // FromConn takes a pre-existing connection to a Frisbee server and starts the reactor goroutines
 // to receive and handle incoming packets. If this function is called, Connect should not be called.
-func (c *Client) FromConn(conn net.Conn) error {
-	c.conn = NewAsync(conn, c.Logger())
+func (c *Client) FromConn(conn net.Conn, streamHandler ...NewStreamHandler) error {
+	c.conn = NewAsync(conn, c.Logger(), streamHandler...)
 	c.wg.Add(1)
 	go c.handleConn()
 	c.Logger().Debug().Msgf("Connection handler started for %s", c.conn.RemoteAddr())
@@ -144,6 +144,22 @@ func (c *Client) Raw() (net.Conn, error) {
 		return conn, nil
 	}
 	return c.conn.Raw(), nil
+}
+
+// Stream returns a new Stream object that can be used to send and receive frisbee packets
+func (c *Client) Stream(id uint16) *Stream {
+	return c.conn.NewStream(id)
+}
+
+// SetNewStreamHandler sets the callback handler for new streams.
+//
+// It's important to note that this handler is called for new streams and if it is
+// not set then stream packets will be dropped.
+//
+// It's also important to note that the handler itself is called in its own goroutine to
+// avoid blocking the read lop. This means that the handler must be thread-safe.
+func (c *Client) SetNewStreamHandler(handler NewStreamHandler) {
+	c.conn.SetNewStreamHandler(handler)
 }
 
 // Logger returns the client's logger (useful for ClientRouter functions)

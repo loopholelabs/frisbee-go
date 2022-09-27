@@ -29,9 +29,12 @@ import (
 var (
 	InvalidContentLength     = errors.New("invalid content length")
 	ConnectionClosed         = errors.New("connection closed")
+	StreamClosed             = errors.New("stream closed")
+	InvalidStreamPacket      = errors.New("invalid stream packet")
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferLength      = errors.New("invalid buffer length")
 	InvalidHandlerTable      = errors.New("invalid handler table configuration, a reserved value may have been used")
+	InvalidOperation         = errors.New("invalid operation in packet, a reserved value may have been used")
 )
 
 // Action is an ENUM used to modify the state of the client or server from a Handler function
@@ -65,7 +68,10 @@ const (
 	// PONG is used to respond to a PING packets
 	PONG
 
-	RESERVED2
+	// STREAM is used to request that a new stream be created by the receiver to
+	// receive packets with the same packet ID until a packet with a ContentLength of 0 is received
+	STREAM
+
 	RESERVED3
 	RESERVED4
 	RESERVED5

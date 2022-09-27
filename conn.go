@@ -58,8 +58,6 @@ type Conn interface {
 	SetWriteDeadline(time.Time) error
 	WritePacket(*packet.Packet) error
 	ReadPacket() (*packet.Packet, error)
-	SetContext(context.Context)
-	Context() context.Context
 	Logger() *zerolog.Logger
 	Error() error
 	Raw() net.Conn
