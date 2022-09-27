@@ -7,11 +7,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.7.0] - 2022-09-27
+
+### Changes
+
+- **[BREAKING]** The `Heartbeat` option for the Server, Client, and Async connections has been removed
+- The previous heartbeat semantics have been simplified to allow for simplified bi-directional heartbeats and a lower
+  overall processing overhead
+
+### Features
+
+- Streaming capabilities have been added to the Async connections allowing you to register a "stream" callback and the
+  ability to create streams from either peer.
+
 ## [v0.6.0] - 2022-08-07 (Beta)
 
-## Changes
+### Changes
 
-- **[BREAKING]** The `server` now concurrently process incoming packets from connections by calling handler functions in a goroutine.
+- **[BREAKING]** The `server` now concurrently process incoming packets from connections by calling handler functions in
+  a goroutine.
   This is done to avoid blocking the main packet processing loop when the handler for an incoming packet is slow.
 - The `UPDATE` Action has been completely removed from the `server` and the `client` - the context can no longer be
   updated from a handler function.
@@ -23,33 +37,33 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.5.4] - 2022-07-28 (Beta)
 
-## Features
+### Features
 
 - Renaming the `defaultDeadline` to `DefaultDeadline` and increasing the value to 5 seconds from 1 second
 
 ## [v0.5.3] - 2022-07-27 (Beta)
 
-## Features
+### Features
 
 - Adding the `GetHandlerTable` function to the server which allows us to retrieve the handler table from the server
 
 ## [v0.5.2] - 2022-07-22 (Beta)
 
-## Features
+### Features
 
 - Adding the `SetHandlerTable` function to the server which allows us to modify the handler table in the server
 
-## Changes
+### Changes
 
 - Close errors when the connection is already closed will now log at the Debug level
 
 ## [v0.5.1] - 2022-07-20 (Beta)
 
-## Fixes
+### Fixes
 
 - Fixed an issue where new connections in the server would be overwritten sometimes due to a pointer error
 
-## Changes
+### Changes
 
 - FRPC is now called fRPC
 - fRPC has been moved into its own [repository](https://github.com/loopholelabs/frpc-go)
@@ -58,7 +72,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.5.0] - 2022-05-18 (Beta)
 
-## Changes
+### Changes
 
 - Updating Frisbee RPC references to FRPC
 - Updating documentation site to point to https://frpc.io
@@ -66,27 +80,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.4.6] - 2022-04-28 (Beta)
 
-## Fixes
+### Fixes
 
 - Fixing issue where generated `decode` functions for slices would not allocate the proper memory before decoding the slice values (Issue #108)
 
-## Changes
+### Changes
 
 - Updating Trunk Linter to `v0.11.0-beta`
 
 ## [v0.4.5] - 2022-04-22 (Beta)
 
-## Fixes
+### Fixes
 
 - Fixing issue where packet.Decoder would return the decoder back to the pool before decoding was complete (Issue #102)
 
-## Changes
+### Changes
 
 - Updating Trunk Linter to `v0.10.1-beta`
 
 ## [v0.4.4] - 2022-04-21 (Beta)
 
-## Changes
+### Changes
 
 - Generated RPC Code for decoding objects no longer relies on the `*packet.Packet` structure, and instead works
   with `[]byte` slices directly
@@ -96,7 +110,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.4.3] - 2022-04-20 (Beta)
 
-## Fixes
+### Fixes
 
 - Version [v0.4.2][v0.4.2] did not embed the templates for RPC generation into frisbee, leading to runtime panics when
   generating RPC frameworks from outside the frisbee repository directory. This has now been fixed by embedding the
@@ -104,7 +118,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.4.2] - 2022-04-20 (Beta)
 
-## Changes
+### Changes
 
 - Refactored the RPC Generator to use the `text/template`
   package ([#90](https://github.com/loopholelabs/frisbee/pull/90))
@@ -114,20 +128,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.4.1] - 2022-03-24 (Beta)
 
-## Changes
+### Changes
 
 - Using new `internal/dialer` package to handle dialing for Async and Sync connections with automatic retires
 - Handling proper backoffs for accept loop in `Server` so server does not just crash when many connections are opened at
   once
 
-## Fixes
+### Fixes
 
 - Fixing `SetBaseContext`, `SetOnClosed`, and `SetPreWrite` functions to not error out if a valid function is used
 - Async test cases are less flaky
 
 ## [v0.4.0] - 2022-03-24 (Beta)
 
-## Changes
+### Changes
 
 - Changing `Connect` signatures and `Start` signatures for servers, and clients
 - Changing the functionality of Server.`Start` so that it blocks and returns an error
@@ -137,14 +151,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Making `baseContext`, `onClosed`, and `preWrite` hooks for the Server private, and creating `Setter` functions that
   make it impossible to set those functions to nil
 
-## Fixes
+### Fixes
 
 - Fixing panics from `ConnectSync` and `ConnectAsync` functions when the connection cannot be established - it now
   returns an error properly instead
 
 ## [v0.3.2] - 2022-03-18 (Beta)
 
-## Changes
+### Changes
 
 - Swapping the lock-free Queue out with a simpler locking queue that has significantly less lock contention in scenarios
   when multiple buffers are required.
