@@ -23,6 +23,9 @@ import (
 	"sync"
 )
 
+// DefaultStreamBufferSize is the default size of the stream buffer.
+const DefaultStreamBufferSize = 1 << 12
+
 type Stream struct {
 	id      uint16
 	conn    *Async
@@ -32,17 +35,13 @@ type Stream struct {
 	stale   []*packet.Packet
 }
 
-func NewStream(id uint16, conn *Async) *Stream {
+func newStream(id uint16, conn *Async) *Stream {
 	return &Stream{
 		id:     id,
 		conn:   conn,
 		closed: atomic.NewBool(false),
 		queue:  queue.NewCircular[packet.Packet, *packet.Packet](DefaultStreamBufferSize),
 	}
-}
-
-func (s *Stream) push(p *packet.Packet) error {
-	return s.queue.Push(p)
 }
 
 // ReadPacket is a blocking function that will wait until a Frisbee packet is available and then return it (and its content).
@@ -57,7 +56,7 @@ func (s *Stream) ReadPacket() (*packet.Packet, error) {
 			return p, nil
 		}
 		s.staleMu.Unlock()
-		return nil, ConnectionClosed
+		return nil, StreamClosed
 	}
 
 	readPacket, err := s.queue.Pop()
@@ -71,7 +70,7 @@ func (s *Stream) ReadPacket() (*packet.Packet, error) {
 				return p, nil
 			}
 			s.staleMu.Unlock()
-			return nil, ConnectionClosed
+			return nil, StreamClosed
 		}
 		return nil, err
 	}
@@ -79,20 +78,51 @@ func (s *Stream) ReadPacket() (*packet.Packet, error) {
 	return readPacket, nil
 }
 
-//func (s *Stream) Close() {
-//	s.staleMu.Lock()
-//	if s.closed.CAS(false, true) {
-//		s.Logger().Debug().Msg("connection close called, killing goroutines")
-//		s.killGoroutines()
-//		s.staleMu.Unlock()
-//		s.Lock()
-//		if s.writer.Buffered() > 0 {
-//			_ = s.conn.Flush()
-//			_ = s.conn.SetWriteDeadline(emptyTime)
-//		}
-//		s.Unlock()
-//		return nil
-//	}
-//	s.staleMu.Unlock()
-//	return ConnectionClosed
-//}
+// WritePacket will write the given packet to the stream but the ID and Operation will be
+// overwritten with the stream's ID and the STREAM operation. Packets send to a stream
+// must have a ContentLength greater than 0.
+func (s *Stream) WritePacket(p *packet.Packet) error {
+	if s.closed.Load() {
+		return StreamClosed
+	}
+	if p.Metadata.ContentLength == 0 {
+		return InvalidStreamPacket
+	}
+	p.Metadata.Id = s.id
+	p.Metadata.Operation = STREAM
+	return s.conn.writePacket(p)
+}
+
+func (s *Stream) ID() uint16 {
+	return s.id
+}
+
+// Close will close the stream and prevent any further reads or writes.
+func (s *Stream) Close() error {
+	s.staleMu.Lock()
+	if s.closed.CAS(false, true) {
+		s.queue.Close()
+		s.stale = s.queue.Drain()
+		s.staleMu.Unlock()
+
+		p := packet.Get()
+		p.Metadata.Id = s.id
+		p.Metadata.Operation = STREAM
+		err := s.conn.writePacket(p)
+		packet.Put(p)
+
+		return err
+	}
+	s.staleMu.Unlock()
+	return StreamClosed
+}
+
+// close will close the stream and prevent any further reads or writes without sending a stream close packet.
+func (s *Stream) close() {
+	s.staleMu.Lock()
+	if s.closed.CAS(false, true) {
+		s.queue.Close()
+		s.stale = s.queue.Drain()
+	}
+	s.staleMu.Unlock()
+}

@@ -173,8 +173,16 @@ func (c *Async) CloseChannel() <-chan struct{} {
 
 // WritePacket takes a packet.Packet and queues it up to send asynchronously.
 //
-// If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
+// If packet.Metadata.ContentLength == 0, then the content array's length must be 0. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Async) WritePacket(p *packet.Packet) error {
+	if p.Metadata.Operation <= RESERVED9 {
+		return InvalidOperation
+	}
+	return c.writePacket(p)
+}
+
+// write packet is the internal write packet function that does not check for reserved operations.
+func (c *Async) writePacket(p *packet.Packet) error {
 	if int(p.Metadata.ContentLength) != len(*p.Content) {
 		return InvalidContentLength
 	}
@@ -314,6 +322,22 @@ func (c *Async) Raw() net.Conn {
 	return c.conn
 }
 
+// Stream returns a new stream that can be used to send and receive packets
+func (c *Async) Stream(id uint16) (stream *Stream) {
+	c.streamsMu.Lock()
+	if stream = c.streams[id]; stream == nil {
+		stream = newStream(id, c)
+		c.streams[id] = stream
+	}
+	c.streamsMu.Unlock()
+	return
+}
+
+// StreamCh returns a channel that will receive new streams that are created by a remote peer
+func (c *Async) StreamCh() <-chan *Stream {
+	return c.streamCh
+}
+
 // Close closes the frisbee connection gracefully
 func (c *Async) Close() error {
 	err := c.close()
@@ -350,26 +374,26 @@ func (c *Async) flush() error {
 	return nil
 }
 
-func (c *Async) killGoroutines() {
-	c.Lock()
-	c.incoming.Close()
-	close(c.flusher)
-	close(c.closeCh)
-	c.Unlock()
-	_ = c.conn.SetDeadline(pastTime)
-	c.wg.Wait()
-	_ = c.conn.SetDeadline(emptyTime)
-	c.Logger().Debug().Msg("error channel closed, goroutines killed")
-
-	c.stale = c.incoming.Drain()
-}
-
 func (c *Async) close() error {
 	c.staleMu.Lock()
+	c.streamsMu.Lock()
 	if c.closed.CAS(false, true) {
 		c.Logger().Debug().Msg("connection close called, killing goroutines")
-		c.killGoroutines()
+		c.Lock()
+		c.incoming.Close()
+		close(c.flusher)
+		close(c.closeCh)
+		c.Unlock()
+		_ = c.conn.SetDeadline(pastTime)
+		c.wg.Wait()
+		_ = c.conn.SetDeadline(emptyTime)
+		c.Logger().Debug().Msg("error channel closed, goroutines killed")
+		c.stale = c.incoming.Drain()
 		c.staleMu.Unlock()
+		for _, stream := range c.streams {
+			_ = stream.Close()
+		}
+		c.streamsMu.Unlock()
 		c.Lock()
 		if c.writer.Buffered() > 0 {
 			_ = c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
@@ -380,6 +404,7 @@ func (c *Async) close() error {
 		return nil
 	}
 	c.staleMu.Unlock()
+	c.streamsMu.Unlock()
 	return ConnectionClosed
 }
 
@@ -420,7 +445,7 @@ func (c *Async) pingLoop() {
 			c.wg.Done()
 			return
 		case <-ticker.C:
-			err = c.WritePacket(PINGPacket)
+			err = c.writePacket(PINGPacket)
 			if err != nil {
 				c.wg.Done()
 				_ = c.closeWithError(err)
@@ -478,7 +503,7 @@ func (c *Async) readLoop() {
 			switch p.Metadata.Operation {
 			case PING:
 				c.Logger().Debug().Msg("PING Packet received by read loop, sending back PONG packet")
-				err = c.WritePacket(PONGPacket)
+				err = c.writePacket(PONGPacket)
 				if err != nil {
 					c.wg.Done()
 					_ = c.closeWithError(err)
@@ -539,24 +564,30 @@ func (c *Async) readLoop() {
 					}
 				} else {
 					if p.Metadata.ContentLength == 0 {
-						// End of Stream
-					}
-					if stream == nil {
-						stream = NewStream(p.Metadata.Id, c)
-						c.streamsMu.Lock()
-						c.streams[p.Metadata.Id] = stream
-						c.streamsMu.Unlock()
-						select {
-						case c.streamCh <- stream:
-						default:
+						if stream != nil {
+							stream.close()
+							c.streamsMu.Lock()
+							delete(c.streams, p.Metadata.Id)
+							c.streamsMu.Unlock()
 						}
-					}
-					err = stream.push(p)
-					if err != nil {
-						c.Logger().Debug().Err(err).Msg("error while pushing to a stream queue packet queue")
-						c.wg.Done()
-						_ = c.closeWithError(err)
-						return
+					} else {
+						if stream == nil {
+							stream = newStream(p.Metadata.Id, c)
+							c.streamsMu.Lock()
+							c.streams[p.Metadata.Id] = stream
+							c.streamsMu.Unlock()
+							select {
+							case c.streamCh <- stream:
+							default:
+							}
+						}
+						err = stream.queue.Push(p)
+						if err != nil {
+							c.Logger().Debug().Err(err).Msg("error while pushing to a stream queue packet queue")
+							c.wg.Done()
+							_ = c.closeWithError(err)
+							return
+						}
 					}
 					stream = nil
 					isStream = false

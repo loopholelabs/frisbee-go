@@ -30,8 +30,6 @@ import (
 // DefaultBufferSize is the size of the default buffer
 const DefaultBufferSize = 1 << 16
 
-const DefaultStreamBufferSize = 1 << 12
-
 var (
 	defaultLogger = zerolog.New(io.Discard)
 
@@ -60,8 +58,6 @@ type Conn interface {
 	SetWriteDeadline(time.Time) error
 	WritePacket(*packet.Packet) error
 	ReadPacket() (*packet.Packet, error)
-	SetContext(context.Context)
-	Context() context.Context
 	Logger() *zerolog.Logger
 	Error() error
 	Raw() net.Conn
