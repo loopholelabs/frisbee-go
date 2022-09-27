@@ -56,7 +56,7 @@ type Async struct {
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Async, error) {
+func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config, streamHandler ...NewStreamHandler) (*Async, error) {
 	var conn net.Conn
 	var err error
 
@@ -76,11 +76,11 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 		return nil, err
 	}
 
-	return NewAsync(conn, logger), nil
+	return NewAsync(conn, logger, streamHandler...), nil
 }
 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
-func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
+func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...NewStreamHandler) (conn *Async) {
 	conn = &Async{
 		conn:     c,
 		closed:   atomic.NewBool(false),
@@ -95,6 +95,10 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 
 	if logger == nil {
 		conn.logger = &defaultLogger
+	}
+
+	if len(streamHandler) > 0 {
+		conn.newStreamHandler = streamHandler[0]
 	}
 
 	conn.wg.Add(3)

@@ -174,8 +174,8 @@ func TestNewStreamDualCreate(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, &emptyLogger, func(_ *Stream) {})
+	writerConn := NewAsync(writer, &emptyLogger, func(_ *Stream) {})
 
 	writerStream := writerConn.NewStream(0)
 	readerStream := readerConn.NewStream(0)
