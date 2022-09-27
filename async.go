@@ -576,10 +576,7 @@ func (c *Async) readLoop() {
 							c.streamsMu.Lock()
 							c.streams[p.Metadata.Id] = stream
 							c.streamsMu.Unlock()
-							select {
-							case c.streamCh <- stream:
-							default:
-							}
+							c.streamCh <- stream
 						}
 						err = stream.queue.Push(p)
 						if err != nil {
