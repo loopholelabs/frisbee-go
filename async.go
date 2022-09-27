@@ -38,20 +38,21 @@ import (
 // meant to be used by frisbee client and server implementations
 type Async struct {
 	sync.Mutex
-	conn      net.Conn
-	closed    *atomic.Bool
-	writer    *bufio.Writer
-	flusher   chan struct{}
-	closeCh   chan struct{}
-	streamCh  chan *Stream
-	incoming  *queue.Circular[packet.Packet, *packet.Packet]
-	staleMu   sync.Mutex
-	stale     []*packet.Packet
-	logger    *zerolog.Logger
-	wg        sync.WaitGroup
-	error     *atomic.Error
-	streamsMu sync.RWMutex
-	streams   map[uint16]*Stream
+	conn               net.Conn
+	closed             *atomic.Bool
+	writer             *bufio.Writer
+	flushCh            chan struct{}
+	closeCh            chan struct{}
+	incoming           *queue.Circular[packet.Packet, *packet.Packet]
+	staleMu            sync.Mutex
+	stale              []*packet.Packet
+	logger             *zerolog.Logger
+	wg                 sync.WaitGroup
+	error              *atomic.Error
+	streamsMu          sync.Mutex
+	streams            map[uint16]*Stream
+	newStreamHandlerMu sync.Mutex
+	newStreamHandler   NewStreamHandler
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
@@ -85,9 +86,8 @@ func NewAsync(c net.Conn, logger *zerolog.Logger) (conn *Async) {
 		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
 		incoming: queue.NewCircular[packet.Packet, *packet.Packet](DefaultBufferSize),
-		flusher:  make(chan struct{}, 3),
+		flushCh:  make(chan struct{}, 3),
 		closeCh:  make(chan struct{}),
-		streamCh: make(chan *Stream, 10),
 		streams:  make(map[uint16]*Stream),
 		logger:   logger,
 		error:    atomic.NewError(nil),
@@ -181,68 +181,6 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 	return c.writePacket(p)
 }
 
-// write packet is the internal write packet function that does not check for reserved operations.
-func (c *Async) writePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != len(*p.Content) {
-		return InvalidContentLength
-	}
-
-	encodedMetadata := metadata.GetBuffer()
-	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
-	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
-	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
-
-	c.Lock()
-	if c.closed.Load() {
-		c.Unlock()
-		return ConnectionClosed
-	}
-	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
-	if err != nil {
-		c.Unlock()
-		if c.closed.Load() {
-			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
-			return ConnectionClosed
-		}
-		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
-		return c.closeWithError(err)
-	}
-	_, err = c.writer.Write(encodedMetadata[:])
-	metadata.PutBuffer(encodedMetadata)
-	if err != nil {
-		c.Unlock()
-		if c.closed.Load() {
-			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-			return ConnectionClosed
-		}
-		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-		return c.closeWithError(err)
-	}
-	if p.Metadata.ContentLength != 0 {
-		_, err = c.writer.Write((*p.Content)[:p.Metadata.ContentLength])
-		if err != nil {
-			c.Unlock()
-			if c.closed.Load() {
-				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
-				return ConnectionClosed
-			}
-			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
-			return c.closeWithError(err)
-		}
-	}
-
-	if len(c.flusher) == 0 {
-		select {
-		case c.flusher <- struct{}{}:
-		default:
-		}
-	}
-
-	c.Unlock()
-
-	return nil
-}
-
 // ReadPacket is a blocking function that will wait until a Frisbee packet is available and then return it (and its content).
 // In the event that the connection is closed, ReadPacket will return an error.
 func (c *Async) ReadPacket() (*packet.Packet, error) {
@@ -322,8 +260,8 @@ func (c *Async) Raw() net.Conn {
 	return c.conn
 }
 
-// Stream returns a new stream that can be used to send and receive packets
-func (c *Async) Stream(id uint16) (stream *Stream) {
+// NewStream returns a new stream that can be used to send and receive packets
+func (c *Async) NewStream(id uint16) (stream *Stream) {
 	c.streamsMu.Lock()
 	if stream = c.streams[id]; stream == nil {
 		stream = newStream(id, c)
@@ -333,9 +271,17 @@ func (c *Async) Stream(id uint16) (stream *Stream) {
 	return
 }
 
-// StreamCh returns a channel that will receive new streams that are created by a remote peer
-func (c *Async) StreamCh() <-chan *Stream {
-	return c.streamCh
+// SetNewStreamHandler sets the callback handler for new streams.
+//
+// It's important to note that this handler is called for new streams and if it is
+// not set then stream packets will be dropped.
+//
+// It's also important to note that the handler itself is called in its own goroutine to
+// avoid blocking the read lop. This means that the handler must be thread-safe.`
+func (c *Async) SetNewStreamHandler(handler NewStreamHandler) {
+	c.newStreamHandlerMu.Lock()
+	c.newStreamHandler = handler
+	c.newStreamHandlerMu.Unlock()
 }
 
 // Close closes the frisbee connection gracefully
@@ -346,6 +292,68 @@ func (c *Async) Close() error {
 	}
 	_ = c.conn.Close()
 	return err
+}
+
+// write packet is the internal write packet function that does not check for reserved operations.
+func (c *Async) writePacket(p *packet.Packet) error {
+	if int(p.Metadata.ContentLength) != len(*p.Content) {
+		return InvalidContentLength
+	}
+
+	encodedMetadata := metadata.GetBuffer()
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
+
+	c.Lock()
+	if c.closed.Load() {
+		c.Unlock()
+		return ConnectionClosed
+	}
+	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
+	if err != nil {
+		c.Unlock()
+		if c.closed.Load() {
+			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
+			return ConnectionClosed
+		}
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
+		return c.closeWithError(err)
+	}
+	_, err = c.writer.Write(encodedMetadata[:])
+	metadata.PutBuffer(encodedMetadata)
+	if err != nil {
+		c.Unlock()
+		if c.closed.Load() {
+			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
+			return ConnectionClosed
+		}
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
+		return c.closeWithError(err)
+	}
+	if p.Metadata.ContentLength != 0 {
+		_, err = c.writer.Write((*p.Content)[:p.Metadata.ContentLength])
+		if err != nil {
+			c.Unlock()
+			if c.closed.Load() {
+				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+				return ConnectionClosed
+			}
+			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+			return c.closeWithError(err)
+		}
+	}
+
+	if len(c.flushCh) == 0 {
+		select {
+		case c.flushCh <- struct{}{}:
+		default:
+		}
+	}
+
+	c.Unlock()
+
+	return nil
 }
 
 // flush is an internal function for flushing data from the write buffer, however
@@ -381,13 +389,12 @@ func (c *Async) close() error {
 		c.Logger().Debug().Msg("connection close called, killing goroutines")
 		c.Lock()
 		c.incoming.Close()
-		close(c.flusher)
 		close(c.closeCh)
+		close(c.flushCh)
 		c.Unlock()
 		_ = c.conn.SetDeadline(pastTime)
 		c.wg.Wait()
 		_ = c.conn.SetDeadline(emptyTime)
-		c.Logger().Debug().Msg("error channel closed, goroutines killed")
 		c.stale = c.incoming.Drain()
 		c.staleMu.Unlock()
 		for _, stream := range c.streams {
@@ -422,7 +429,7 @@ func (c *Async) closeWithError(err error) error {
 func (c *Async) flushLoop() {
 	var err error
 	for {
-		if _, ok := <-c.flusher; !ok {
+		if _, ok := <-c.flushCh; !ok {
 			c.wg.Done()
 			return
 		}
@@ -460,6 +467,7 @@ func (c *Async) readLoop() {
 	var index int
 	var stream *Stream
 	var isStream bool
+	var newStreamHandler NewStreamHandler
 	for {
 		buf = buf[:cap(buf)]
 		if len(buf) < metadata.Size {
@@ -516,9 +524,14 @@ func (c *Async) readLoop() {
 			case STREAM:
 				c.Logger().Debug().Msg("STREAM Packet received by read loop")
 				isStream = true
-				c.streamsMu.RLock()
-				stream = c.streams[p.Metadata.Id]
-				c.streamsMu.RUnlock()
+				c.newStreamHandlerMu.Lock()
+				newStreamHandler = c.newStreamHandler
+				c.newStreamHandlerMu.Unlock()
+				if newStreamHandler != nil || p.Metadata.ContentLength == 0 {
+					c.streamsMu.Lock()
+					stream = c.streams[p.Metadata.Id]
+					c.streamsMu.Unlock()
+				}
 				fallthrough
 			default:
 				if p.Metadata.ContentLength > 0 {
@@ -570,25 +583,32 @@ func (c *Async) readLoop() {
 							delete(c.streams, p.Metadata.Id)
 							c.streamsMu.Unlock()
 						}
+						packet.Put(p)
 					} else {
-						if stream == nil {
-							stream = newStream(p.Metadata.Id, c)
-							c.streamsMu.Lock()
-							c.streams[p.Metadata.Id] = stream
-							c.streamsMu.Unlock()
-							c.streamCh <- stream
-						}
-						err = stream.queue.Push(p)
-						if err != nil {
-							c.Logger().Debug().Err(err).Msg("error while pushing to a stream queue packet queue")
-							c.wg.Done()
-							_ = c.closeWithError(err)
-							return
+						if newStreamHandler == nil {
+							c.Logger().Debug().Msg("STREAM Packet discarded by read loop")
+							packet.Put(p)
+						} else {
+							if stream == nil {
+								stream = newStream(p.Metadata.Id, c)
+								c.streamsMu.Lock()
+								c.streams[p.Metadata.Id] = stream
+								c.streamsMu.Unlock()
+								go newStreamHandler(stream)
+							}
+							err = stream.queue.Push(p)
+							if err != nil {
+								c.Logger().Debug().Err(err).Msg("error while pushing to a stream queue packet queue")
+								c.wg.Done()
+								_ = c.closeWithError(err)
+								return
+							}
 						}
 					}
-					stream = nil
-					isStream = false
 				}
+				newStreamHandler = nil
+				stream = nil
+				isStream = false
 			}
 			if n == index {
 				index = 0

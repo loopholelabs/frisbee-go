@@ -26,6 +26,8 @@ import (
 // DefaultStreamBufferSize is the default size of the stream buffer.
 const DefaultStreamBufferSize = 1 << 12
 
+type NewStreamHandler func(*Stream)
+
 type Stream struct {
 	id      uint16
 	conn    *Async
@@ -93,8 +95,14 @@ func (s *Stream) WritePacket(p *packet.Packet) error {
 	return s.conn.writePacket(p)
 }
 
+// ID returns the stream's ID.
 func (s *Stream) ID() uint16 {
 	return s.id
+}
+
+// Conn returns the connection that the stream is associated with.
+func (s *Stream) Conn() *Async {
+	return s.conn
 }
 
 // Close will close the stream and prevent any further reads or writes.
@@ -110,6 +118,10 @@ func (s *Stream) Close() error {
 		p.Metadata.Operation = STREAM
 		err := s.conn.writePacket(p)
 		packet.Put(p)
+
+		s.conn.streamsMu.Lock()
+		delete(s.conn.streams, s.id)
+		s.conn.streamsMu.Unlock()
 
 		return err
 	}

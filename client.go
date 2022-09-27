@@ -148,12 +148,18 @@ func (c *Client) Raw() (net.Conn, error) {
 
 // Stream returns a new Stream object that can be used to send and receive frisbee packets
 func (c *Client) Stream(id uint16) *Stream {
-	return c.conn.Stream(id)
+	return c.conn.NewStream(id)
 }
 
-// StreamCh returns a channel that will receive new streams that are created by the server
-func (c *Client) StreamCh() <-chan *Stream {
-	return c.conn.StreamCh()
+// SetNewStreamHandler sets the callback handler for new streams.
+//
+// It's important to note that this handler is called for new streams and if it is
+// not set then stream packets will be dropped.
+//
+// It's also important to note that the handler itself is called in its own goroutine to
+// avoid blocking the read lop. This means that the handler must be thread-safe.
+func (c *Client) SetNewStreamHandler(handler NewStreamHandler) {
+	c.conn.SetNewStreamHandler(handler)
 }
 
 // Logger returns the client's logger (useful for ClientRouter functions)

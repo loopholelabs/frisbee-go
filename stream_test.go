@@ -34,13 +34,12 @@ func TestNewStream(t *testing.T) {
 	const packetSize = 512
 
 	emptyLogger := zerolog.New(io.Discard)
-
 	reader, writer := net.Pipe()
 
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
 
-	writerStream := writerConn.Stream(0)
+	writerStream := writerConn.NewStream(0)
 
 	data := make([]byte, packetSize)
 	_, err := rand.Read(data)
@@ -52,16 +51,22 @@ func TestNewStream(t *testing.T) {
 	p.Metadata.ContentLength = uint32(packetSize)
 	p.Content.Write(data)
 
+	readerStreamCh := make(chan *Stream)
+	var readerStream *Stream
+
+	readerConn.SetNewStreamHandler(func(stream *Stream) {
+		readerStreamCh <- stream
+	})
+
 	err = writerStream.WritePacket(p)
 	require.NoError(t, err)
 	packet.Put(p)
 
-	var readerStream *Stream
 	timer := time.NewTimer(DefaultDeadline)
 	select {
 	case <-timer.C:
 		t.Fatal("timed out waiting for reader stream")
-	case readerStream = <-readerConn.StreamCh():
+	case readerStream = <-readerStreamCh:
 	}
 
 	p, err = readerStream.ReadPacket()
@@ -98,7 +103,7 @@ func TestNewStreamStale(t *testing.T) {
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
 
-	writerStream := writerConn.Stream(0)
+	writerStream := writerConn.NewStream(0)
 
 	data := make([]byte, packetSize)
 	_, err := rand.Read(data)
@@ -110,6 +115,13 @@ func TestNewStreamStale(t *testing.T) {
 	p.Metadata.ContentLength = uint32(packetSize)
 	p.Content.Write(data)
 
+	readerStreamCh := make(chan *Stream)
+	var readerStream *Stream
+
+	readerConn.SetNewStreamHandler(func(stream *Stream) {
+		readerStreamCh <- stream
+	})
+
 	err = writerStream.WritePacket(p)
 	require.NoError(t, err)
 
@@ -118,12 +130,11 @@ func TestNewStreamStale(t *testing.T) {
 
 	packet.Put(p)
 
-	var readerStream *Stream
 	timer := time.NewTimer(DefaultDeadline)
 	select {
 	case <-timer.C:
 		t.Fatal("timed out waiting for reader stream")
-	case readerStream = <-readerConn.StreamCh():
+	case readerStream = <-readerStreamCh:
 	}
 
 	err = writerStream.Close()
@@ -166,8 +177,8 @@ func TestNewStreamDualCreate(t *testing.T) {
 	readerConn := NewAsync(reader, &emptyLogger)
 	writerConn := NewAsync(writer, &emptyLogger)
 
-	writerStream := writerConn.Stream(0)
-	readerStream := readerConn.Stream(0)
+	writerStream := writerConn.NewStream(0)
+	readerStream := readerConn.NewStream(0)
 
 	data := make([]byte, packetSize)
 	_, err := rand.Read(data)
