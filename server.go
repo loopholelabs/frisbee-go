@@ -55,6 +55,7 @@ type Server struct {
 	startedCh     chan struct{}
 	concurrency   uint64
 	limiter       chan struct{}
+	streamHandler func(*Stream)
 
 	// baseContext is used to define the base context for this Server and all incoming connections
 	baseContext func() context.Context
@@ -64,6 +65,9 @@ type Server struct {
 
 	// preWrite is run by the server before a write happens
 	preWrite func()
+
+	// StreamHandler is used to handle incoming client-initiated streams on the server
+	StreamHandler func(*Async, *Stream)
 
 	// ConnContext is used to define a connection-specific context based on the incoming connection
 	// and is run whenever a new connection is opened
@@ -132,13 +136,6 @@ func (s *Server) SetHandlerTable(handlerTable HandlerTable) error {
 		}
 	}
 
-	if s.options.Heartbeat > time.Duration(0) {
-		handlerTable[HEARTBEAT] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			outgoing = incoming
-			return
-		}
-	}
-
 	s.handlerTable = handlerTable
 	return nil
 }
@@ -181,6 +178,13 @@ func (s *Server) Start(addr string) error {
 	}
 	s.wg.Add(1)
 	close(s.startedCh)
+
+	if s.StreamHandler != nil {
+		s.streamHandler = func(stream *Stream) {
+			s.StreamHandler(stream.Conn(), stream)
+		}
+	}
+
 	return s.handleListener()
 }
 
@@ -223,6 +227,50 @@ func (s *Server) handleListener() error {
 		backoff = 0
 
 		s.ServeConn(newConn)
+	}
+}
+
+func (s *Server) createHandler(conn *Async, closed *atomic.Bool, wg *sync.WaitGroup, ctx context.Context, cancel context.CancelFunc) func(*packet.Packet) {
+	return func(p *packet.Packet) {
+		handlerFunc := s.handlerTable[p.Metadata.Operation]
+		if handlerFunc != nil {
+			packetCtx := ctx
+			if s.PacketContext != nil {
+				packetCtx = s.PacketContext(packetCtx, p)
+			}
+			outgoing, action := handlerFunc(packetCtx, p)
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+				s.preWrite()
+				err := conn.WritePacket(outgoing)
+				if outgoing != p {
+					packet.Put(outgoing)
+				}
+				packet.Put(p)
+				if err != nil {
+					_ = conn.Close()
+					if closed.CAS(false, true) {
+						s.onClosed(conn, err)
+					}
+					cancel()
+					wg.Done()
+					return
+				}
+			} else {
+				packet.Put(p)
+			}
+			switch action {
+			case NONE:
+			case CLOSE:
+				_ = conn.Close()
+				if closed.CAS(false, true) {
+					s.onClosed(conn, nil)
+				}
+				cancel()
+			}
+		} else {
+			packet.Put(p)
+		}
+		wg.Done()
 	}
 }
 
@@ -283,50 +331,6 @@ func (s *Server) handleSinglePacket(frisbeeConn *Async, connCtx context.Context)
 	}
 }
 
-func (s *Server) handler(conn *Async, closed *atomic.Bool, wg *sync.WaitGroup, ctx context.Context, cancel context.CancelFunc) func(*packet.Packet) {
-	return func(p *packet.Packet) {
-		handlerFunc := s.handlerTable[p.Metadata.Operation]
-		if handlerFunc != nil {
-			packetCtx := ctx
-			if s.PacketContext != nil {
-				packetCtx = s.PacketContext(packetCtx, p)
-			}
-			outgoing, action := handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
-				s.preWrite()
-				err := conn.WritePacket(outgoing)
-				if outgoing != p {
-					packet.Put(outgoing)
-				}
-				packet.Put(p)
-				if err != nil {
-					_ = conn.Close()
-					if closed.CAS(false, true) {
-						s.onClosed(conn, err)
-					}
-					cancel()
-					wg.Done()
-					return
-				}
-			} else {
-				packet.Put(p)
-			}
-			switch action {
-			case NONE:
-			case CLOSE:
-				_ = conn.Close()
-				if closed.CAS(false, true) {
-					s.onClosed(conn, nil)
-				}
-				cancel()
-			}
-		} else {
-			packet.Put(p)
-		}
-		wg.Done()
-	}
-}
-
 func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Context) {
 	p, err := frisbeeConn.ReadPacket()
 	if err != nil {
@@ -340,10 +344,10 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
-	handler := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
+	handle := s.createHandler(frisbeeConn, closed, wg, connCtx, cancel)
 	for {
 		wg.Add(1)
-		go handler(p)
+		go handle(p)
 		p, err = frisbeeConn.ReadPacket()
 		if err != nil {
 			_ = frisbeeConn.Close()
@@ -369,16 +373,16 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
-	uHandler := s.handler(frisbeeConn, closed, wg, connCtx, cancel)
-	handler := func(p *packet.Packet) {
-		uHandler(p)
+	handler := s.createHandler(frisbeeConn, closed, wg, connCtx, cancel)
+	handle := func(p *packet.Packet) {
+		handler(p)
 		<-s.limiter
 	}
 	for {
 		select {
 		case s.limiter <- struct{}{}:
 			wg.Add(1)
-			go handler(p)
+			go handle(p)
 			p, err = frisbeeConn.ReadPacket()
 			if err != nil {
 				_ = frisbeeConn.Close()
@@ -428,9 +432,8 @@ func (s *Server) serveConn(newConn net.Conn) {
 		}
 	}
 
-	frisbeeConn := NewAsync(newConn, s.Logger())
+	frisbeeConn := NewAsync(newConn, s.Logger(), s.streamHandler)
 	connCtx := s.baseContext()
-
 	s.connectionsMu.Lock()
 	if s.shutdown.Load() {
 		s.wg.Done()

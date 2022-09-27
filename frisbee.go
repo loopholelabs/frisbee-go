@@ -29,9 +29,12 @@ import (
 var (
 	InvalidContentLength     = errors.New("invalid content length")
 	ConnectionClosed         = errors.New("connection closed")
+	StreamClosed             = errors.New("stream closed")
+	InvalidStreamPacket      = errors.New("invalid stream packet")
 	ConnectionNotInitialized = errors.New("connection not initialized")
 	InvalidBufferLength      = errors.New("invalid buffer length")
 	InvalidHandlerTable      = errors.New("invalid handler table configuration, a reserved value may have been used")
+	InvalidOperation         = errors.New("invalid operation in packet, a reserved value may have been used")
 )
 
 // Action is an ENUM used to modify the state of the client or server from a Handler function
@@ -59,14 +62,15 @@ type HandlerTable map[uint16]Handler
 
 // These are internal reserved packet types, and are the reason you cannot use 0-9 in Handler functions:
 const (
-	// HEARTBEAT is used to send heartbeats from the client to the server (and measure round trip time)
-	HEARTBEAT = uint16(iota)
-
 	// PING is used to check if a client is still alive
-	PING
+	PING = uint16(iota)
 
 	// PONG is used to respond to a PING packets
 	PONG
+
+	// STREAM is used to request that a new stream be created by the receiver to
+	// receive packets with the same packet ID until a packet with a ContentLength of 0 is received
+	STREAM
 
 	RESERVED3
 	RESERVED4
@@ -78,14 +82,6 @@ const (
 )
 
 var (
-	// HEARTBEATPacket is a pre-allocated Frisbee Packet for HEARTBEAT Packets
-	HEARTBEATPacket = &packet.Packet{
-		Metadata: &metadata.Metadata{
-			Operation: HEARTBEAT,
-		},
-		Content: polyglot.NewBuffer(),
-	}
-
 	// PINGPacket is a pre-allocated Frisbee Packet for PING Packets
 	PINGPacket = &packet.Packet{
 		Metadata: &metadata.Metadata{
