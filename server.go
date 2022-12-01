@@ -30,9 +30,10 @@ import (
 )
 
 var (
-	BaseContextNil = errors.New("BaseContext cannot be nil")
-	OnClosedNil    = errors.New("OnClosed cannot be nil")
-	PreWriteNil    = errors.New("PreWrite cannot be nil")
+	BaseContextNil   = errors.New("BaseContext cannot be nil")
+	OnClosedNil      = errors.New("OnClosed cannot be nil")
+	PreWriteNil      = errors.New("PreWrite cannot be nil")
+	StreamHandlerNil = errors.New("StreamHandler cannot be nil")
 )
 
 var (
@@ -41,6 +42,10 @@ var (
 	defaultOnClosed = func(_ *Async, _ error) {}
 
 	defaultPreWrite = func() {}
+
+	defaultStreamHandler = func(stream *Stream) {
+		_ = stream.Close()
+	}
 )
 
 // Server accepts connections from frisbee Clients and can send and receive frisbee Packets
@@ -55,7 +60,6 @@ type Server struct {
 	startedCh     chan struct{}
 	concurrency   uint64
 	limiter       chan struct{}
-	streamHandler func(*Stream)
 
 	// baseContext is used to define the base context for this Server and all incoming connections
 	baseContext func() context.Context
@@ -66,8 +70,8 @@ type Server struct {
 	// preWrite is run by the server before a write happens
 	preWrite func()
 
-	// StreamHandler is used to handle incoming client-initiated streams on the server
-	StreamHandler func(*Async, *Stream)
+	// streamHandler is used to handle incoming client-initiated streams on the server
+	streamHandler func(*Stream)
 
 	// ConnContext is used to define a connection-specific context based on the incoming connection
 	// and is run whenever a new connection is opened
@@ -87,13 +91,14 @@ type Server struct {
 func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 	options := loadOptions(opts...)
 	s := &Server{
-		options:     options,
-		shutdown:    atomic.NewBool(false),
-		connections: make(map[*Async]struct{}),
-		startedCh:   make(chan struct{}),
-		baseContext: defaultBaseContext,
-		onClosed:    defaultOnClosed,
-		preWrite:    defaultPreWrite,
+		options:       options,
+		shutdown:      atomic.NewBool(false),
+		connections:   make(map[*Async]struct{}),
+		startedCh:     make(chan struct{}),
+		baseContext:   defaultBaseContext,
+		onClosed:      defaultOnClosed,
+		preWrite:      defaultPreWrite,
+		streamHandler: defaultStreamHandler,
 	}
 
 	return s, s.SetHandlerTable(handlerTable)
@@ -123,6 +128,17 @@ func (s *Server) SetPreWrite(f func()) error {
 		return PreWriteNil
 	}
 	s.preWrite = f
+	return nil
+}
+
+// SetStreamHandler sets the streamHandler function for the server. If f is nil, it returns an error.
+func (s *Server) SetStreamHandler(f func(*Async, *Stream)) error {
+	if f == nil {
+		return StreamHandlerNil
+	}
+	s.streamHandler = func(stream *Stream) {
+		f(stream.Conn(), stream)
+	}
 	return nil
 }
 
@@ -178,12 +194,6 @@ func (s *Server) Start(addr string) error {
 	}
 	s.wg.Add(1)
 	close(s.startedCh)
-
-	if s.StreamHandler != nil {
-		s.streamHandler = func(stream *Stream) {
-			s.StreamHandler(stream.Conn(), stream)
-		}
-	}
 
 	return s.handleListener()
 }
