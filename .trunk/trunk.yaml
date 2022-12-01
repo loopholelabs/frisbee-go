@@ -4,17 +4,25 @@ runtimes:
     - go@1.18.3
     - node@16.14.2
 cli:
-  version: 0.18.0-beta
+  version: 1.1.0
 lint:
   enabled:
     - git-diff-check@SYSTEM
-    - actionlint@1.6.19
-    - gitleaks@8.13.0
-    - gofmt@1.18.3
-    - golangci-lint@1.49.0
+    - actionlint@1.6.22
+    - gitleaks@8.15.1
+    - gofmt@1.19.3
+    - golangci-lint@1.50.1
     - markdownlint@0.32.2
-    - prettier@2.7.1
+    - prettier@2.8.0
   ignore:
-    - linters: [ALL]
+    - linters: [ ALL ]
       paths:
         - dist/**
+actions:
+  enabled:
+    - trunk-upgrade-available
+plugins:
+  sources:
+    - id: trunk
+      ref: v0.0.6
+      uri: https://github.com/trunk-io/plugins
