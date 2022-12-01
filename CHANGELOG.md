@@ -7,6 +7,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.7.1] - 2022-12-01
+
+### Fixes
+
+- StreamHandlers would not be registered when calling `ServeConn` because they were created during a `server.Start`
+  call. This has been fixed by creating a dedicated `SetStreamHandler` method on the `Server` struct.
+
+### Changes
+
+- The `Server` struct now has a `SetStreamHandler` method that allows you to register a stream handler for a given
+  stream name.
+
 ## [v0.7.0] - 2022-09-27
 
 ### Changes
@@ -328,7 +340,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.7.0...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.7.1...HEAD
+[v0.7.1]: https://github.com/loopholelabs/frisbee/compare/v0.7.0...v0.7.1
 [v0.7.0]: https://github.com/loopholelabs/frisbee/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/loopholelabs/frisbee/compare/v0.5.4...v0.6.0
 [v0.5.4]: https://github.com/loopholelabs/frisbee/compare/v0.5.3...v0.5.4
