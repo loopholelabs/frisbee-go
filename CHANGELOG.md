@@ -7,6 +7,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixes
+
+- StreamHandlers would not be registered when calling `ServeConn` because they were created during a `server.Start`
+  call. This has been fixed by creating a dedicated `SetStreamHandler` method on the `Server` struct.
+
+### Changes
+
+- The `Server` struct now has a `SetStreamHandler` method that allows you to register a stream handler for a given
+  stream name.
+
 ## [v0.7.0] - 2022-09-27
 
 ### Changes
