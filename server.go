@@ -258,7 +258,7 @@ func (s *Server) createHandler(conn *Async, closed *atomic.Bool, wg *sync.WaitGr
 				packet.Put(p)
 				if err != nil {
 					_ = conn.Close()
-					if closed.CAS(false, true) {
+					if closed.CompareAndSwap(false, true) {
 						s.onClosed(conn, err)
 					}
 					cancel()
@@ -272,7 +272,7 @@ func (s *Server) createHandler(conn *Async, closed *atomic.Bool, wg *sync.WaitGr
 			case NONE:
 			case CLOSE:
 				_ = conn.Close()
-				if closed.CAS(false, true) {
+				if closed.CompareAndSwap(false, true) {
 					s.onClosed(conn, nil)
 				}
 				cancel()
@@ -361,7 +361,7 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 		p, err = frisbeeConn.ReadPacket()
 		if err != nil {
 			_ = frisbeeConn.Close()
-			if closed.CAS(false, true) {
+			if closed.CompareAndSwap(false, true) {
 				s.onClosed(frisbeeConn, err)
 			}
 			cancel()
@@ -376,6 +376,7 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 	if err != nil {
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, err)
+		return
 	}
 	if s.ConnContext != nil {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
@@ -396,7 +397,7 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 			p, err = frisbeeConn.ReadPacket()
 			if err != nil {
 				_ = frisbeeConn.Close()
-				if closed.CAS(false, true) {
+				if closed.CompareAndSwap(false, true) {
 					s.onClosed(frisbeeConn, err)
 				}
 				cancel()
@@ -405,7 +406,7 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 			}
 		case <-connCtx.Done():
 			_ = frisbeeConn.Close()
-			if closed.CAS(false, true) {
+			if closed.CompareAndSwap(false, true) {
 				s.onClosed(frisbeeConn, err)
 			}
 			wg.Wait()

@@ -108,7 +108,7 @@ func (s *Stream) Conn() *Async {
 // Close will close the stream and prevent any further reads or writes.
 func (s *Stream) Close() error {
 	s.staleMu.Lock()
-	if s.closed.CAS(false, true) {
+	if s.closed.CompareAndSwap(false, true) {
 		s.queue.Close()
 		s.stale = s.queue.Drain()
 		s.staleMu.Unlock()
@@ -132,7 +132,7 @@ func (s *Stream) Close() error {
 // close will close the stream and prevent any further reads or writes without sending a stream close packet.
 func (s *Stream) close() {
 	s.staleMu.Lock()
-	if s.closed.CAS(false, true) {
+	if s.closed.CompareAndSwap(false, true) {
 		s.queue.Close()
 		s.stale = s.queue.Drain()
 	}
