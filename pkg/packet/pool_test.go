@@ -17,7 +17,7 @@
 package packet
 
 import (
-	"github.com/loopholelabs/polyglot-go"
+	"github.com/loopholelabs/polyglot"
 	"math/rand"
 	"testing"
 

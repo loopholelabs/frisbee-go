@@ -19,7 +19,7 @@ package frisbee
 import (
 	"crypto/rand"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/polyglot-go"
+	"github.com/loopholelabs/polyglot"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"

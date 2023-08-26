@@ -268,7 +268,7 @@ func (c *Sync) Close() error {
 }
 
 func (c *Sync) close() error {
-	if c.closed.CAS(false, true) {
+	if c.closed.CompareAndSwap(false, true) {
 		return nil
 	}
 	return ConnectionClosed

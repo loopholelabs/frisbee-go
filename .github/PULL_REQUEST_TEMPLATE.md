@@ -31,12 +31,6 @@ Frisbee tries to adhere to strict performance requirements, so please make sure 
 
 ```
 
-## Linting
-
-Please make sure you've run the following and fixed any issues that arise:
-
-- [ ] `trunk check` has been run
-
 ## Final Checklist:
 
 - [ ] My code follows the style guidelines of this project
@@ -48,3 +42,4 @@ Please make sure you've run the following and fixed any issues that arise:
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published in downstream modules
 - [ ] I have checked my code and corrected any misspellings
+- [ ] I have signed-off my commits with `git commit -s` (see [the developer's certificate of origin](https://github.com/apps/dco))

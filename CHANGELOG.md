@@ -7,6 +7,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.7.2] - 2023-08-26
+
+### Features
+
+- Added `StartWithListener` function to start a server with a custom listener ([#155](https://github.com/loopholelabs/frisbee-go/issues/155))
+
+### Fixes
+
+- Fixed a bug where the `server` would not properly return from handling packets when the concurrency value was > 1 ([#160](https://github.com/loopholelabs/frisbee-go/issues/160))
+
+### Changes
+
+- Removing `trunk`
+
+### Dependencies
+
+- Bumping `github.com/loopholelabs/common` from `v0.4.4` to `v0.4.9`
+- Bumping `github.com/loopholelabs/polyglot` from `v0.5.1` to `v0.1.2`
+- Bumping `github.com/rs/zerolog` from `v1.27.0` to `v1.30.0`
+- Bumping `github.com/stretchr/testify` from `v1.8.0` to `v1.8.4`
+- Bumping `go.uber.org/atomic` from `v1.9.0` to `v1.11.0`
+- Bumping `go.uber.org/goleak` from `v1.1.12` to `v1.2.1`
+
 ## [v0.7.1] - 2022-12-01
 
 ### Fixes
@@ -340,7 +363,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.7.1...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.7.2...HEAD
+[v0.7.2]: https://github.com/loopholelabs/frisbee/compare/v0.7.1...v0.7.2
 [v0.7.1]: https://github.com/loopholelabs/frisbee/compare/v0.7.0...v0.7.1
 [v0.7.0]: https://github.com/loopholelabs/frisbee/compare/v0.6.0...v0.7.0
 [v0.6.0]: https://github.com/loopholelabs/frisbee/compare/v0.5.4...v0.6.0

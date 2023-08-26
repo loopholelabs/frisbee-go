@@ -34,6 +34,7 @@ var (
 	OnClosedNil      = errors.New("OnClosed cannot be nil")
 	PreWriteNil      = errors.New("PreWrite cannot be nil")
 	StreamHandlerNil = errors.New("StreamHandler cannot be nil")
+	ListenerNil      = errors.New("Listener cannot be nil")
 )
 
 var (
@@ -183,18 +184,30 @@ func (s *Server) SetConcurrency(concurrency uint64) {
 // onClosed, OnShutdown, or preWrite functions have not been defined, it will
 // use the default functions for these.
 func (s *Server) Start(addr string) error {
+	var listener net.Listener
 	var err error
 	if s.options.TLSConfig != nil {
-		s.listener, err = tls.Listen("tcp", addr, s.options.TLSConfig)
+		listener, err = tls.Listen("tcp", addr, s.options.TLSConfig)
 	} else {
-		s.listener, err = net.Listen("tcp", addr)
+		listener, err = net.Listen("tcp", addr)
 	}
 	if err != nil {
 		return err
 	}
+	return s.StartWithListener(listener)
+}
+
+// StartWithListener will start the frisbee server and its reactor goroutines
+// to receive and handle incoming connections with a given net.Listener. If the baseContext, ConnContext,
+// onClosed, OnShutdown, or preWrite functions have not been defined, it will
+// use the default functions for these.
+func (s *Server) StartWithListener(listener net.Listener) error {
+	if listener == nil {
+		return ListenerNil
+	}
+	s.listener = listener
 	s.wg.Add(1)
 	close(s.startedCh)
-
 	return s.handleListener()
 }
 
@@ -258,7 +271,7 @@ func (s *Server) createHandler(conn *Async, closed *atomic.Bool, wg *sync.WaitGr
 				packet.Put(p)
 				if err != nil {
 					_ = conn.Close()
-					if closed.CAS(false, true) {
+					if closed.CompareAndSwap(false, true) {
 						s.onClosed(conn, err)
 					}
 					cancel()
@@ -272,7 +285,7 @@ func (s *Server) createHandler(conn *Async, closed *atomic.Bool, wg *sync.WaitGr
 			case NONE:
 			case CLOSE:
 				_ = conn.Close()
-				if closed.CAS(false, true) {
+				if closed.CompareAndSwap(false, true) {
 					s.onClosed(conn, nil)
 				}
 				cancel()
@@ -361,7 +374,7 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 		p, err = frisbeeConn.ReadPacket()
 		if err != nil {
 			_ = frisbeeConn.Close()
-			if closed.CAS(false, true) {
+			if closed.CompareAndSwap(false, true) {
 				s.onClosed(frisbeeConn, err)
 			}
 			cancel()
@@ -376,6 +389,7 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 	if err != nil {
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, err)
+		return
 	}
 	if s.ConnContext != nil {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
@@ -396,7 +410,7 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 			p, err = frisbeeConn.ReadPacket()
 			if err != nil {
 				_ = frisbeeConn.Close()
-				if closed.CAS(false, true) {
+				if closed.CompareAndSwap(false, true) {
 					s.onClosed(frisbeeConn, err)
 				}
 				cancel()
@@ -405,7 +419,7 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 			}
 		case <-connCtx.Done():
 			_ = frisbeeConn.Close()
-			if closed.CAS(false, true) {
+			if closed.CompareAndSwap(false, true) {
 				s.onClosed(frisbeeConn, err)
 			}
 			wg.Wait()

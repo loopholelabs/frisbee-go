@@ -18,7 +18,7 @@ package packet
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/polyglot-go"
+	"github.com/loopholelabs/polyglot"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

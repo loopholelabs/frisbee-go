@@ -106,7 +106,7 @@ func (c *Client) Error() error {
 
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
-	if c.closed.CAS(false, true) {
+	if c.closed.CompareAndSwap(false, true) {
 		err := c.conn.Close()
 		if err != nil {
 			return err
@@ -138,7 +138,7 @@ func (c *Client) Raw() (net.Conn, error) {
 	if c.conn == nil {
 		return nil, ConnectionNotInitialized
 	}
-	if c.closed.CAS(false, true) {
+	if c.closed.CompareAndSwap(false, true) {
 		conn := c.conn.Raw()
 		c.wg.Wait()
 		return conn, nil

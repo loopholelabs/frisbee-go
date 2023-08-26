@@ -20,7 +20,7 @@ import (
 	"context"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/polyglot-go"
+	"github.com/loopholelabs/polyglot"
 	"github.com/pkg/errors"
 	"time"
 )
