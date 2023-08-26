@@ -9,6 +9,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [v0.7.1] - 2022-12-01
 
+### Features
+
+- Added `StartWithListener` function to start a server with a custom listener ([#155](https://github.com/loopholelabs/frisbee-go/issues/155))
+
 ### Fixes
 
 - StreamHandlers would not be registered when calling `ServeConn` because they were created during a `server.Start`
