@@ -18,7 +18,7 @@ package packet
 
 import (
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
-	"github.com/loopholelabs/polyglot-go"
+	"github.com/loopholelabs/polyglot"
 )
 
 // Packet is the structured frisbee data packet, and contains the following:

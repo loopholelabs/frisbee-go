@@ -389,7 +389,7 @@ func (c *Async) flush() error {
 func (c *Async) close() error {
 	c.staleMu.Lock()
 	c.streamsMu.Lock()
-	if c.closed.CAS(false, true) {
+	if c.closed.CompareAndSwap(false, true) {
 		c.Logger().Debug().Msg("connection close called, killing goroutines")
 		c.Lock()
 		c.incoming.Close()
