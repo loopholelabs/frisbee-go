@@ -34,6 +34,7 @@ var (
 	OnClosedNil      = errors.New("OnClosed cannot be nil")
 	PreWriteNil      = errors.New("PreWrite cannot be nil")
 	StreamHandlerNil = errors.New("StreamHandler cannot be nil")
+	ListenerNil      = errors.New("Listener cannot be nil")
 )
 
 var (
@@ -183,18 +184,30 @@ func (s *Server) SetConcurrency(concurrency uint64) {
 // onClosed, OnShutdown, or preWrite functions have not been defined, it will
 // use the default functions for these.
 func (s *Server) Start(addr string) error {
+	var listener net.Listener
 	var err error
 	if s.options.TLSConfig != nil {
-		s.listener, err = tls.Listen("tcp", addr, s.options.TLSConfig)
+		listener, err = tls.Listen("tcp", addr, s.options.TLSConfig)
 	} else {
-		s.listener, err = net.Listen("tcp", addr)
+		listener, err = net.Listen("tcp", addr)
 	}
 	if err != nil {
 		return err
 	}
+	return s.StartWithListener(listener)
+}
+
+// StartWithListener will start the frisbee server and its reactor goroutines
+// to receive and handle incoming connections with a given net.Listener. If the baseContext, ConnContext,
+// onClosed, OnShutdown, or preWrite functions have not been defined, it will
+// use the default functions for these.
+func (s *Server) StartWithListener(listener net.Listener) error {
+	if listener == nil {
+		return ListenerNil
+	}
+	s.listener = listener
 	s.wg.Add(1)
 	close(s.startedCh)
-
 	return s.handleListener()
 }
 
