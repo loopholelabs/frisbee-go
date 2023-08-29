@@ -35,7 +35,7 @@ type Client struct {
 	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
 
-	// PacketContext is used to define packet-specific contexts based on the incoming packet
+	// PacketContext is used to define packet-specific contexts based on the incomingPackets packet
 	// and is run whenever a new packet arrives
 	PacketContext func(context.Context, *packet.Packet) context.Context
 
@@ -66,8 +66,8 @@ func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (
 }
 
 // Connect actually connects to the given frisbee server, and starts the reactor goroutines
-// to receive and handle incoming packets. If this function is called, FromConn should not be called.
-func (c *Client) Connect(addr string, streamHandler ...NewStreamHandler) error {
+// to receive and handle incomingPackets packets. If this function is called, FromConn should not be called.
+func (c *Client) Connect(addr string, streamHandler ...StreamHandler) error {
 	c.Logger().Debug().Msgf("Connecting to %s", addr)
 	var frisbeeConn *Async
 	var err error
@@ -85,8 +85,8 @@ func (c *Client) Connect(addr string, streamHandler ...NewStreamHandler) error {
 }
 
 // FromConn takes a pre-existing connection to a Frisbee server and starts the reactor goroutines
-// to receive and handle incoming packets. If this function is called, Connect should not be called.
-func (c *Client) FromConn(conn net.Conn, streamHandler ...NewStreamHandler) error {
+// to receive and handle incomingPackets packets. If this function is called, Connect should not be called.
+func (c *Client) FromConn(conn net.Conn, streamHandler ...StreamHandler) error {
 	c.conn = NewAsync(conn, c.Logger(), streamHandler...)
 	c.wg.Add(1)
 	go c.handleConn()
@@ -158,7 +158,7 @@ func (c *Client) Stream(id uint16) *Stream {
 //
 // It's also important to note that the handler itself is called in its own goroutine to
 // avoid blocking the read lop. This means that the handler must be thread-safe.
-func (c *Client) SetNewStreamHandler(handler NewStreamHandler) {
+func (c *Client) SetNewStreamHandler(handler StreamHandler) {
 	c.conn.SetNewStreamHandler(handler)
 }
 

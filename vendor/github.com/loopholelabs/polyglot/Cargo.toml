@@ -1,0 +1,36 @@
+[package]
+name = "polyglot_rs"
+version = "1.1.2"
+edition = "2021"
+description="A high-performance serialization framework used for encoding and decoding arbitrary datastructures across languages."
+license = "Apache-2.0"
+repository = "https://github.com/loopholelabs/polyglot"
+readme = "README.md"
+keywords = ["polyglot", "serialization", "deserialization", "encoding", "decoding"]
+exclude = [
+    "**/*.go",
+    "**/*.templ",
+    "go.mod",
+    "go.sum",
+    "*/**.md",
+    "*/**.json",
+    "*/**.ts",
+    "node_modules",
+]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+byteorder = "1"
+
+[dev-dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.105"
+base64 = "0.21.3"
+num_enum = "0.6.1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

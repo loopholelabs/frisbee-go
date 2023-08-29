@@ -393,7 +393,7 @@ func TestAsyncTimeout(t *testing.T) {
 	packet.Put(p)
 
 	time.Sleep(DefaultDeadline)
-	require.Equal(t, 1, readerConn.incoming.Length())
+	require.Equal(t, 1, readerConn.incomingPackets.Length())
 
 	err = writerConn.conn.Close()
 	require.NoError(t, err)

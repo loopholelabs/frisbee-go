@@ -53,7 +53,7 @@ const (
 	CLOSE
 )
 
-// Handler is the handler function called by frisbee for incoming packets of data, depending on the packet's Metadata.Operation field
+// Handler is the handler function called by frisbee for incomingPackets packets of data, depending on the packet's Metadata.Operation field
 type Handler func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action)
 
 // HandlerTable is the lookup table for Frisbee handler functions - based on the Metadata.Operation field of a packet,
