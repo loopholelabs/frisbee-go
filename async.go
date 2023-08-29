@@ -86,9 +86,8 @@ func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...StreamHandler
 		closeCh:         make(chan struct{}),
 		incomingPackets: queue.NewCircular[packet.Packet, *packet.Packet](DefaultBufferSize),
 		stalePackets:    NewPackets(),
-
-		streams: NewStreams(),
-		logger:  logger,
+		streams:         NewStreams(),
+		logger:          logger,
 	}
 
 	if logger == nil {
@@ -186,22 +185,9 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 // ReadPacket is a blocking function that will wait until a Frisbee packet is available and then return it (and its content).
 // In the event that the connection is closed, ReadPacket will return an error.
 func (c *Async) ReadPacket() (*packet.Packet, error) {
-	if c.closed.Load() {
-		if !c.incomingPackets.IsEmpty() {
-			c.stalePackets.Append(c.incomingPackets.Drain())
-		}
-
-		p := c.stalePackets.Poll()
-		if p != nil {
-			return p, nil
-		}
-		c.Logger().Debug().Err(ConnectionClosed).Msg("error while popping from packet queue")
-		return nil, ConnectionClosed
-	}
-
 	readPacket, err := c.incomingPackets.Pop()
 	if err != nil {
-		if c.closed.Load() {
+		if c.incomingPackets.IsClosed() {
 			if !c.incomingPackets.IsEmpty() {
 				c.stalePackets.Append(c.incomingPackets.Drain())
 			}
@@ -222,7 +208,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 
 // Flush allows for synchronous messaging by flushing the write buffer and instantly sending packets
 func (c *Async) Flush() error {
-	err := c.flush()
+	err := c.flush(true)
 	if err != nil {
 		return c.closeWithError(err)
 	}
@@ -301,11 +287,11 @@ func (c *Async) writePacket(p *packet.Packet) error {
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
 	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
 
-	c.mu.Lock()
 	if c.closed.Load() {
-		c.mu.Unlock()
 		return ConnectionClosed
 	}
+
+	c.mu.Lock()
 	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 	if err != nil {
 		c.mu.Unlock()
@@ -352,12 +338,12 @@ func (c *Async) writePacket(p *packet.Packet) error {
 // flush is an internal function for flushing data from the write buffer, however
 // it is unique in that it does not call closeWithError (and so does not try and close the underlying connection)
 // when it encounters an error, and instead leaves that responsibility to its parent caller
-func (c *Async) flush() error {
-	c.mu.Lock()
-	if c.closed.Load() {
-		c.mu.Unlock()
+func (c *Async) flush(checkForClosed bool) error {
+	if checkForClosed && c.closed.Load() {
 		return ConnectionClosed
 	}
+
+	c.mu.Lock()
 	if c.writer.Buffered() > 0 {
 		err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 		if err != nil {
@@ -365,6 +351,7 @@ func (c *Async) flush() error {
 			return err
 		}
 		err = c.writer.Flush()
+		_ = c.conn.SetWriteDeadline(emptyTime)
 		if err != nil {
 			c.mu.Unlock()
 			c.Logger().Err(err).Msg("error while flushing data")
@@ -376,31 +363,23 @@ func (c *Async) flush() error {
 }
 
 func (c *Async) close() error {
-	if c.closed.CompareAndSwap(false, true) {
-		c.Logger().Debug().Msg("connection close called, killing goroutines")
-
-		c.mu.Lock()
-		c.incomingPackets.Close()
-		close(c.closeCh)
-		close(c.flushCh)
-		c.mu.Unlock()
-
-		_ = c.conn.SetDeadline(pastTime)
-		c.wg.Wait()
-		_ = c.conn.SetDeadline(emptyTime)
-
-		c.streams.CloseAll()
-
-		c.mu.Lock()
-		if c.writer.Buffered() > 0 {
-			_ = c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
-			_ = c.writer.Flush()
-			_ = c.conn.SetWriteDeadline(emptyTime)
-		}
-		c.mu.Unlock()
-		return nil
+	if !c.closed.CompareAndSwap(false, true) {
+		return ConnectionClosed
 	}
-	return ConnectionClosed
+
+	c.Logger().Debug().Msg("connection close called, killing goroutines")
+
+	c.incomingPackets.Close()
+	close(c.closeCh)
+	close(c.flushCh)
+
+	_ = c.conn.SetDeadline(pastTime)
+	c.wg.Wait()
+	_ = c.conn.SetDeadline(emptyTime)
+
+	c.streams.CloseAll()
+
+	return c.flush(false)
 }
 
 func (c *Async) closeWithError(err error) error {
@@ -421,7 +400,7 @@ func (c *Async) flushLoop() {
 			c.wg.Done()
 			return
 		}
-		err = c.flush()
+		err = c.flush(true)
 		if err != nil {
 			c.wg.Done()
 			_ = c.closeWithError(err)
