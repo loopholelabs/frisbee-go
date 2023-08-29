@@ -208,7 +208,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 
 // Flush allows for synchronous messaging by flushing the write buffer and instantly sending packets
 func (c *Async) Flush() error {
-	err := c.flush(true)
+	err := c.flush()
 	if err != nil {
 		return c.closeWithError(err)
 	}
@@ -291,10 +291,8 @@ func (c *Async) writePacket(p *packet.Packet) error {
 		return ConnectionClosed
 	}
 
-	c.mu.Lock()
 	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 	if err != nil {
-		c.mu.Unlock()
 		if c.closed.Load() {
 			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
 			return ConnectionClosed
@@ -302,6 +300,8 @@ func (c *Async) writePacket(p *packet.Packet) error {
 		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
 		return c.closeWithError(err)
 	}
+
+	c.mu.Lock()
 	_, err = c.writer.Write(encodedMetadata[:])
 	metadata.PutBuffer(encodedMetadata)
 	if err != nil {
@@ -338,8 +338,8 @@ func (c *Async) writePacket(p *packet.Packet) error {
 // flush is an internal function for flushing data from the write buffer, however
 // it is unique in that it does not call closeWithError (and so does not try and close the underlying connection)
 // when it encounters an error, and instead leaves that responsibility to its parent caller
-func (c *Async) flush(checkForClosed bool) error {
-	if checkForClosed && c.closed.Load() {
+func (c *Async) flush() error {
+	if c.closed.Load() {
 		return ConnectionClosed
 	}
 
@@ -351,7 +351,6 @@ func (c *Async) flush(checkForClosed bool) error {
 			return err
 		}
 		err = c.writer.Flush()
-		_ = c.conn.SetWriteDeadline(emptyTime)
 		if err != nil {
 			c.mu.Unlock()
 			c.Logger().Err(err).Msg("error while flushing data")
@@ -379,7 +378,14 @@ func (c *Async) close() error {
 
 	c.streams.CloseAll()
 
-	return c.flush(false)
+	c.mu.Lock()
+	if c.writer.Buffered() > 0 {
+		_ = c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
+		_ = c.writer.Flush()
+		_ = c.conn.SetWriteDeadline(emptyTime)
+	}
+	c.mu.Unlock()
+	return nil
 }
 
 func (c *Async) closeWithError(err error) error {
@@ -400,7 +406,7 @@ func (c *Async) flushLoop() {
 			c.wg.Done()
 			return
 		}
-		err = c.flush(true)
+		err = c.flush()
 		if err != nil {
 			c.wg.Done()
 			_ = c.closeWithError(err)

@@ -8,6 +8,10 @@ tests: vet
 	@go clean -testcache
 	go test -race  ./... -coverpkg=./...  -coverprofile cover.out && go tool cover -func=cover.out
 
+bench: vet
+	@go clean -testcache
+	go test -bench=. -race  ./... -coverpkg=./...
+
 t: vet
 	@go clean -testcache
 	go test ./...
