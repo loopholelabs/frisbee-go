@@ -187,7 +187,7 @@ func (c *Async) WritePacket(p *packet.Packet) error {
 func (c *Async) ReadPacket() (*packet.Packet, error) {
 	readPacket, err := c.incomingPackets.Pop()
 	if err != nil {
-		if c.incomingPackets.IsClosed() {
+		if c.closed.Load() {
 			if !c.incomingPackets.IsEmpty() {
 				c.stalePackets.Append(c.incomingPackets.Drain())
 			}
@@ -217,11 +217,11 @@ func (c *Async) Flush() error {
 
 // WriteBufferSize returns the size of the underlying write buffer (used for internal packet handling and for heartbeat logic)
 func (c *Async) WriteBufferSize() int {
-	c.mu.Lock()
 	if c.closed.Load() {
-		c.mu.Unlock()
 		return 0
 	}
+
+	c.mu.Lock()
 	i := c.writer.Buffered()
 	c.mu.Unlock()
 	return i
@@ -440,9 +440,7 @@ func (c *Async) pingLoop() {
 func (c *Async) readLoop() {
 	buf := make([]byte, DefaultBufferSize)
 	var index int
-	var stream *Stream
 	var isStream bool
-	var streamHandler StreamHandler
 	for {
 		buf = buf[:cap(buf)]
 		if len(buf) < metadata.Size {
@@ -500,11 +498,6 @@ func (c *Async) readLoop() {
 				c.Logger().Debug().Msg("STREAM Packet received by read loop")
 				isStream = true
 
-				streamHandler = c.streams.Handlers().Get()
-
-				if streamHandler != nil || p.Metadata.ContentLength == 0 {
-					stream = c.streams.Get(p.Metadata.Id)
-				}
 				fallthrough
 			default:
 				if p.Metadata.ContentLength > 0 {
@@ -540,15 +533,14 @@ func (c *Async) readLoop() {
 						index += p.Content.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
 				}
-				if !isStream {
-					err = c.incomingPackets.Push(p)
-					if err != nil {
-						c.Logger().Debug().Err(err).Msg("error while pushing to incomingPackets packet queue")
-						c.wg.Done()
-						_ = c.closeWithError(err)
-						return
+				if isStream {
+					var stream *Stream
+
+					streamHandler := c.streams.Handlers().Get()
+					if streamHandler != nil || p.Metadata.ContentLength == 0 {
+						stream = c.streams.Get(p.Metadata.Id)
 					}
-				} else {
+
 					if p.Metadata.ContentLength == 0 {
 						if stream != nil {
 							stream.close()
@@ -575,11 +567,18 @@ func (c *Async) readLoop() {
 							}
 						}
 					}
+				} else {
+					err = c.incomingPackets.Push(p)
+					if err != nil {
+						c.Logger().Debug().Err(err).Msg("error while pushing to incomingPackets packet queue")
+						c.wg.Done()
+						_ = c.closeWithError(err)
+						return
+					}
 				}
-				streamHandler = nil
-				stream = nil
 				isStream = false
 			}
+
 			if n == index {
 				index = 0
 				buf = buf[:cap(buf)]
