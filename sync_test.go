@@ -205,8 +205,8 @@ func TestSyncRawConn(t *testing.T) {
 	}
 	<-end
 
-	rawReaderConn := readerConn.Raw()
-	rawWriterConn := writerConn.Raw()
+	rawReaderConn := readerConn.PartialCloseRetrieveNetConn()
+	rawWriterConn := writerConn.PartialCloseRetrieveNetConn()
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 

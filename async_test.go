@@ -176,8 +176,8 @@ func TestAsyncRawConn(t *testing.T) {
 		assert.Equal(t, polyglot.Buffer(randomData), *p.Content)
 	}
 
-	rawReaderConn := readerConn.Raw()
-	rawWriterConn := writerConn.Raw()
+	rawReaderConn := readerConn.PartialCloseRetrieveNetConn()
+	rawWriterConn := writerConn.PartialCloseRetrieveNetConn()
 
 	rawWriteMessage := []byte("TEST CASE MESSAGE")
 

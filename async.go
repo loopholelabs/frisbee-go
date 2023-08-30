@@ -38,12 +38,12 @@ import (
 // meant to be used by frisbee client and server implementations
 type Async struct {
 	mu              sync.Mutex
-	wg              sync.WaitGroup
 	conn            net.Conn
 	closed          *atomic.Bool
 	writer          *bufio.Writer
 	flushCh         chan struct{}
 	closeCh         chan struct{}
+	wg              sync.WaitGroup
 	error           *atomic.Error
 	incomingPackets *queue.Circular[packet.Packet, *packet.Packet]
 	stalePackets    *Packets
@@ -76,8 +76,8 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 }
 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
-func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...NewStreamHandler) (conn *Async) {
-	conn = &Async{
+func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...NewStreamHandler) *Async {
+	conn := &Async{
 		conn:            c,
 		closed:          atomic.NewBool(false),
 		error:           atomic.NewError(nil),
@@ -103,7 +103,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...NewStreamHand
 	go conn.readLoop()
 	go conn.pingLoop()
 
-	return
+	return conn
 }
 
 // SetDeadline sets the read and write deadline on the underlying net.Conn
@@ -236,13 +236,13 @@ func (c *Async) Error() error {
 	return c.error.Load()
 }
 
-// Closed returns whether the frisbee.Async connection is closed
-func (c *Async) Closed() bool {
+// IsClosed returns whether the frisbee.Async connection is closed
+func (c *Async) IsClosed() bool {
 	return c.closed.Load()
 }
 
-// Raw shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)
-func (c *Async) Raw() net.Conn {
+// PartialCloseRetrieveNetConn shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)
+func (c *Async) PartialCloseRetrieveNetConn() net.Conn {
 	_ = c.close()
 	return c.conn
 }
@@ -324,11 +324,11 @@ func (c *Async) writePacket(p *packet.Packet) error {
 			return c.closeWithError(err)
 		}
 	}
-	c.mu.Unlock()
 
 	if len(c.flushCh) == 0 {
 		c.flushCh <- struct{}{}
 	}
+	c.mu.Unlock()
 
 	return nil
 }
@@ -366,15 +366,17 @@ func (c *Async) close() error {
 
 	c.Logger().Debug().Msg("connection close called, killing goroutines")
 
+	c.streams.Close()
 	c.incomingPackets.Close()
+
+	c.mu.Lock()
 	close(c.closeCh)
 	close(c.flushCh)
+	c.mu.Unlock()
 
 	_ = c.conn.SetDeadline(pastTime)
 	c.wg.Wait()
 	_ = c.conn.SetDeadline(emptyTime)
-
-	c.streams.CloseAll()
 
 	c.mu.Lock()
 	if c.writer.Buffered() > 0 {

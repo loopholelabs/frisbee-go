@@ -54,7 +54,7 @@ func (s *Streams) Handlers() *StreamHandlers {
 	return s.hs
 }
 
-func (s *Streams) CloseAll() {
+func (s *Streams) Close() {
 	s.mu.RLock()
 	for _, stream := range s.ms {
 		_ = stream.Close()

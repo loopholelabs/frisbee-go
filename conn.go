@@ -60,5 +60,5 @@ type Conn interface {
 	ReadPacket() (*packet.Packet, error)
 	Logger() *zerolog.Logger
 	Error() error
-	Raw() net.Conn
+	PartialCloseRetrieveNetConn() net.Conn
 }

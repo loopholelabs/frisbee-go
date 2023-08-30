@@ -38,7 +38,7 @@ import (
 // trunk-ignore-all(golangci-lint/staticcheck)
 
 const (
-	serverConnContextKey = "conn"
+	serverConnContextKey = "frisbeeAsyncConn"
 )
 
 func TestServerRawSingle(t *testing.T) {
@@ -58,7 +58,7 @@ func TestServerRawSingle(t *testing.T) {
 	var rawServerConn, rawClientConn net.Conn
 	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		c := ctx.Value(serverConnContextKey).(*Async)
-		rawServerConn = c.Raw()
+		rawServerConn = c.PartialCloseRetrieveNetConn()
 		serverIsRaw <- struct{}{}
 		return
 	}
@@ -85,7 +85,7 @@ func TestServerRawSingle(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -114,7 +114,7 @@ func TestServerRawSingle(t *testing.T) {
 
 	packet.Put(p)
 
-	rawClientConn, err = c.Raw()
+	rawClientConn, err = c.PartialCloseRetrieveNetConn()
 	require.NoError(t, err)
 
 	<-serverIsRaw
@@ -179,7 +179,7 @@ func TestServerStaleCloseSingle(t *testing.T) {
 
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -201,7 +201,7 @@ func TestServerStaleCloseSingle(t *testing.T) {
 	packet.Put(p)
 	<-finished
 
-	_, err = c.conn.ReadPacket()
+	_, err = c.frisbeeAsyncConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
@@ -260,7 +260,7 @@ func TestServerMultipleConnectionsSingle(t *testing.T) {
 		for i := 0; i < num; i++ {
 			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
 			assert.NoError(t, err)
-			_, err = clients[i].Raw()
+			_, err = clients[i].PartialCloseRetrieveNetConn()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 			err = clients[i].Connect(listenAddr)
@@ -327,7 +327,7 @@ func TestServerRawUnlimited(t *testing.T) {
 	var rawServerConn, rawClientConn net.Conn
 	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		c := ctx.Value(serverConnContextKey).(*Async)
-		rawServerConn = c.Raw()
+		rawServerConn = c.PartialCloseRetrieveNetConn()
 		serverIsRaw <- struct{}{}
 		return
 	}
@@ -354,7 +354,7 @@ func TestServerRawUnlimited(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -383,7 +383,7 @@ func TestServerRawUnlimited(t *testing.T) {
 
 	packet.Put(p)
 
-	rawClientConn, err = c.Raw()
+	rawClientConn, err = c.PartialCloseRetrieveNetConn()
 	require.NoError(t, err)
 
 	<-serverIsRaw
@@ -450,7 +450,7 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -472,7 +472,7 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 	packet.Put(p)
 	<-finished
 
-	_, err = c.conn.ReadPacket()
+	_, err = c.frisbeeAsyncConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
@@ -537,7 +537,7 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 		for i := 0; i < num; i++ {
 			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
 			assert.NoError(t, err)
-			_, err = clients[i].Raw()
+			_, err = clients[i].PartialCloseRetrieveNetConn()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 			err = clients[i].Connect(listenAddr)
@@ -604,7 +604,7 @@ func TestServerRawLimited(t *testing.T) {
 	var rawServerConn, rawClientConn net.Conn
 	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		c := ctx.Value(serverConnContextKey).(*Async)
-		rawServerConn = c.Raw()
+		rawServerConn = c.PartialCloseRetrieveNetConn()
 		serverIsRaw <- struct{}{}
 		return
 	}
@@ -631,7 +631,7 @@ func TestServerRawLimited(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -660,7 +660,7 @@ func TestServerRawLimited(t *testing.T) {
 
 	packet.Put(p)
 
-	rawClientConn, err = c.Raw()
+	rawClientConn, err = c.PartialCloseRetrieveNetConn()
 	require.NoError(t, err)
 
 	<-serverIsRaw
@@ -727,7 +727,7 @@ func TestServerStaleCloseLimited(t *testing.T) {
 
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -749,7 +749,7 @@ func TestServerStaleCloseLimited(t *testing.T) {
 	packet.Put(p)
 	<-finished
 
-	_, err = c.conn.ReadPacket()
+	_, err = c.frisbeeAsyncConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
@@ -815,7 +815,7 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 		for i := 0; i < num; i++ {
 			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
 			assert.NoError(t, err)
-			_, err = clients[i].Raw()
+			_, err = clients[i].PartialCloseRetrieveNetConn()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 			err = clients[i].Connect(listenAddr)

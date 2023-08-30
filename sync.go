@@ -251,8 +251,8 @@ func (c *Sync) Error() error {
 	return c.error.Load()
 }
 
-// Raw shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)
-func (c *Sync) Raw() net.Conn {
+// PartialCloseRetrieveNetConn shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)
+func (c *Sync) PartialCloseRetrieveNetConn() net.Conn {
 	_ = c.close()
 	return c.conn
 }
