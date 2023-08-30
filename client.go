@@ -67,7 +67,7 @@ func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (
 
 // Connect actually connects to the given frisbee server, and starts the reactor goroutines
 // to receive and handle incomingPackets packets. If this function is called, FromConn should not be called.
-func (c *Client) Connect(addr string, streamHandler ...StreamHandler) error {
+func (c *Client) Connect(addr string, streamHandler ...NewStreamHandler) error {
 	c.Logger().Debug().Msgf("Connecting to %s", addr)
 	var frisbeeConn *Async
 	var err error
@@ -86,7 +86,7 @@ func (c *Client) Connect(addr string, streamHandler ...StreamHandler) error {
 
 // FromConn takes a pre-existing connection to a Frisbee server and starts the reactor goroutines
 // to receive and handle incomingPackets packets. If this function is called, Connect should not be called.
-func (c *Client) FromConn(conn net.Conn, streamHandler ...StreamHandler) error {
+func (c *Client) FromConn(conn net.Conn, streamHandler ...NewStreamHandler) error {
 	c.conn = NewAsync(conn, c.Logger(), streamHandler...)
 	c.wg.Add(1)
 	go c.handleConn()
@@ -158,7 +158,7 @@ func (c *Client) Stream(id uint16) *Stream {
 //
 // It's also important to note that the handler itself is called in its own goroutine to
 // avoid blocking the read lop. This means that the handler must be thread-safe.
-func (c *Client) SetNewStreamHandler(handler StreamHandler) {
+func (c *Client) SetNewStreamHandler(handler NewStreamHandler) {
 	c.conn.SetNewStreamHandler(handler)
 }
 

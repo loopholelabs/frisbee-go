@@ -62,26 +62,26 @@ func (s *Streams) CloseAll() {
 	s.mu.RUnlock()
 }
 
-type StreamHandler func(*Stream)
+type NewStreamHandler func(*Stream)
 
 type StreamHandlers struct {
 	mu sync.RWMutex
-	f  []StreamHandler
+	f  []NewStreamHandler
 }
 
 func NewStreamHandlers(cap, len int) *StreamHandlers {
 	return &StreamHandlers{
-		f: make([]StreamHandler, cap, len),
+		f: make([]NewStreamHandler, cap, len),
 	}
 }
 
-func (sh *StreamHandlers) Set(handler StreamHandler) {
+func (sh *StreamHandlers) Set(handler NewStreamHandler) {
 	sh.mu.Lock()
 	sh.f[0] = handler
 	sh.mu.Unlock()
 }
 
-func (sh *StreamHandlers) Get() StreamHandler {
+func (sh *StreamHandlers) Get() NewStreamHandler {
 	sh.mu.RLock()
 	h := sh.f[0]
 	sh.mu.RUnlock()

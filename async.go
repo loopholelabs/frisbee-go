@@ -52,7 +52,7 @@ type Async struct {
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config, streamHandler ...StreamHandler) (*Async, error) {
+func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config, streamHandler ...NewStreamHandler) (*Async, error) {
 	var conn net.Conn
 	var err error
 
@@ -76,7 +76,7 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 }
 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
-func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...StreamHandler) (conn *Async) {
+func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...NewStreamHandler) (conn *Async) {
 	conn = &Async{
 		conn:            c,
 		closed:          atomic.NewBool(false),
@@ -208,8 +208,7 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 
 // Flush allows for synchronous messaging by flushing the write buffer and instantly sending packets
 func (c *Async) Flush() error {
-	err := c.flush()
-	if err != nil {
+	if err := c.flush(); err != nil {
 		return c.closeWithError(err)
 	}
 	return nil
@@ -262,7 +261,7 @@ func (c *Async) NewStream(id uint16) *Stream {
 //
 // It's also important to note that the handler itself is called in its own goroutine to
 // avoid blocking the read lop. This means that the handler must be thread-safe.`
-func (c *Async) SetNewStreamHandler(handler StreamHandler) {
+func (c *Async) SetNewStreamHandler(handler NewStreamHandler) {
 	c.streams.Handlers().Set(handler)
 }
 
@@ -325,12 +324,11 @@ func (c *Async) writePacket(p *packet.Packet) error {
 			return c.closeWithError(err)
 		}
 	}
+	c.mu.Unlock()
 
 	if len(c.flushCh) == 0 {
 		c.flushCh <- struct{}{}
 	}
-
-	c.mu.Unlock()
 
 	return nil
 }
@@ -400,13 +398,12 @@ func (c *Async) closeWithError(err error) error {
 }
 
 func (c *Async) flushLoop() {
-	var err error
 	for {
 		if _, ok := <-c.flushCh; !ok {
 			c.wg.Done()
 			return
 		}
-		err = c.flush()
+		err := c.flush()
 		if err != nil {
 			c.wg.Done()
 			_ = c.closeWithError(err)
@@ -418,7 +415,7 @@ func (c *Async) flushLoop() {
 func (c *Async) pingLoop() {
 	ticker := time.NewTicker(DefaultPingInterval)
 	defer ticker.Stop()
-	var err error
+
 	for {
 		ticker.Reset(DefaultPingInterval)
 
@@ -427,7 +424,7 @@ func (c *Async) pingLoop() {
 			c.wg.Done()
 			return
 		case <-ticker.C:
-			err = c.writePacket(PINGPacket)
+			err := c.writePacket(PINGPacket)
 			if err != nil {
 				c.wg.Done()
 				_ = c.closeWithError(err)
