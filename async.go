@@ -209,7 +209,8 @@ func (c *Async) ReadPacket() (*packet.Packet, error) {
 // Flush allows for synchronous messaging by flushing the write buffer and instantly sending packets
 func (c *Async) Flush() error {
 	if err := c.flush(); err != nil {
-		return c.closeWithError(err)
+		_ = c.closeWithError(err)
+		return err
 	}
 	return nil
 }
@@ -277,52 +278,28 @@ func (c *Async) Close() error {
 
 // write packet is the internal write packet function that does not check for reserved operations.
 func (c *Async) writePacket(p *packet.Packet) error {
-	if int(p.Metadata.ContentLength) != len(*p.Content) {
-		return InvalidContentLength
-	}
-
-	encodedMetadata := metadata.GetBuffer()
-	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
-	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
-	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
-
 	if c.closed.Load() {
 		return ConnectionClosed
 	}
 
+	if int(p.Metadata.ContentLength) != len(*p.Content) {
+		return InvalidContentLength
+	}
+
 	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 	if err != nil {
-		if c.closed.Load() {
-			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
-			return ConnectionClosed
-		}
+		err = c.closeWithError(err)
 		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
-		return c.closeWithError(err)
+		return err
 	}
 
 	c.mu.Lock()
-	_, err = c.writer.Write(encodedMetadata[:])
-	metadata.PutBuffer(encodedMetadata)
+	err = p.Write(c.writer)
 	if err != nil {
 		c.mu.Unlock()
-		if c.closed.Load() {
-			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-			return ConnectionClosed
-		}
-		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-		return c.closeWithError(err)
-	}
-	if p.Metadata.ContentLength != 0 {
-		_, err = c.writer.Write((*p.Content)[:p.Metadata.ContentLength])
-		if err != nil {
-			c.mu.Unlock()
-			if c.closed.Load() {
-				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
-				return ConnectionClosed
-			}
-			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
-			return c.closeWithError(err)
-		}
+		err = c.closeWithError(err)
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+		return err
 	}
 
 	if len(c.flushCh) == 0 {

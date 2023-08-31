@@ -17,8 +17,10 @@
 package packet
 
 import (
+	"encoding/binary"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/polyglot"
+	"io"
 )
 
 // Packet is the structured frisbee data packet, and contains the following:
@@ -44,6 +46,29 @@ func (p *Packet) Reset() {
 	p.Metadata.Operation = 0
 	p.Metadata.ContentLength = 0
 	p.Content.Reset()
+}
+
+func (p *Packet) Write(w io.Writer) error {
+	encodedMetadata := metadata.GetBuffer()
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
+
+	_, err := w.Write(encodedMetadata[:])
+	metadata.PutBuffer(encodedMetadata)
+
+	if err != nil {
+		return err
+	}
+
+	if p.Metadata.ContentLength > 0 {
+		_, err = w.Write((*p.Content)[:p.Metadata.ContentLength])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func New() *Packet {
