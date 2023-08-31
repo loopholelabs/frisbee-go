@@ -100,11 +100,19 @@ func (c *Client) IsClosed() bool {
 
 // Error checks whether this client has an error
 func (c *Client) Error() error {
+	if c.frisbeeAsyncConn == nil {
+		return ConnectionNotInitialized
+	}
+
 	return c.frisbeeAsyncConn.Error()
 }
 
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
+	if c.frisbeeAsyncConn == nil {
+		return ConnectionNotInitialized
+	}
+
 	isClosed := c.closed.CompareAndSwap(false, true)
 	err := c.frisbeeAsyncConn.Close()
 	if err != nil {
@@ -119,17 +127,29 @@ func (c *Client) Close() error {
 
 // WritePacket sends a frisbee packet.Packet from the client to the server
 func (c *Client) WritePacket(p *packet.Packet) error {
+	if c.frisbeeAsyncConn == nil {
+		return ConnectionNotInitialized
+	}
+
 	return c.frisbeeAsyncConn.WritePacket(p)
 }
 
 // Flush flushes any queued frisbee Packets from the client to the server
 func (c *Client) Flush() error {
+	if c.frisbeeAsyncConn == nil {
+		return ConnectionNotInitialized
+	}
+
 	return c.frisbeeAsyncConn.Flush()
 }
 
 // CloseChannel returns a channel that can be listened to see if this client has been closed
-func (c *Client) CloseChannel() <-chan struct{} {
-	return c.frisbeeAsyncConn.CloseChannel()
+func (c *Client) CloseChannel() (<-chan struct{}, error) {
+	if c.frisbeeAsyncConn == nil {
+		return nil, ConnectionNotInitialized
+	}
+
+	return c.frisbeeAsyncConn.CloseChannel(), nil
 }
 
 // PartialCloseRetrieveNetConn converts the frisbee client into a normal net.Conn object, and returns it.
@@ -150,6 +170,12 @@ func (c *Client) PartialCloseRetrieveNetConn() (net.Conn, error) {
 
 // Stream returns a new Stream object that can be used to send and receive frisbee packets
 func (c *Client) Stream(id uint16) *Stream {
+	//TODO: Uncomment this code, when proto genrated code will include error handling for this method
+	//if c.frisbeeAsyncConn == nil {
+	//	return nil, ConnectionNotInitialized
+	//}
+
+	//return c.frisbeeAsyncConn.NewStream(id), nil
 	return c.frisbeeAsyncConn.NewStream(id)
 }
 
@@ -160,8 +186,14 @@ func (c *Client) Stream(id uint16) *Stream {
 //
 // It's also important to note that the handler itself is called in its own goroutine to
 // avoid blocking the read lop. This means that the handler must be thread-safe.
-func (c *Client) SetNewStreamHandler(handler NewStreamHandler) {
+func (c *Client) SetNewStreamHandler(handler NewStreamHandler) error {
+	if c.frisbeeAsyncConn == nil {
+		return ConnectionNotInitialized
+	}
+
 	c.frisbeeAsyncConn.SetNewStreamHandler(handler)
+
+	return nil
 }
 
 // Logger returns the client's logger (useful for ClientRouter functions)
