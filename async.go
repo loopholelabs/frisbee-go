@@ -95,7 +95,7 @@ func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...NewStreamHand
 	}
 
 	if len(streamHandler) > 0 {
-		conn.streams.Handlers().Set(streamHandler[0])
+		conn.streams.SetHandler(streamHandler[0])
 	}
 
 	conn.wg.Add(3)
@@ -263,7 +263,7 @@ func (c *Async) NewStream(id uint16) *Stream {
 // It's also important to note that the handler itself is called in its own goroutine to
 // avoid blocking the read lop. This means that the handler must be thread-safe.`
 func (c *Async) SetNewStreamHandler(handler NewStreamHandler) {
-	c.streams.Handlers().Set(handler)
+	c.streams.SetHandler(handler)
 }
 
 // Close closes the frisbee connection gracefully
@@ -512,7 +512,7 @@ func (c *Async) readLoop() {
 				if isStream {
 					var stream *Stream
 
-					streamHandler := c.streams.Handlers().Get()
+					streamHandler := c.streams.Handler()
 					if streamHandler != nil || p.Metadata.ContentLength == 0 {
 						stream = c.streams.Get(p.Metadata.Id)
 					}
