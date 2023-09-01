@@ -113,6 +113,10 @@ func (c *Client) Close() error {
 		return ConnectionNotInitialized
 	}
 
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
+
 	isClosed := c.closed.CompareAndSwap(false, true)
 	err := c.frisbeeAsyncConn.Close()
 	if err != nil {
@@ -131,6 +135,10 @@ func (c *Client) WritePacket(p *packet.Packet) error {
 		return ConnectionNotInitialized
 	}
 
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
+
 	return c.frisbeeAsyncConn.WritePacket(p)
 }
 
@@ -140,6 +148,10 @@ func (c *Client) Flush() error {
 		return ConnectionNotInitialized
 	}
 
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
+
 	return c.frisbeeAsyncConn.Flush()
 }
 
@@ -147,6 +159,10 @@ func (c *Client) Flush() error {
 func (c *Client) CloseChannel() (<-chan struct{}, error) {
 	if c.frisbeeAsyncConn == nil {
 		return nil, ConnectionNotInitialized
+	}
+
+	if c.closed.Load() {
+		return nil, ConnectionClosed
 	}
 
 	return c.frisbeeAsyncConn.CloseChannel(), nil
@@ -159,6 +175,10 @@ func (c *Client) PartialCloseRetrieveNetConn() (net.Conn, error) {
 		return nil, ConnectionNotInitialized
 	}
 
+	if c.closed.Load() {
+		return nil, ConnectionClosed
+	}
+
 	isClosed := c.closed.CompareAndSwap(false, true)
 	conn := c.frisbeeAsyncConn.PartialCloseRetrieveNetConn()
 
@@ -169,14 +189,16 @@ func (c *Client) PartialCloseRetrieveNetConn() (net.Conn, error) {
 }
 
 // Stream returns a new Stream object that can be used to send and receive frisbee packets
-func (c *Client) Stream(id uint16) *Stream {
-	//TODO: Uncomment this code, when proto genrated code will include error handling for this method
-	//if c.frisbeeAsyncConn == nil {
-	//	return nil, ConnectionNotInitialized
-	//}
+func (c *Client) Stream(id uint16) (*Stream, error) {
+	if c.frisbeeAsyncConn == nil {
+		return nil, ConnectionNotInitialized
+	}
 
-	//return c.frisbeeAsyncConn.NewStream(id), nil
-	return c.frisbeeAsyncConn.NewStream(id)
+	if c.closed.Load() {
+		return nil, ConnectionClosed
+	}
+
+	return c.frisbeeAsyncConn.NewStream(id), nil
 }
 
 // SetNewStreamHandler sets the callback handler for new streams.
@@ -189,6 +211,10 @@ func (c *Client) Stream(id uint16) *Stream {
 func (c *Client) SetNewStreamHandler(handler NewStreamHandler) error {
 	if c.frisbeeAsyncConn == nil {
 		return ConnectionNotInitialized
+	}
+
+	if c.closed.Load() {
+		return ConnectionClosed
 	}
 
 	c.frisbeeAsyncConn.SetNewStreamHandler(handler)
