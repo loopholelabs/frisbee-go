@@ -33,7 +33,7 @@ import (
 // trunk-ignore-all(golangci-lint/staticcheck)
 
 const (
-	clientConnContextKey = "conn"
+	clientConnContextKey = "frisbeeAsyncConn"
 )
 
 func TestClientRaw(t *testing.T) {
@@ -54,7 +54,7 @@ func TestClientRaw(t *testing.T) {
 	var rawServerConn, rawClientConn net.Conn
 	serverHandlerTable[metadata.PacketProbe] = func(ctx context.Context, _ *packet.Packet) (outgoing *packet.Packet, action Action) {
 		conn := ctx.Value(clientConnContextKey).(*Async)
-		rawServerConn = conn.Raw()
+		rawServerConn = conn.PartialCloseRetrieveNetConn()
 		serverIsRaw <- struct{}{}
 		return
 	}
@@ -80,7 +80,7 @@ func TestClientRaw(t *testing.T) {
 
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -105,7 +105,7 @@ func TestClientRaw(t *testing.T) {
 	err = c.WritePacket(p)
 	assert.NoError(t, err)
 
-	rawClientConn, err = c.Raw()
+	rawClientConn, err = c.PartialCloseRetrieveNetConn()
 	require.NoError(t, err)
 
 	<-serverIsRaw
@@ -171,7 +171,7 @@ func TestClientStaleClose(t *testing.T) {
 
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
-	_, err = c.Raw()
+	_, err = c.PartialCloseRetrieveNetConn()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
 
 	err = c.FromConn(clientConn)
@@ -193,7 +193,7 @@ func TestClientStaleClose(t *testing.T) {
 	packet.Put(p)
 	<-finished
 
-	_, err = c.conn.ReadPacket()
+	_, err = c.frisbeeAsyncConn.ReadPacket()
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()

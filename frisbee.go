@@ -27,7 +27,6 @@ import (
 
 // These are various frisbee errors that can be returned by the client or server:
 var (
-	InvalidContentLength     = errors.New("invalid content length")
 	ConnectionClosed         = errors.New("connection closed")
 	StreamClosed             = errors.New("stream closed")
 	InvalidStreamPacket      = errors.New("invalid stream packet")
@@ -53,7 +52,7 @@ const (
 	CLOSE
 )
 
-// Handler is the handler function called by frisbee for incoming packets of data, depending on the packet's Metadata.Operation field
+// Handler is the handler function called by frisbee for incomingPackets packets of data, depending on the packet's Metadata.Operation field
 type Handler func(ctx context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action)
 
 // HandlerTable is the lookup table for Frisbee handler functions - based on the Metadata.Operation field of a packet,

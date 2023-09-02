@@ -41,11 +41,11 @@
 //		const PING = uint16(10)
 //		const PONG = uint16(11)
 //
-//		func handlePing(_ *frisbee.Async, incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
-//			if incoming.Metadata.ContentLength > 0 {
-//				log.Printf("Server Received Metadata: %s\n", incoming.Content)
-//	         incoming.Metadata.Operation = PONG
-//				outgoing = incoming
+//		func handlePing(_ *frisbee.Async, incomingPackets *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
+//			if incomingPackets.Metadata.ContentLength > 0 {
+//				log.Printf("Server Received Metadata: %s\n", incomingPackets.Content)
+//	         incomingPackets.Metadata.Operation = PONG
+//				outgoing = incomingPackets
 //			}
 //
 //			return
@@ -87,9 +87,9 @@
 //	const PING = uint16(10)
 //	const PONG = uint16(11)
 //
-//	func handlePong(incoming *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
-//		if incoming.Metadata.ContentLength > 0 {
-//			log.Printf("Client Received Metadata: %s\n", incoming.Content)
+//	func handlePong(incomingPackets *packet.Packet) (outgoing *packet.Packet, action frisbee.Action) {
+//		if incomingPackets.Metadata.ContentLength > 0 {
+//			log.Printf("Client Received Metadata: %s\n", incomingPackets.Content)
 //		}
 //		return
 //	}

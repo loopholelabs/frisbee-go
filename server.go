@@ -62,7 +62,7 @@ type Server struct {
 	concurrency   uint64
 	limiter       chan struct{}
 
-	// baseContext is used to define the base context for this Server and all incoming connections
+	// baseContext is used to define the base context for this Server and all incomingPackets connections
 	baseContext func() context.Context
 
 	// onClosed is a function run by the server whenever a connection is closed
@@ -71,14 +71,14 @@ type Server struct {
 	// preWrite is run by the server before a write happens
 	preWrite func()
 
-	// streamHandler is used to handle incoming client-initiated streams on the server
+	// streamHandler is used to handle incomingPackets client-initiated streams on the server
 	streamHandler func(*Stream)
 
-	// ConnContext is used to define a connection-specific context based on the incoming connection
+	// ConnContext is used to define a connection-specific context based on the incomingPackets connection
 	// and is run whenever a new connection is opened
 	ConnContext func(context.Context, *Async) context.Context
 
-	// PacketContext is used to define a handler-specific contexts based on the incoming packet
+	// PacketContext is used to define a handler-specific contexts based on the incomingPackets packet
 	// and is run whenever a new packet arrives
 	PacketContext func(context.Context, *packet.Packet) context.Context
 
@@ -165,7 +165,7 @@ func (s *Server) GetHandlerTable() HandlerTable {
 }
 
 // SetConcurrency sets the maximum number of concurrent goroutines that will be created
-// by the server to handle incoming packets.
+// by the server to handle incomingPackets packets.
 //
 // An important caveat of this is that handlers must always thread-safe if they share resources
 // between connections. If the concurrency is set to a value != 1, then the handlers
@@ -180,7 +180,7 @@ func (s *Server) SetConcurrency(concurrency uint64) {
 }
 
 // Start will start the frisbee server and its reactor goroutines
-// to receive and handle incoming connections. If the baseContext, ConnContext,
+// to receive and handle incomingPackets connections. If the baseContext, ConnContext,
 // onClosed, OnShutdown, or preWrite functions have not been defined, it will
 // use the default functions for these.
 func (s *Server) Start(addr string) error {
@@ -198,7 +198,7 @@ func (s *Server) Start(addr string) error {
 }
 
 // StartWithListener will start the frisbee server and its reactor goroutines
-// to receive and handle incoming connections with a given net.Listener. If the baseContext, ConnContext,
+// to receive and handle incomingPackets connections with a given net.Listener. If the baseContext, ConnContext,
 // onClosed, OnShutdown, or preWrite functions have not been defined, it will
 // use the default functions for these.
 func (s *Server) StartWithListener(listener net.Listener) error {

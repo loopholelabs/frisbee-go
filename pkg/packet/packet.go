@@ -17,8 +17,15 @@
 package packet
 
 import (
+	"encoding/binary"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/polyglot"
+	"github.com/pkg/errors"
+	"io"
+)
+
+var (
+	InvalidContentLength = errors.New("invalid content length")
 )
 
 // Packet is the structured frisbee data packet, and contains the following:
@@ -46,9 +53,76 @@ func (p *Packet) Reset() {
 	p.Content.Reset()
 }
 
+func (p *Packet) Write(w io.Writer) error {
+	encodedMetadata := metadata.GetBuffer()
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
+	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
+
+	_, err := w.Write(encodedMetadata[:])
+	metadata.PutBuffer(encodedMetadata)
+
+	if err != nil {
+		return err
+	}
+
+	if p.Metadata.ContentLength > 0 {
+		_, err = w.Write((*p.Content)[:p.Metadata.ContentLength])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *Packet) Validate() error {
+	if int(p.Metadata.ContentLength) != len(*p.Content) {
+		return InvalidContentLength
+	}
+
+	return nil
+}
+
 func New() *Packet {
 	return &Packet{
 		Metadata: new(metadata.Metadata),
 		Content:  polyglot.NewBuffer(),
 	}
+}
+
+func CreateByReadingFrom(r io.Reader) (*Packet, error) {
+	var encodedPacket metadata.Buffer
+
+	_, err := io.ReadAtLeast(r, encodedPacket[:], metadata.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	p := Get()
+
+	p.Metadata.Id = binary.BigEndian.Uint16(encodedPacket[metadata.IdOffset : metadata.IdOffset+metadata.IdSize])
+	p.Metadata.Operation = binary.BigEndian.Uint16(encodedPacket[metadata.OperationOffset : metadata.OperationOffset+metadata.OperationSize])
+	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedPacket[metadata.ContentLengthOffset : metadata.ContentLengthOffset+metadata.ContentLengthSize])
+
+	if p.Metadata.ContentLength > 0 {
+		for cap(*p.Content) < int(p.Metadata.ContentLength) {
+			*p.Content = append((*p.Content)[:cap(*p.Content)], 0)
+		}
+		*p.Content = (*p.Content)[:p.Metadata.ContentLength]
+		_, err = io.ReadAtLeast(r, *p.Content, int(p.Metadata.ContentLength))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
+}
+
+func CreateWithMetadataFromBuffer(buf []byte, pos int) *Packet {
+	p := Get()
+	p.Metadata.Id = binary.BigEndian.Uint16(buf[pos+metadata.IdOffset : pos+metadata.IdOffset+metadata.IdSize])
+	p.Metadata.Operation = binary.BigEndian.Uint16(buf[pos+metadata.OperationOffset : pos+metadata.OperationOffset+metadata.OperationSize])
+	p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[pos+metadata.ContentLengthOffset : pos+metadata.ContentLengthOffset+metadata.ContentLengthSize])
+
+	return p
 }
