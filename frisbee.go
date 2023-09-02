@@ -27,7 +27,6 @@ import (
 
 // These are various frisbee errors that can be returned by the client or server:
 var (
-	InvalidContentLength     = errors.New("invalid content length")
 	ConnectionClosed         = errors.New("connection closed")
 	StreamClosed             = errors.New("stream closed")
 	InvalidStreamPacket      = errors.New("invalid stream packet")

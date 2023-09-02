@@ -20,7 +20,12 @@ import (
 	"encoding/binary"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/polyglot"
+	"github.com/pkg/errors"
 	"io"
+)
+
+var (
+	InvalidContentLength = errors.New("invalid content length")
 )
 
 // Packet is the structured frisbee data packet, and contains the following:
@@ -71,7 +76,22 @@ func (p *Packet) Write(w io.Writer) error {
 	return nil
 }
 
-func Read(r io.Reader) (*Packet, error) {
+func (p *Packet) Validate() error {
+	if int(p.Metadata.ContentLength) != len(*p.Content) {
+		return InvalidContentLength
+	}
+
+	return nil
+}
+
+func New() *Packet {
+	return &Packet{
+		Metadata: new(metadata.Metadata),
+		Content:  polyglot.NewBuffer(),
+	}
+}
+
+func CreateByReadingFrom(r io.Reader) (*Packet, error) {
 	var encodedPacket metadata.Buffer
 
 	_, err := io.ReadAtLeast(r, encodedPacket[:], metadata.Size)
@@ -98,9 +118,11 @@ func Read(r io.Reader) (*Packet, error) {
 	return p, nil
 }
 
-func New() *Packet {
-	return &Packet{
-		Metadata: new(metadata.Metadata),
-		Content:  polyglot.NewBuffer(),
-	}
+func CreateWithMetadataFromBuffer(buf []byte, pos int) *Packet {
+	p := Get()
+	p.Metadata.Id = binary.BigEndian.Uint16(buf[pos+metadata.IdOffset : pos+metadata.IdOffset+metadata.IdSize])
+	p.Metadata.Operation = binary.BigEndian.Uint16(buf[pos+metadata.OperationOffset : pos+metadata.OperationOffset+metadata.OperationSize])
+	p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[pos+metadata.ContentLengthOffset : pos+metadata.ContentLengthOffset+metadata.ContentLengthSize])
+
+	return p
 }

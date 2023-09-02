@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"encoding/binary"
 	"github.com/loopholelabs/common/pkg/queue"
 	"github.com/loopholelabs/frisbee-go/internal/dialer"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
@@ -282,11 +281,12 @@ func (c *Async) writePacket(p *packet.Packet) error {
 		return ConnectionClosed
 	}
 
-	if int(p.Metadata.ContentLength) != len(*p.Content) {
-		return InvalidContentLength
+	err := p.Validate()
+	if err != nil {
+		return err
 	}
 
-	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
+	err = c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 	if err != nil {
 		err = c.closeWithError(err)
 		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
@@ -294,9 +294,10 @@ func (c *Async) writePacket(p *packet.Packet) error {
 	}
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	err = p.Write(c.writer)
 	if err != nil {
-		c.mu.Unlock()
 		err = c.closeWithError(err)
 		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
 		return err
@@ -305,8 +306,6 @@ func (c *Async) writePacket(p *packet.Packet) error {
 	if len(c.flushCh) == 0 {
 		c.flushCh <- struct{}{}
 	}
-	c.mu.Unlock()
-
 	return nil
 }
 
@@ -319,20 +318,20 @@ func (c *Async) flush() error {
 	}
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if c.writer.Buffered() > 0 {
 		err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 		if err != nil {
-			c.mu.Unlock()
 			return err
 		}
 		err = c.writer.Flush()
 		if err != nil {
-			c.mu.Unlock()
 			c.Logger().Err(err).Msg("error while flushing data")
 			return err
 		}
 	}
-	c.mu.Unlock()
+
 	return nil
 }
 
@@ -451,10 +450,7 @@ func (c *Async) readLoop() {
 
 		index = 0
 		for index < n {
-			p := packet.Get()
-			p.Metadata.Id = binary.BigEndian.Uint16(buf[index+metadata.IdOffset : index+metadata.IdOffset+metadata.IdSize])
-			p.Metadata.Operation = binary.BigEndian.Uint16(buf[index+metadata.OperationOffset : index+metadata.OperationOffset+metadata.OperationSize])
-			p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[index+metadata.ContentLengthOffset : index+metadata.ContentLengthOffset+metadata.ContentLengthSize])
+			p := packet.CreateWithMetadataFromBuffer(buf, index)
 			index += metadata.Size
 
 			switch p.Metadata.Operation {

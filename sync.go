@@ -142,11 +142,12 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 		return ConnectionClosed
 	}
 
-	if int(p.Metadata.ContentLength) != len(*p.Content) {
-		return InvalidContentLength
+	err := p.Validate()
+	if err != nil {
+		return err
 	}
 
-	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
+	err = c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 	if err != nil {
 		err = c.closeWithError(err)
 		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
@@ -154,8 +155,9 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 	}
 
 	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	err = p.Write(c.conn)
-	c.mu.Unlock()
 	if err != nil {
 		err = c.closeWithError(err)
 		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
@@ -172,7 +174,7 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 		return nil, ConnectionClosed
 	}
 
-	p, err := packet.Read(c.conn)
+	p, err := packet.CreateByReadingFrom(c.conn)
 	if err != nil {
 		c.Logger().Debug().Err(err).Msg("error while reading from underlying net.Conn")
 		return nil, c.closeWithError(err)
