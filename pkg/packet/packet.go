@@ -71,6 +71,33 @@ func (p *Packet) Write(w io.Writer) error {
 	return nil
 }
 
+func Read(r io.Reader) (*Packet, error) {
+	var encodedPacket metadata.Buffer
+
+	_, err := io.ReadAtLeast(r, encodedPacket[:], metadata.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	p := Get()
+
+	p.Metadata.Id = binary.BigEndian.Uint16(encodedPacket[metadata.IdOffset : metadata.IdOffset+metadata.IdSize])
+	p.Metadata.Operation = binary.BigEndian.Uint16(encodedPacket[metadata.OperationOffset : metadata.OperationOffset+metadata.OperationSize])
+	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedPacket[metadata.ContentLengthOffset : metadata.ContentLengthOffset+metadata.ContentLengthSize])
+
+	if p.Metadata.ContentLength > 0 {
+		for cap(*p.Content) < int(p.Metadata.ContentLength) {
+			*p.Content = append((*p.Content)[:cap(*p.Content)], 0)
+		}
+		*p.Content = (*p.Content)[:p.Metadata.ContentLength]
+		_, err = io.ReadAtLeast(r, *p.Content, int(p.Metadata.ContentLength))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
+}
+
 func New() *Packet {
 	return &Packet{
 		Metadata: new(metadata.Metadata),

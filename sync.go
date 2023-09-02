@@ -19,14 +19,11 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
-	"encoding/binary"
-	"io"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/loopholelabs/frisbee-go/internal/dialer"
-	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -37,7 +34,7 @@ import (
 // can handle the specific frisbee requirements. This is not meant to be used on its own, and instead is
 // meant to be used by frisbee client and server implementations
 type Sync struct {
-	sync.Mutex
+	mu     sync.Mutex
 	conn   net.Conn
 	closed *atomic.Bool
 	logger *zerolog.Logger
@@ -141,46 +138,30 @@ func (c *Sync) RemoteAddr() net.Addr {
 //
 // If packet.Metadata.ContentLength == 0, then the content array must be nil. Otherwise, it is required that packet.Metadata.ContentLength == len(content).
 func (c *Sync) WritePacket(p *packet.Packet) error {
+	if c.closed.Load() {
+		return ConnectionClosed
+	}
+
 	if int(p.Metadata.ContentLength) != len(*p.Content) {
 		return InvalidContentLength
 	}
 
-	var encodedMetadata [metadata.Size]byte
-
-	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
-	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
-	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
-
-	c.Lock()
-	if c.closed.Load() {
-		c.Unlock()
-		return ConnectionClosed
-	}
-
-	_, err := c.conn.Write(encodedMetadata[:])
+	err := c.conn.SetWriteDeadline(time.Now().Add(DefaultDeadline))
 	if err != nil {
-		c.Unlock()
-		if c.closed.Load() {
-			c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-			return ConnectionClosed
-		}
-		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-		return c.closeWithError(err)
-	}
-	if p.Metadata.ContentLength != 0 {
-		_, err = c.conn.Write((*p.Content)[:p.Metadata.ContentLength])
-		if err != nil {
-			c.Unlock()
-			if c.closed.Load() {
-				c.Logger().Debug().Err(ConnectionClosed).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-				return ConnectionClosed
-			}
-			c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing encoded metadata")
-			return c.closeWithError(err)
-		}
+		err = c.closeWithError(err)
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while setting write deadline before writing packet")
+		return err
 	}
 
-	c.Unlock()
+	c.mu.Lock()
+	err = p.Write(c.conn)
+	c.mu.Unlock()
+	if err != nil {
+		err = c.closeWithError(err)
+		c.Logger().Debug().Err(err).Uint16("Packet ID", p.Metadata.Id).Msg("error while writing packet content")
+		return err
+	}
+
 	return nil
 }
 
@@ -190,37 +171,11 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	if c.closed.Load() {
 		return nil, ConnectionClosed
 	}
-	var encodedPacket [metadata.Size]byte
 
-	_, err := io.ReadAtLeast(c.conn, encodedPacket[:], metadata.Size)
+	p, err := packet.Read(c.conn)
 	if err != nil {
-		if c.closed.Load() {
-			c.Logger().Debug().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
-			return nil, ConnectionClosed
-		}
 		c.Logger().Debug().Err(err).Msg("error while reading from underlying net.Conn")
 		return nil, c.closeWithError(err)
-	}
-	p := packet.Get()
-
-	p.Metadata.Id = binary.BigEndian.Uint16(encodedPacket[metadata.IdOffset : metadata.IdOffset+metadata.IdSize])
-	p.Metadata.Operation = binary.BigEndian.Uint16(encodedPacket[metadata.OperationOffset : metadata.OperationOffset+metadata.OperationSize])
-	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedPacket[metadata.ContentLengthOffset : metadata.ContentLengthOffset+metadata.ContentLengthSize])
-
-	if p.Metadata.ContentLength > 0 {
-		for cap(*p.Content) < int(p.Metadata.ContentLength) {
-			*p.Content = append((*p.Content)[:cap(*p.Content)], 0)
-		}
-		*p.Content = (*p.Content)[:p.Metadata.ContentLength]
-		_, err = io.ReadAtLeast(c.conn, *p.Content, int(p.Metadata.ContentLength))
-		if err != nil {
-			if c.closed.Load() {
-				c.Logger().Debug().Err(ConnectionClosed).Msg("error while reading from underlying net.Conn")
-				return nil, ConnectionClosed
-			}
-			c.Logger().Debug().Err(err).Msg("error while reading from underlying net.Conn")
-			return nil, c.closeWithError(err)
-		}
 	}
 
 	return p, nil
@@ -229,16 +184,17 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 // SetContext allows users to save a context within a connection
 func (c *Sync) SetContext(ctx context.Context) {
 	c.ctxMu.Lock()
+	defer c.ctxMu.Unlock()
+
 	c.ctx = ctx
-	c.ctxMu.Unlock()
 }
 
 // Context returns the saved context within the connection
 func (c *Sync) Context() (ctx context.Context) {
 	c.ctxMu.RLock()
-	ctx = c.ctx
-	c.ctxMu.RUnlock()
-	return
+	defer c.ctxMu.RUnlock()
+
+	return c.ctx
 }
 
 // Logger returns the underlying logger of the frisbee connection
@@ -268,10 +224,10 @@ func (c *Sync) Close() error {
 }
 
 func (c *Sync) close() error {
-	if c.closed.CompareAndSwap(false, true) {
-		return nil
+	if !c.closed.CompareAndSwap(false, true) {
+		return ConnectionClosed
 	}
-	return ConnectionClosed
+	return nil
 }
 
 func (c *Sync) closeWithError(err error) error {

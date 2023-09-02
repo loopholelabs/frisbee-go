@@ -113,10 +113,6 @@ func (c *Client) Close() error {
 		return ConnectionNotInitialized
 	}
 
-	if c.closed.Load() {
-		return ConnectionClosed
-	}
-
 	isClosed := c.closed.CompareAndSwap(false, true)
 	err := c.frisbeeAsyncConn.Close()
 	if err != nil {
