@@ -1,4 +1,4 @@
-//go:build linux
+//go:build !linux
 
 /*
 	Copyright 2022 Loophole Labs
@@ -542,11 +542,7 @@ func (c *Async) readLoop() {
 			default:
 				if p.Metadata.ContentLength > 0 {
 					if n-index < int(p.Metadata.ContentLength) {
-						n, err = p.Content.Write(buf[index:n])
-						if err != nil {
-							panic(err)
-						}
-						min := int(p.Metadata.ContentLength) - n
+						min := int(p.Metadata.ContentLength) - p.Content.Write(buf[index:n])
 						n = 0
 						for cap(buf) < min {
 							buf = append(buf[:cap(buf)], 0)
@@ -571,17 +567,10 @@ func (c *Async) readLoop() {
 								break
 							}
 						}
-						_, err = p.Content.Write(buf[:min])
-						if err != nil {
-							panic(err)
-						}
+						p.Content.Write(buf[:min])
 						index = min
 					} else {
-						_, err = p.Content.Write(buf[index : index+int(p.Metadata.ContentLength)])
-						if err != nil {
-							panic(err)
-						}
-						index += int(p.Metadata.ContentLength)
+						index += p.Content.Write(buf[index : index+int(p.Metadata.ContentLength)])
 					}
 				}
 				if !isStream {

@@ -1,4 +1,4 @@
-//go:build linux
+//go:build !linux
 
 /*
 	Copyright 2022 Loophole Labs
@@ -20,7 +20,7 @@ package packet
 
 import (
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
-	"github.com/loopholelabs/iouring/pkg/buffer"
+	"github.com/loopholelabs/polyglot"
 )
 
 // Packet is the structured frisbee data packet, and contains the following:
@@ -38,7 +38,7 @@ import (
 // delivered with the frisbee packet (see the Async.WritePacket function for more details), and the Operation field must be greater than uint16(9).
 type Packet struct {
 	Metadata *metadata.Metadata
-	Content  *buffer.Buffer
+	Content  *polyglot.Buffer
 }
 
 func (p *Packet) Reset() {
@@ -49,12 +49,8 @@ func (p *Packet) Reset() {
 }
 
 func New() *Packet {
-	buf, err := buffer.New(512, true)
-	if err != nil {
-		panic(err)
-	}
 	return &Packet{
 		Metadata: new(metadata.Metadata),
-		Content:  buf,
+		Content:  polyglot.NewBuffer(),
 	}
 }
