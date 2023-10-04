@@ -1,4 +1,4 @@
-//go:build linux
+//go:build !linux
 
 /*
 	Copyright 2022 Loophole Labs
@@ -22,7 +22,7 @@ import (
 	"context"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/iouring/pkg/buffer"
+	"github.com/loopholelabs/polyglot"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -89,6 +89,7 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PING,
 		},
+		Content: polyglot.NewBuffer(),
 	}
 
 	// PONGPacket is a pre-allocated Frisbee Packet for PONG Packets
@@ -96,20 +97,9 @@ var (
 		Metadata: &metadata.Metadata{
 			Operation: PONG,
 		},
+		Content: polyglot.NewBuffer(),
 	}
 )
-
-func init() {
-	var err error
-	PINGPacket.Content, err = buffer.New(512)
-	if err != nil {
-		panic(err)
-	}
-	PONGPacket.Content, err = buffer.New(512)
-	if err != nil {
-		panic(err)
-	}
-}
 
 // temporary is an interface used to check if an error is recoverable
 type temporary interface {
