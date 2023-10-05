@@ -124,7 +124,9 @@ func TestClientRaw(t *testing.T) {
 	assert.Equal(t, clientBytes, serverBuffer)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 	err = rawClientConn.Close()
 	assert.NoError(t, err)
 
@@ -197,7 +199,9 @@ func TestClientStaleClose(t *testing.T) {
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 
 	err = s.Shutdown()
 	assert.NoError(t, err)
