@@ -74,7 +74,7 @@ func TestServerRawSingle(t *testing.T) {
 	s.SetConcurrency(1)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
-		return context.WithValue(ctx, serverConnContextKey, c)
+		return context.WithValue(ctx, serverConnContextKey, c) //nolint:staticcheck
 	}
 
 	serverConn, clientConn, err := pair.New()
@@ -86,7 +86,7 @@ func TestServerRawSingle(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	assert.NoError(t, err)
@@ -133,7 +133,9 @@ func TestServerRawSingle(t *testing.T) {
 	assert.Equal(t, serverBytes, clientBuffer[:read])
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 	err = rawClientConn.Close()
 	assert.NoError(t, err)
 
@@ -180,7 +182,7 @@ func TestServerStaleCloseSingle(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	require.NoError(t, err)
@@ -205,7 +207,9 @@ func TestServerStaleCloseSingle(t *testing.T) {
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 
 	err = s.Shutdown()
 	assert.NoError(t, err)
@@ -261,7 +265,7 @@ func TestServerMultipleConnectionsSingle(t *testing.T) {
 			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
 			assert.NoError(t, err)
 			_, err = clients[i].Raw()
-			assert.ErrorIs(t, ConnectionNotInitialized, err)
+			assert.ErrorIs(t, ErrNotInitialized, err)
 
 			err = clients[i].Connect(listenAddr)
 			require.NoError(t, err)
@@ -288,7 +292,9 @@ func TestServerMultipleConnectionsSingle(t *testing.T) {
 				}
 				<-finished[idx]
 				err := clients[idx].Close()
-				assert.NoError(t, err)
+				if err != nil {
+					assert.ErrorIs(t, err, ErrAlreadyClosed)
+				}
 				clientWg.Done()
 				packet.Put(p)
 			}()
@@ -343,7 +349,7 @@ func TestServerRawUnlimited(t *testing.T) {
 	s.SetConcurrency(0)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
-		return context.WithValue(ctx, serverConnContextKey, c)
+		return context.WithValue(ctx, serverConnContextKey, c) //nolint:staticcheck
 	}
 
 	serverConn, clientConn, err := pair.New()
@@ -355,7 +361,7 @@ func TestServerRawUnlimited(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	assert.NoError(t, err)
@@ -402,7 +408,9 @@ func TestServerRawUnlimited(t *testing.T) {
 	assert.Equal(t, serverBytes, clientBuffer)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 	err = rawClientConn.Close()
 	assert.NoError(t, err)
 
@@ -451,7 +459,7 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	require.NoError(t, err)
@@ -476,7 +484,9 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 
 	err = s.Shutdown()
 	assert.NoError(t, err)
@@ -538,7 +548,7 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
 			assert.NoError(t, err)
 			_, err = clients[i].Raw()
-			assert.ErrorIs(t, ConnectionNotInitialized, err)
+			assert.ErrorIs(t, ErrNotInitialized, err)
 
 			err = clients[i].Connect(listenAddr)
 			require.NoError(t, err)
@@ -565,7 +575,9 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 				}
 				<-finished[idx]
 				err := clients[idx].Close()
-				assert.NoError(t, err)
+				if err != nil {
+					assert.ErrorIs(t, err, ErrAlreadyClosed)
+				}
 				clientWg.Done()
 				packet.Put(p)
 			}()
@@ -620,7 +632,7 @@ func TestServerRawLimited(t *testing.T) {
 	s.SetConcurrency(10)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
-		return context.WithValue(ctx, serverConnContextKey, c)
+		return context.WithValue(ctx, serverConnContextKey, c) //nolint:staticcheck
 	}
 
 	serverConn, clientConn, err := pair.New()
@@ -632,7 +644,7 @@ func TestServerRawLimited(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	assert.NoError(t, err)
@@ -679,7 +691,10 @@ func TestServerRawLimited(t *testing.T) {
 	assert.Equal(t, serverBytes, clientBuffer)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
+
 	err = rawClientConn.Close()
 	assert.NoError(t, err)
 
@@ -728,7 +743,7 @@ func TestServerStaleCloseLimited(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	require.NoError(t, err)
@@ -753,7 +768,9 @@ func TestServerStaleCloseLimited(t *testing.T) {
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 
 	err = s.Shutdown()
 	assert.NoError(t, err)
@@ -816,7 +833,7 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
 			assert.NoError(t, err)
 			_, err = clients[i].Raw()
-			assert.ErrorIs(t, ConnectionNotInitialized, err)
+			assert.ErrorIs(t, ErrNotInitialized, err)
 
 			err = clients[i].Connect(listenAddr)
 			require.NoError(t, err)
@@ -843,7 +860,9 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 				}
 				<-finished[idx]
 				err := clients[idx].Close()
-				assert.NoError(t, err)
+				if err != nil {
+					assert.ErrorIs(t, err, ErrAlreadyClosed)
+				}
 				clientWg.Done()
 				packet.Put(p)
 			}()

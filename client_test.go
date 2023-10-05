@@ -70,7 +70,7 @@ func TestClientRaw(t *testing.T) {
 	s.SetConcurrency(1)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
-		return context.WithValue(ctx, clientConnContextKey, c)
+		return context.WithValue(ctx, clientConnContextKey, c) //nolint:staticcheck
 	}
 
 	serverConn, clientConn, err := pair.New()
@@ -81,7 +81,7 @@ func TestClientRaw(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	require.NoError(t, err)
@@ -124,7 +124,9 @@ func TestClientRaw(t *testing.T) {
 	assert.Equal(t, clientBytes, serverBuffer)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 	err = rawClientConn.Close()
 	assert.NoError(t, err)
 
@@ -172,7 +174,7 @@ func TestClientStaleClose(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	require.NoError(t, err)
@@ -197,7 +199,9 @@ func TestClientStaleClose(t *testing.T) {
 	assert.ErrorIs(t, err, ConnectionClosed)
 
 	err = c.Close()
-	assert.NoError(t, err)
+	if err != nil {
+		assert.ErrorIs(t, err, ErrAlreadyClosed)
+	}
 
 	err = s.Shutdown()
 	assert.NoError(t, err)

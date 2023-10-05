@@ -76,10 +76,12 @@ func TestIndividualOptions(t *testing.T) {
 	keepAliveOption := WithKeepAlive(time.Minute * 6)
 	loggerOption := WithLogger(&logger)
 	TLSOption := WithTLS(tlsConfig)
+	ReconnectOption := WithReconnect(true)
 
-	options := loadOptions(keepAliveOption, loggerOption, TLSOption)
+	options := loadOptions(keepAliveOption, loggerOption, TLSOption, ReconnectOption)
 
 	assert.Equal(t, time.Minute*6, options.KeepAlive)
 	assert.Equal(t, &logger, options.Logger)
 	assert.Equal(t, tlsConfig, options.TLSConfig)
+	assert.Equal(t, true, options.Reconnect)
 }
