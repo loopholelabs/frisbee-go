@@ -70,7 +70,7 @@ func TestClientRaw(t *testing.T) {
 	s.SetConcurrency(1)
 
 	s.ConnContext = func(ctx context.Context, c *Async) context.Context {
-		return context.WithValue(ctx, clientConnContextKey, c)
+		return context.WithValue(ctx, clientConnContextKey, c) //nolint:staticcheck
 	}
 
 	serverConn, clientConn, err := pair.New()
@@ -81,7 +81,7 @@ func TestClientRaw(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestClientStaleClose(t *testing.T) {
 	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
-	assert.ErrorIs(t, ConnectionNotInitialized, err)
+	assert.ErrorIs(t, ErrNotInitialized, err)
 
 	err = c.FromConn(clientConn)
 	require.NoError(t, err)

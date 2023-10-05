@@ -40,6 +40,7 @@ var DefaultLogger = zerolog.New(io.Discard)
 type Options struct {
 	KeepAlive time.Duration
 	Logger    *zerolog.Logger
+	Reconnect bool
 	TLSConfig *tls.Config
 }
 
@@ -87,5 +88,13 @@ func WithLogger(logger *zerolog.Logger) Option {
 func WithTLS(tlsConfig *tls.Config) Option {
 	return func(opts *Options) {
 		opts.TLSConfig = tlsConfig
+	}
+}
+
+// WithReconnect allows users to define whether the frisbee client should attempt to reconnect to the server
+// if the connection is lost. By default, this is set to false.
+func WithReconnect(reconnect bool) Option {
+	return func(opts *Options) {
+		opts.Reconnect = reconnect
 	}
 }
