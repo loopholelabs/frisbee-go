@@ -18,11 +18,12 @@ package frisbee
 
 import (
 	"context"
+	"net"
+	"sync"
+
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
-	"net"
-	"sync"
 )
 
 // Client connects to a frisbee Server and can send and receive frisbee packets
@@ -205,6 +206,9 @@ func (c *Client) handleConn() {
 					return
 				}
 			} else {
+				if outgoing != nil && outgoing != p {
+					packet.Put(outgoing)
+				}
 				packet.Put(p)
 			}
 			switch action {
