@@ -21,16 +21,17 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"errors"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/loopholelabs/common/pkg/queue"
 	"github.com/loopholelabs/frisbee-go/internal/dialer"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
-	"net"
-	"sync"
-	"time"
 )
 
 // Async is the underlying asynchronous frisbee connection which has extremely efficient read and write logic and

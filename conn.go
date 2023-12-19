@@ -19,12 +19,13 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
-	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
+	"errors"
 	"io"
 	"net"
 	"time"
+
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
+	"github.com/rs/zerolog"
 )
 
 // DefaultBufferSize is the size of the default buffer
