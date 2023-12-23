@@ -18,11 +18,12 @@ package frisbee
 
 import (
 	"context"
+	"errors"
+	"time"
+
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
 	"github.com/loopholelabs/polyglot"
-	"github.com/pkg/errors"
-	"time"
 )
 
 // These are various frisbee errors that can be returned by the client or server:

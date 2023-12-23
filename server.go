@@ -19,12 +19,12 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 )
