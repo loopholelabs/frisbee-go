@@ -92,7 +92,7 @@ func (s *Stream) WritePacket(p *packet.Packet) error {
 	}
 	p.Metadata.Id = s.id
 	p.Metadata.Operation = STREAM
-	return s.conn.writePacket(p)
+	return s.conn.writePacket(p, true)
 }
 
 // ID returns the stream's ID.
@@ -116,7 +116,7 @@ func (s *Stream) Close() error {
 		p := packet.Get()
 		p.Metadata.Id = s.id
 		p.Metadata.Operation = STREAM
-		err := s.conn.writePacket(p)
+		err := s.conn.writePacket(p, true)
 		packet.Put(p)
 
 		s.conn.streamsMu.Lock()

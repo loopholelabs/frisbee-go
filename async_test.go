@@ -379,7 +379,6 @@ func TestAsyncTimeout(t *testing.T) {
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 	assert.Equal(t, 0, len(*p.Content))
 
-	t.Logf("Sleeping for %v\n", DefaultDeadline*2)
 	time.Sleep(DefaultDeadline * 2)
 
 	err = writerConn.Error()
@@ -393,14 +392,12 @@ func TestAsyncTimeout(t *testing.T) {
 
 	packet.Put(p)
 
-	t.Logf("Sleeping for %v\n", DefaultDeadline)
 	time.Sleep(DefaultDeadline)
 	require.Equal(t, 1, readerConn.incoming.Length())
 
 	err = writerConn.conn.Close()
 	require.NoError(t, err)
 
-	t.Logf("Sleeping for %v\n", DefaultDeadline*2)
 	runtime.Gosched()
 	time.Sleep(DefaultDeadline * 2)
 	runtime.Gosched()
@@ -418,7 +415,6 @@ func TestAsyncTimeout(t *testing.T) {
 
 	err = readerConn.Error()
 	if err == nil {
-		t.Logf("Sleeping for %v\n", DefaultDeadline*3)
 		runtime.Gosched()
 		time.Sleep(DefaultDeadline * 3)
 		runtime.Gosched()
