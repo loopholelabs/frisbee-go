@@ -18,15 +18,14 @@ package metadata
 
 import (
 	"encoding/binary"
+	"errors"
 	"unsafe"
-
-	"github.com/pkg/errors"
 )
 
 var (
-	Encoding            = errors.New("error while encoding metadata")
-	Decoding            = errors.New("error while decoding metadata")
-	InvalidBufferLength = errors.New("invalid buffer length")
+	EncodingErr            = errors.New("error while encoding metadata")
+	DecodingErr            = errors.New("error while decoding metadata")
+	InvalidBufferLengthErr = errors.New("invalid buffer length")
 )
 
 const (
@@ -59,7 +58,7 @@ type Metadata struct {
 func (fm *Metadata) Encode() (b *Buffer, err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
-			err = errors.Wrap(recoveredErr.(error), Encoding.Error())
+			err = errors.Join(recoveredErr.(error), EncodingErr)
 		}
 	}()
 
@@ -75,7 +74,7 @@ func (fm *Metadata) Encode() (b *Buffer, err error) {
 func (fm *Metadata) Decode(buf *Buffer) (err error) {
 	defer func() {
 		if recoveredErr := recover(); recoveredErr != nil {
-			err = errors.Wrap(recoveredErr.(error), Decoding.Error())
+			err = errors.Join(recoveredErr.(error), DecodingErr)
 		}
 	}()
 
@@ -98,7 +97,7 @@ func Encode(id, operation uint16, contentLength uint32) (*Buffer, error) {
 
 func Decode(buf []byte) (*Metadata, error) {
 	if len(buf) < Size {
-		return nil, InvalidBufferLength
+		return nil, InvalidBufferLengthErr
 	}
 
 	m := new(Metadata)

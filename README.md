@@ -10,7 +10,7 @@ This is the [Go](http://golang.org) implementation of **Frisbee**, a bring-your-
 protocol messaging framework designed for performance and
 stability.
 
-**This library requires Go1.18 or later.**
+**This library requires Go1.20 or later.**
 
 ## Important note about releases and stability
 

@@ -18,9 +18,10 @@ package metadata
 
 import (
 	"encoding/binary"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestMessageEncodeDecode(t *testing.T) {
@@ -72,7 +73,7 @@ func TestEncodeDecode(t *testing.T) {
 
 	invalidMessage, err := Decode(emptyEncodedBytes[1:])
 	require.Error(t, err)
-	assert.ErrorIs(t, InvalidBufferLength, err)
+	assert.ErrorIs(t, InvalidBufferLengthErr, err)
 	assert.Nil(t, invalidMessage)
 }
 
