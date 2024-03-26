@@ -459,11 +459,12 @@ func (s *Server) serveConn(newConn net.Conn) {
 	if s.ConnContext != nil {
 		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
-	if s.concurrency == 0 {
+	switch s.concurrency {
+	case 0:
 		s.handleUnlimitedPacket(frisbeeConn, connCtx)
-	} else if s.concurrency == 1 {
+	case 1:
 		s.handleSinglePacket(frisbeeConn, connCtx)
-	} else {
+	default:
 		s.handleLimitedPacket(frisbeeConn, connCtx)
 	}
 	s.connectionsMu.Lock()
