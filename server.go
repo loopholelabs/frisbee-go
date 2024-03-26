@@ -309,9 +309,6 @@ func (s *Server) handleSinglePacket(frisbeeConn *Async, connCtx context.Context)
 		s.onClosed(frisbeeConn, err)
 		return
 	}
-	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
-	}
 	for {
 		handlerFunc = s.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
@@ -361,9 +358,6 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 		s.onClosed(frisbeeConn, err)
 		return
 	}
-	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
-	}
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
@@ -390,9 +384,6 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, err)
 		return
-	}
-	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
@@ -465,11 +456,15 @@ func (s *Server) serveConn(newConn net.Conn) {
 	}
 	s.connections[frisbeeConn] = struct{}{}
 	s.connectionsMu.Unlock()
-	if s.concurrency == 0 {
+	if s.ConnContext != nil {
+		connCtx = s.ConnContext(connCtx, frisbeeConn)
+	}
+	switch s.concurrency {
+	case 0:
 		s.handleUnlimitedPacket(frisbeeConn, connCtx)
-	} else if s.concurrency == 1 {
+	case 1:
 		s.handleSinglePacket(frisbeeConn, connCtx)
-	} else {
+	default:
 		s.handleLimitedPacket(frisbeeConn, connCtx)
 	}
 	s.connectionsMu.Lock()
