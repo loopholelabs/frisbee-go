@@ -97,7 +97,9 @@ func TestServerRawSingle(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+	expected := polyglot.NewBufferFromBytes(data)
+	expected.MoveOffset(len(data))
+	assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -106,7 +108,7 @@ func TestServerRawSingle(t *testing.T) {
 	}
 
 	p.Reset()
-	assert.Equal(t, 0, len(*p.Content))
+	assert.Equal(t, 0, p.Content.Len())
 	p.Metadata.Operation = metadata.PacketProbe
 
 	err = c.WritePacket(p)
@@ -191,7 +193,9 @@ func TestServerStaleCloseSingle(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+	expected := polyglot.NewBufferFromBytes(data)
+	expected.MoveOffset(len(data))
+	assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -280,7 +284,9 @@ func TestServerMultipleConnectionsSingle(t *testing.T) {
 				p.Content.Write(data)
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
-				assert.Equal(t, polyglot.Buffer(data), *p.Content)
+				expected := polyglot.NewBufferFromBytes(data)
+				expected.MoveOffset(len(data))
+				assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 				for q := 0; q < testSize; q++ {
 					p.Metadata.Id = uint16(q)
 					err := clients[idx].WritePacket(p)
@@ -366,7 +372,9 @@ func TestServerRawUnlimited(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+	expected := polyglot.NewBufferFromBytes(data)
+	expected.MoveOffset(len(data))
+	assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -375,7 +383,7 @@ func TestServerRawUnlimited(t *testing.T) {
 	}
 
 	p.Reset()
-	assert.Equal(t, 0, len(*p.Content))
+	assert.Equal(t, 0, p.Content.Len())
 	p.Metadata.Operation = metadata.PacketProbe
 
 	err = c.WritePacket(p)
@@ -462,7 +470,9 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+	expected := polyglot.NewBufferFromBytes(data)
+	expected.MoveOffset(len(data))
+	assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -558,7 +568,9 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
 				p.Metadata.Id = uint16(idx)
-				assert.Equal(t, polyglot.Buffer(data), *p.Content)
+				expected := polyglot.NewBufferFromBytes(data)
+				expected.MoveOffset(len(data))
+				assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 				for q := 0; q < testSize; q++ {
 					err := clients[idx].WritePacket(p)
 					assert.NoError(t, err)
@@ -643,7 +655,9 @@ func TestServerRawLimited(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+	expected := polyglot.NewBufferFromBytes(data)
+	expected.MoveOffset(len(data))
+	assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -652,7 +666,7 @@ func TestServerRawLimited(t *testing.T) {
 	}
 
 	p.Reset()
-	assert.Equal(t, 0, len(*p.Content))
+	assert.Equal(t, 0, p.Content.Len())
 	p.Metadata.Operation = metadata.PacketProbe
 
 	err = c.WritePacket(p)
@@ -739,7 +753,9 @@ func TestServerStaleCloseLimited(t *testing.T) {
 	p.Content.Write(data)
 	p.Metadata.ContentLength = packetSize
 	p.Metadata.Operation = metadata.PacketPing
-	assert.Equal(t, polyglot.Buffer(data), *p.Content)
+	expected := polyglot.NewBufferFromBytes(data)
+	expected.MoveOffset(len(data))
+	assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 
 	for q := 0; q < testSize; q++ {
 		p.Metadata.Id = uint16(q)
@@ -836,7 +852,9 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 				p.Metadata.ContentLength = packetSize
 				p.Metadata.Operation = metadata.PacketPing
 				p.Metadata.Id = uint16(idx)
-				assert.Equal(t, polyglot.Buffer(data), *p.Content)
+				expected := polyglot.NewBufferFromBytes(data)
+				expected.MoveOffset(len(data))
+				assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 				for q := 0; q < testSize; q++ {
 					err := clients[idx].WritePacket(p)
 					assert.NoError(t, err)
