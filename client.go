@@ -192,7 +192,7 @@ func (c *Client) handleConn() {
 				packetCtx = c.PacketContext(packetCtx, p)
 			}
 			outgoing, action = handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(outgoing.Content.Len()) {
 				err = c.conn.WritePacket(outgoing)
 				if outgoing != p {
 					packet.Put(outgoing)

@@ -19,12 +19,12 @@ package frisbee
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
 )
@@ -262,7 +262,7 @@ func (s *Server) createHandler(conn *Async, closed *atomic.Bool, wg *sync.WaitGr
 				packetCtx = s.PacketContext(packetCtx, p)
 			}
 			outgoing, action := handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(outgoing.Content.Len()) {
 				s.preWrite()
 				err := conn.WritePacket(outgoing)
 				if outgoing != p {
@@ -309,9 +309,6 @@ func (s *Server) handleSinglePacket(frisbeeConn *Async, connCtx context.Context)
 		s.onClosed(frisbeeConn, err)
 		return
 	}
-	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
-	}
 	for {
 		handlerFunc = s.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
@@ -320,7 +317,7 @@ func (s *Server) handleSinglePacket(frisbeeConn *Async, connCtx context.Context)
 				packetCtx = s.PacketContext(packetCtx, p)
 			}
 			outgoing, action = handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(outgoing.Content.Len()) {
 				s.preWrite()
 				err = frisbeeConn.WritePacket(outgoing)
 				if outgoing != p {
@@ -361,9 +358,6 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 		s.onClosed(frisbeeConn, err)
 		return
 	}
-	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
-	}
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
 	connCtx, cancel := context.WithCancel(connCtx)
@@ -390,9 +384,6 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 		_ = frisbeeConn.Close()
 		s.onClosed(frisbeeConn, err)
 		return
-	}
-	if s.ConnContext != nil {
-		connCtx = s.ConnContext(connCtx, frisbeeConn)
 	}
 	wg := new(sync.WaitGroup)
 	closed := atomic.NewBool(false)
@@ -465,11 +456,15 @@ func (s *Server) serveConn(newConn net.Conn) {
 	}
 	s.connections[frisbeeConn] = struct{}{}
 	s.connectionsMu.Unlock()
-	if s.concurrency == 0 {
+	if s.ConnContext != nil {
+		connCtx = s.ConnContext(connCtx, frisbeeConn)
+	}
+	switch s.concurrency {
+	case 0:
 		s.handleUnlimitedPacket(frisbeeConn, connCtx)
-	} else if s.concurrency == 1 {
+	case 1:
 		s.handleSinglePacket(frisbeeConn, connCtx)
-	} else {
+	default:
 		s.handleLimitedPacket(frisbeeConn, connCtx)
 	}
 	s.connectionsMu.Lock()

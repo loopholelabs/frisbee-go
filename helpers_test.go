@@ -17,6 +17,8 @@
 package frisbee
 
 import (
+	"crypto/rand"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
@@ -31,15 +33,17 @@ func throughputRunner(testSize, packetSize uint32, readerConn, writerConn Conn) 
 	return func(b *testing.B) {
 		b.SetBytes(int64(testSize * packetSize))
 		b.ReportAllocs()
-		var err error
 
 		randomData := make([]byte, packetSize)
+		_, err := rand.Read(randomData)
+		require.NoError(b, err)
 
 		p := packet.Get()
 		p.Metadata.Id = 64
 		p.Metadata.Operation = 32
 		p.Content.Write(randomData)
 		p.Metadata.ContentLength = packetSize
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			done := make(chan struct{}, 1)

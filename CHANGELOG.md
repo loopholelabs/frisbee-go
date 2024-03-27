@@ -7,6 +7,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [v0.7.3] - 2024-03-26
+
+### Dependencies
+
+- Updated `polyglot` to `v1.2.2`
+
+### Fix
+
+- Fixed bugs where test cases would not generate random data properly
+- Fixed a bug where `ConnContext` would not get called until the first packet was read 
+
 ## [v0.7.2] - 2023-08-26
 
 ### Features
@@ -363,7 +374,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Initial Release of Frisbee
 
-[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.7.2...HEAD
+[unreleased]: https://github.com/loopholelabs/frisbee/compare/v0.7.3...HEAD
+[v0.7.3]: https://github.com/loopholelabs/frisbee/compare/v0.7.1...v0.7.3
 [v0.7.2]: https://github.com/loopholelabs/frisbee/compare/v0.7.1...v0.7.2
 [v0.7.1]: https://github.com/loopholelabs/frisbee/compare/v0.7.0...v0.7.1
 [v0.7.0]: https://github.com/loopholelabs/frisbee/compare/v0.6.0...v0.7.0

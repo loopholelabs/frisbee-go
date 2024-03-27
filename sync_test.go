@@ -55,7 +55,7 @@ func TestNewSync(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, 0, len(*p.Content))
+		assert.Equal(t, 0, p.Content.Len())
 		end <- struct{}{}
 		packet.Put(p)
 	}()
@@ -79,8 +79,10 @@ func TestNewSync(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-		assert.Equal(t, packetSize, len(*p.Content))
-		assert.Equal(t, polyglot.Buffer(data), *p.Content)
+		assert.Equal(t, packetSize, p.Content.Len())
+		expected := polyglot.NewBufferFromBytes(data)
+		expected.MoveOffset(len(data))
+		assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 		end <- struct{}{}
 		packet.Put(p)
 	}()
@@ -130,8 +132,10 @@ func TestSyncLargeWrite(t *testing.T) {
 			assert.Equal(t, uint16(64), p.Metadata.Id)
 			assert.Equal(t, uint16(32), p.Metadata.Operation)
 			assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-			assert.Equal(t, packetSize, len(*p.Content))
-			assert.Equal(t, polyglot.Buffer(randomData[i]), *p.Content)
+			assert.Equal(t, packetSize, p.Content.Len())
+			expected := polyglot.NewBufferFromBytes(randomData[i])
+			expected.MoveOffset(len(randomData[i]))
+			assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 			packet.Put(p)
 		}
 		end <- struct{}{}
@@ -191,8 +195,10 @@ func TestSyncRawConn(t *testing.T) {
 			assert.Equal(t, uint16(64), p.Metadata.Id)
 			assert.Equal(t, uint16(32), p.Metadata.Operation)
 			assert.Equal(t, uint32(packetSize), p.Metadata.ContentLength)
-			assert.Equal(t, packetSize, len(*p.Content))
-			assert.Equal(t, polyglot.Buffer(randomData), *p.Content)
+			assert.Equal(t, packetSize, p.Content.Len())
+			expected := polyglot.NewBufferFromBytes(randomData)
+			expected.MoveOffset(len(randomData))
+			assert.Equal(t, expected.Bytes(), p.Content.Bytes())
 			packet.Put(p)
 		}
 		end <- struct{}{}
@@ -255,7 +261,7 @@ func TestSyncReadClose(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, 0, len(*p.Content))
+		assert.Equal(t, 0, p.Content.Len())
 		end <- struct{}{}
 		packet.Put(p)
 	}()
@@ -305,7 +311,7 @@ func TestSyncWriteClose(t *testing.T) {
 		assert.Equal(t, uint16(64), p.Metadata.Id)
 		assert.Equal(t, uint16(32), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, 0, len(*p.Content))
+		assert.Equal(t, 0, p.Content.Len())
 		packet.Put(p)
 		end <- struct{}{}
 	}()
