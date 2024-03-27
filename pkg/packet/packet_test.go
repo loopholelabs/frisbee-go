@@ -18,7 +18,6 @@ package packet
 
 import (
 	"crypto/rand"
-	"github.com/loopholelabs/polyglot"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -33,7 +32,7 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, uint16(0), p.Metadata.Id)
 	assert.Equal(t, uint16(0), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-	assert.Equal(t, polyglot.Buffer{}, *p.Content)
+	assert.Equal(t, Get().Content, p.Content)
 
 	Put(p)
 }
@@ -48,12 +47,12 @@ func TestWrite(t *testing.T) {
 	assert.NoError(t, err)
 
 	p.Content.Write(b)
-	assert.Equal(t, polyglot.Buffer(b), *p.Content)
+	assert.Equal(t, b, p.Content.Bytes())
 
 	p.Reset()
-	assert.NotEqual(t, b, *p.Content)
-	assert.Equal(t, 0, len(*p.Content))
-	assert.Equal(t, 512, cap(*p.Content))
+	assert.NotEqual(t, b, p.Content.Bytes())
+	assert.Equal(t, 0, p.Content.Len())
+	assert.Equal(t, 512, p.Content.Cap())
 
 	b = make([]byte, 1024)
 	_, err = rand.Read(b)
@@ -61,8 +60,8 @@ func TestWrite(t *testing.T) {
 
 	p.Content.Write(b)
 
-	assert.Equal(t, polyglot.Buffer(b), *p.Content)
-	assert.Equal(t, 1024, len(*p.Content))
-	assert.GreaterOrEqual(t, cap(*p.Content), 1024)
+	assert.Equal(t, b, p.Content.Bytes())
+	assert.Equal(t, 1024, p.Content.Len())
+	assert.GreaterOrEqual(t, p.Content.Cap(), 1024)
 
 }

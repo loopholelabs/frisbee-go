@@ -301,7 +301,7 @@ func (c *Async) Close() error {
 
 // write packet is the internal write packet function that does not check for reserved operations.
 func (c *Async) writePacket(p *packet.Packet, closeOnErr bool) error {
-	if int(p.Metadata.ContentLength) != len(*p.Content) {
+	if int(p.Metadata.ContentLength) != p.Content.Len() {
 		return InvalidContentLength
 	}
 
@@ -343,7 +343,7 @@ func (c *Async) writePacket(p *packet.Packet, closeOnErr bool) error {
 		return err
 	}
 	if p.Metadata.ContentLength != 0 {
-		_, err = c.writer.Write((*p.Content)[:p.Metadata.ContentLength])
+		_, err = c.writer.Write(p.Content.Bytes()[:p.Metadata.ContentLength])
 		if err != nil {
 			c.Unlock()
 			if c.closed.Load() {

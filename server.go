@@ -262,7 +262,7 @@ func (s *Server) createHandler(conn *Async, closed *atomic.Bool, wg *sync.WaitGr
 				packetCtx = s.PacketContext(packetCtx, p)
 			}
 			outgoing, action := handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(outgoing.Content.Len()) {
 				s.preWrite()
 				err := conn.WritePacket(outgoing)
 				if outgoing != p {
@@ -317,7 +317,7 @@ func (s *Server) handleSinglePacket(frisbeeConn *Async, connCtx context.Context)
 				packetCtx = s.PacketContext(packetCtx, p)
 			}
 			outgoing, action = handlerFunc(packetCtx, p)
-			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(len(*outgoing.Content)) {
+			if outgoing != nil && outgoing.Metadata.ContentLength == uint32(outgoing.Content.Len()) {
 				s.preWrite()
 				err = frisbeeConn.WritePacket(outgoing)
 				if outgoing != p {

@@ -17,8 +17,7 @@
 package packet
 
 import (
-	"github.com/loopholelabs/polyglot"
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,7 +35,7 @@ func TestRecycle(t *testing.T) {
 	pool.Put(p)
 	p = pool.Get()
 
-	testData := make([]byte, cap(*p.Content)*2)
+	testData := make([]byte, p.Content.Cap()*2)
 	_, err := rand.Read(testData)
 	assert.NoError(t, err)
 	for {
@@ -44,11 +43,11 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, uint16(0), p.Metadata.Id)
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
-		assert.Equal(t, polyglot.Buffer{}, *p.Content)
+		assert.Equal(t, *pool.Get().Content, *p.Content)
 
 		p.Content.Write(testData)
-		assert.Equal(t, len(testData), len(*p.Content))
-		assert.GreaterOrEqual(t, cap(*p.Content), len(testData))
+		assert.Equal(t, len(testData), p.Content.Len())
+		assert.GreaterOrEqual(t, p.Content.Cap(), len(testData))
 
 		pool.Put(p)
 		p = pool.Get()
@@ -58,11 +57,11 @@ func TestRecycle(t *testing.T) {
 		assert.Equal(t, uint16(0), p.Metadata.Operation)
 		assert.Equal(t, uint32(0), p.Metadata.ContentLength)
 
-		if cap(*p.Content) < len(testData) {
+		if p.Content.Cap() < len(testData) {
 			continue
 		}
-		assert.Equal(t, 0, len(*p.Content))
-		assert.GreaterOrEqual(t, cap(*p.Content), len(testData))
+		assert.Equal(t, 0, p.Content.Len())
+		assert.GreaterOrEqual(t, p.Content.Cap(), len(testData))
 		break
 	}
 
