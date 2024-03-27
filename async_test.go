@@ -492,7 +492,6 @@ func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
 			p.Content.Write(randomData)
 			p.Metadata.ContentLength = packetSize
 
-			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				done := make(chan struct{}, 1)
 				errCh := make(chan error, 1)
