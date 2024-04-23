@@ -23,7 +23,7 @@ import (
 
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/polyglot"
+	"github.com/loopholelabs/polyglot/v2"
 )
 
 // These are various frisbee errors that can be returned by the client or server:
