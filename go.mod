@@ -2,7 +2,6 @@ module github.com/loopholelabs/frisbee-go
 
 go 1.21.4
 
-
 require (
 	github.com/loopholelabs/common v0.4.9
 	github.com/loopholelabs/polyglot v1.3.0
