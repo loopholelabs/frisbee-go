@@ -11,8 +11,8 @@ github.com/loopholelabs/common v0.4.9 h1:9MPUYlZZ/qx3Kt8LXgXxcSXthrM91od8026c4Dl
 github.com/loopholelabs/common v0.4.9/go.mod h1:Wop5srN1wYT+mdQ9gZ+kn2I9qKAyVd0FB48pThwIa9M=
 github.com/loopholelabs/polyglot v1.3.0 h1:pOQjZHo4X/VEjADkmM2tXHui8NFkOlmaU4D/4W18WK8=
 github.com/loopholelabs/polyglot v1.3.0/go.mod h1:w9F5kdv3EzE2r7scpmj29hoySRr7NNLjpeUL4ALMusA=
-github.com/loopholelabs/polyglot/v2 v2.0.0 h1:apwXs/A0g/6GEoj/n3+6orKYl17Qj4dSK8azmFuY110=
-github.com/loopholelabs/polyglot/v2 v2.0.0/go.mod h1:V9WoilbgAJ3q5MQO4XwGhrmSpufW7XJK7KKESnWI3Mg=
+github.com/loopholelabs/polyglot/v2 v2.0.1 h1:JVSrXwx3jzr6/IrUe7Y1f7R3I6bFaVjLlPNLjJlmQaU=
+github.com/loopholelabs/polyglot/v2 v2.0.1/go.mod h1:kFoSKvnKAWmV0ICfbaCHDv/+cz5LSuA+xXG4WtYV/z4=
 github.com/loopholelabs/testing v0.2.3 h1:4nVuK5ctaE6ua5Z0dYk2l7xTFmcpCYLUeGjRBp8keOA=
 github.com/loopholelabs/testing v0.2.3/go.mod h1:gqtGY91soYD1fQoKQt/6kP14OYpS7gcbcIgq5mc9m8Q=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=

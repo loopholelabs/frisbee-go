@@ -5,7 +5,7 @@ go 1.21.4
 require (
 	github.com/loopholelabs/common v0.4.9
 	github.com/loopholelabs/polyglot v1.3.0
-	github.com/loopholelabs/polyglot/v2 v2.0.0
+	github.com/loopholelabs/polyglot/v2 v2.0.1
 	github.com/loopholelabs/testing v0.2.3
 	github.com/rs/zerolog v1.32.0
 	github.com/stretchr/testify v1.9.0
