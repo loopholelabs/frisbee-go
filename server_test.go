@@ -19,20 +19,21 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
+	"io"
+	"net"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/polyglot"
+	"github.com/loopholelabs/polyglot/v2"
 	"github.com/loopholelabs/testing/conn"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
-	"io"
-	"net"
-	"sync"
-	"testing"
-	"time"
 )
 
 // trunk-ignore-all(golangci-lint/staticcheck)

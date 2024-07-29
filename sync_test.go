@@ -18,15 +18,16 @@ package frisbee
 
 import (
 	"crypto/rand"
+	"io"
+	"net"
+	"testing"
+
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/polyglot"
+	"github.com/loopholelabs/polyglot/v2"
 	"github.com/loopholelabs/testing/conn/pair"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
-	"net"
-	"testing"
 )
 
 func TestNewSync(t *testing.T) {
