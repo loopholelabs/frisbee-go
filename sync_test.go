@@ -1,18 +1,4 @@
-/*
-	Copyright 2022 Loophole Labs
-
-	Licensed under the Apache License, Version 2.0 (the "License");
-	you may not use this file except in compliance with the License.
-	You may obtain a copy of the License at
-
-		   http://www.apache.org/licenses/LICENSE-2.0
-
-	Unless required by applicable law or agreed to in writing, software
-	distributed under the License is distributed on an "AS IS" BASIS,
-	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	See the License for the specific language governing permissions and
-	limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 
 package frisbee
 
@@ -22,24 +8,26 @@ import (
 	"net"
 	"testing"
 
-	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/polyglot/v2"
-	"github.com/loopholelabs/testing/conn/pair"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/loopholelabs/logging"
+	"github.com/loopholelabs/polyglot/v2"
+	"github.com/loopholelabs/testing/conn/pair"
+
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
 )
 
 func TestNewSync(t *testing.T) {
 	t.Parallel()
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
+	readerConn := NewSync(reader, emptyLogger)
+	writerConn := NewSync(writer, emptyLogger)
 
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
@@ -107,12 +95,12 @@ func TestSyncLargeWrite(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
+	readerConn := NewSync(reader, emptyLogger)
+	writerConn := NewSync(writer, emptyLogger)
 
 	randomData := make([][]byte, testSize)
 
@@ -167,7 +155,7 @@ func TestSyncRawConn(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 32
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
@@ -175,8 +163,8 @@ func TestSyncRawConn(t *testing.T) {
 	start := make(chan struct{}, 1)
 	end := make(chan struct{}, 1)
 
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
+	readerConn := NewSync(reader, emptyLogger)
+	writerConn := NewSync(writer, emptyLogger)
 
 	randomData := make([]byte, packetSize)
 	_, _ = rand.Read(randomData)
@@ -242,10 +230,10 @@ func TestSyncReadClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
+	readerConn := NewSync(reader, emptyLogger)
+	writerConn := NewSync(writer, emptyLogger)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -292,10 +280,10 @@ func TestSyncWriteClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
+	readerConn := NewSync(reader, emptyLogger)
+	writerConn := NewSync(writer, emptyLogger)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -340,12 +328,12 @@ func TestSyncWriteClose(t *testing.T) {
 func BenchmarkSyncThroughputPipe(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
+	readerConn := NewSync(reader, emptyLogger)
+	writerConn := NewSync(writer, emptyLogger)
 
 	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
 	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))
@@ -360,15 +348,15 @@ func BenchmarkSyncThroughputPipe(b *testing.B) {
 func BenchmarkSyncThroughputNetwork(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
 
 	reader, writer, err := pair.New()
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	readerConn := NewSync(reader, &emptyLogger)
-	writerConn := NewSync(writer, &emptyLogger)
+	readerConn := NewSync(reader, emptyLogger)
+	writerConn := NewSync(writer, emptyLogger)
 
 	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
 	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))

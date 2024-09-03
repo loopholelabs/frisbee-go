@@ -1,18 +1,4 @@
-/*
-	Copyright 2022 Loophole Labs
-
-	Licensed under the Apache License, Version 2.0 (the "License");
-	you may not use this file except in compliance with the License.
-	You may obtain a copy of the License at
-
-		   http://www.apache.org/licenses/LICENSE-2.0
-
-	Unless required by applicable law or agreed to in writing, software
-	distributed under the License is distributed on an "AS IS" BASIS,
-	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	See the License for the specific language governing permissions and
-	limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 
 package frisbee
 
@@ -24,13 +10,15 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/loopholelabs/logging/loggers/noop"
+	"github.com/loopholelabs/logging/types"
 
 	"github.com/loopholelabs/frisbee-go/internal/dialer"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/rs/zerolog"
-	"go.uber.org/atomic"
 )
 
 // Sync is the underlying synchronous frisbee connection which has extremely efficient read and write logic and
@@ -39,15 +27,15 @@ import (
 type Sync struct {
 	sync.Mutex
 	conn   net.Conn
-	closed *atomic.Bool
-	logger *zerolog.Logger
-	error  *atomic.Error
+	closed atomic.Bool
+	logger types.Logger
+	error  atomic.Value
 	ctxMu  sync.RWMutex
 	ctx    context.Context
 }
 
 // ConnectSync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectSync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config) (*Sync, error) {
+func ConnectSync(addr string, keepAlive time.Duration, logger types.Logger, TLSConfig *tls.Config) (*Sync, error) {
 	var conn net.Conn
 	var err error
 
@@ -71,16 +59,14 @@ func ConnectSync(addr string, keepAlive time.Duration, logger *zerolog.Logger, T
 }
 
 // NewSync takes an existing net.Conn object and wraps it in a frisbee connection
-func NewSync(c net.Conn, logger *zerolog.Logger) (conn *Sync) {
+func NewSync(c net.Conn, logger types.Logger) (conn *Sync) {
 	conn = &Sync{
 		conn:   c,
-		closed: atomic.NewBool(false),
 		logger: logger,
-		error:  atomic.NewError(nil),
 	}
 
 	if logger == nil {
-		conn.logger = &defaultLogger
+		conn.logger = noop.New(types.InfoLevel)
 	}
 	return
 }
@@ -241,13 +227,17 @@ func (c *Sync) Context() (ctx context.Context) {
 }
 
 // Logger returns the underlying logger of the frisbee connection
-func (c *Sync) Logger() *zerolog.Logger {
+func (c *Sync) Logger() types.Logger {
 	return c.logger
 }
 
 // Error returns the error that caused the frisbee.Sync to close or go into a paused state
 func (c *Sync) Error() error {
-	return c.error.Load()
+	err := c.error.Load()
+	if err == nil {
+		return nil
+	}
+	return err.(error)
 }
 
 // Raw shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)

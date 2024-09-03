@@ -1,42 +1,27 @@
-/*
-	Copyright 2022 Loophole Labs
-
-	Licensed under the Apache License, Version 2.0 (the "License");
-	you may not use this file except in compliance with the License.
-	You may obtain a copy of the License at
-
-		   http://www.apache.org/licenses/LICENSE-2.0
-
-	Unless required by applicable law or agreed to in writing, software
-	distributed under the License is distributed on an "AS IS" BASIS,
-	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	See the License for the specific language governing permissions and
-	limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 
 package frisbee
 
 import (
 	"context"
 	"crypto/rand"
-	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/loopholelabs/frisbee-go/pkg/metadata"
-	"github.com/loopholelabs/frisbee-go/pkg/packet"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/loopholelabs/logging"
 	"github.com/loopholelabs/polyglot/v2"
 	"github.com/loopholelabs/testing/conn"
 	"github.com/loopholelabs/testing/conn/pair"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
-)
 
-// trunk-ignore-all(golangci-lint/staticcheck)
+	"github.com/loopholelabs/frisbee-go/pkg/metadata"
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
+)
 
 const (
 	serverConnContextKey = "conn"
@@ -68,8 +53,8 @@ func TestServerRawSingle(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
+	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(1)
@@ -83,7 +68,7 @@ func TestServerRawSingle(t *testing.T) {
 
 	go s.ServeConn(serverConn)
 
-	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(emptyLogger))
 	assert.NoError(t, err)
 
 	_, err = c.Raw()
@@ -169,8 +154,8 @@ func TestServerStaleCloseSingle(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
+	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(1)
@@ -180,7 +165,7 @@ func TestServerStaleCloseSingle(t *testing.T) {
 
 	go s.ServeConn(serverConn)
 
-	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -243,8 +228,8 @@ func TestServerMultipleConnectionsSingle(t *testing.T) {
 			return
 		}
 
-		emptyLogger := zerolog.New(io.Discard)
-		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+		emptyLogger := logging.Test(t, logging.Noop, t.Name())
+		s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 		require.NoError(t, err)
 
 		s.SetConcurrency(1)
@@ -263,7 +248,7 @@ func TestServerMultipleConnectionsSingle(t *testing.T) {
 
 		clients := make([]*Client, num)
 		for i := 0; i < num; i++ {
-			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
+			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(emptyLogger))
 			assert.NoError(t, err)
 			_, err = clients[i].Raw()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -343,8 +328,8 @@ func TestServerRawUnlimited(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
+	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(0)
@@ -358,7 +343,7 @@ func TestServerRawUnlimited(t *testing.T) {
 
 	go s.ServeConn(serverConn)
 
-	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(emptyLogger))
 	assert.NoError(t, err)
 
 	_, err = c.Raw()
@@ -431,9 +416,9 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 
 	finished := make(chan struct{}, 1)
 
-	count := atomic.NewUint32(0)
+	var count atomic.Int32
 	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if count.Inc() == testSize-1 {
+		if count.Add(1) == testSize-1 {
 			outgoing = incoming
 			action = CLOSE
 			count.Store(0)
@@ -446,8 +431,8 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
+	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(0)
@@ -457,7 +442,7 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 
 	go s.ServeConn(serverConn)
 
-	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -511,14 +496,11 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 				return
 			}
 		}
-		clientCounts := make([]*atomic.Uint32, num)
-		for i := 0; i < num; i++ {
-			clientCounts[i] = atomic.NewUint32(0)
-		}
+		clientCounts := make([]atomic.Uint32, num)
 
 		serverHandlerTable := make(HandlerTable)
 		serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			if clientCounts[incoming.Metadata.Id].Inc() == testSize-1 {
+			if clientCounts[incoming.Metadata.Id].Add(1) == testSize-1 {
 				outgoing = incoming
 				action = CLOSE
 				clientCounts[incoming.Metadata.Id].Store(0)
@@ -526,8 +508,8 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 			return
 		}
 
-		emptyLogger := zerolog.New(io.Discard)
-		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+		emptyLogger := logging.Test(t, logging.Noop, t.Name())
+		s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 		require.NoError(t, err)
 
 		s.SetConcurrency(0)
@@ -546,7 +528,7 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 
 		clients := make([]*Client, num)
 		for i := 0; i < num; i++ {
-			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
+			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(emptyLogger))
 			assert.NoError(t, err)
 			_, err = clients[i].Raw()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -626,8 +608,8 @@ func TestServerRawLimited(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
+	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(10)
@@ -641,7 +623,7 @@ func TestServerRawLimited(t *testing.T) {
 
 	go s.ServeConn(serverConn)
 
-	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(emptyLogger))
 	assert.NoError(t, err)
 
 	_, err = c.Raw()
@@ -714,9 +696,9 @@ func TestServerStaleCloseLimited(t *testing.T) {
 
 	finished := make(chan struct{}, 1)
 
-	count := atomic.NewUint32(0)
+	var count atomic.Int32
 	serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-		if count.Inc() == testSize-1 {
+		if count.Add(1) == testSize-1 {
 			outgoing = incoming
 			action = CLOSE
 			count.Store(0)
@@ -729,8 +711,8 @@ func TestServerStaleCloseLimited(t *testing.T) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
+	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(10)
@@ -740,7 +722,7 @@ func TestServerStaleCloseLimited(t *testing.T) {
 
 	go s.ServeConn(serverConn)
 
-	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(&emptyLogger))
+	c, err := NewClient(clientHandlerTable, context.Background(), WithLogger(emptyLogger))
 	assert.NoError(t, err)
 	_, err = c.Raw()
 	assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -795,14 +777,11 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 			}
 		}
 
-		clientCounts := make([]*atomic.Uint32, num)
-		for i := 0; i < num; i++ {
-			clientCounts[i] = atomic.NewUint32(0)
-		}
+		clientCounts := make([]atomic.Uint32, num)
 
 		serverHandlerTable := make(HandlerTable)
 		serverHandlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
-			if clientCounts[incoming.Metadata.Id].Inc() == testSize-1 {
+			if clientCounts[incoming.Metadata.Id].Add(1) == testSize-1 {
 				outgoing = incoming
 				action = CLOSE
 				clientCounts[incoming.Metadata.Id].Store(0)
@@ -810,8 +789,8 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 			return
 		}
 
-		emptyLogger := zerolog.New(io.Discard)
-		s, err := NewServer(serverHandlerTable, WithLogger(&emptyLogger))
+		emptyLogger := logging.Test(t, logging.Noop, t.Name())
+		s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
 		require.NoError(t, err)
 
 		s.SetConcurrency(10)
@@ -830,7 +809,7 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 
 		clients := make([]*Client, num)
 		for i := 0; i < num; i++ {
-			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(&emptyLogger))
+			clients[i], err = NewClient(clientTables[i], context.Background(), WithLogger(emptyLogger))
 			assert.NoError(t, err)
 			_, err = clients[i].Raw()
 			assert.ErrorIs(t, ConnectionNotInitialized, err)
@@ -894,8 +873,8 @@ func BenchmarkThroughputServerSingle(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
+	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -909,7 +888,7 @@ func BenchmarkThroughputServerSingle(b *testing.B) {
 
 	go server.ServeConn(serverConn)
 
-	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+	frisbeeConn := NewAsync(clientConn, emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -958,8 +937,8 @@ func BenchmarkThroughputServerUnlimited(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
+	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -973,7 +952,7 @@ func BenchmarkThroughputServerUnlimited(b *testing.B) {
 
 	go server.ServeConn(serverConn)
 
-	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+	frisbeeConn := NewAsync(clientConn, emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -1022,8 +1001,8 @@ func BenchmarkThroughputServerLimited(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
+	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1037,7 +1016,7 @@ func BenchmarkThroughputServerLimited(b *testing.B) {
 
 	go server.ServeConn(serverConn)
 
-	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+	frisbeeConn := NewAsync(clientConn, emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -1096,8 +1075,8 @@ func BenchmarkThroughputResponseServerSingle(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
+	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1106,7 +1085,7 @@ func BenchmarkThroughputResponseServerSingle(b *testing.B) {
 
 	go server.ServeConn(serverConn)
 
-	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+	frisbeeConn := NewAsync(clientConn, emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -1181,8 +1160,8 @@ func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
+	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1191,7 +1170,7 @@ func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
 
 	go server.ServeConn(serverConn)
 
-	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+	frisbeeConn := NewAsync(clientConn, emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -1255,10 +1234,10 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 
 	handlerTable := make(HandlerTable)
 
-	count := atomic.NewUint64(0)
+	var count atomic.Uint64
 	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 		time.Sleep(time.Microsecond * 50)
-		if count.Inc() == testSize-1 {
+		if count.Add(1) == testSize-1 {
 			incoming.Reset()
 			incoming.Metadata.Id = testSize
 			incoming.Metadata.Operation = metadata.PacketPong
@@ -1268,8 +1247,8 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
+	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1278,7 +1257,7 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 
 	go server.ServeConn(serverConn)
 
-	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+	frisbeeConn := NewAsync(clientConn, emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)
@@ -1343,10 +1322,10 @@ func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
 
 	handlerTable := make(HandlerTable)
 
-	count := atomic.NewUint64(0)
+	var count atomic.Uint64
 	handlerTable[metadata.PacketPing] = func(_ context.Context, incoming *packet.Packet) (outgoing *packet.Packet, action Action) {
 		time.Sleep(time.Microsecond * 50)
-		if count.Inc() == testSize-1 {
+		if count.Add(1) == testSize-1 {
 			incoming.Reset()
 			incoming.Metadata.Id = testSize
 			incoming.Metadata.Operation = metadata.PacketPong
@@ -1356,8 +1335,8 @@ func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
 		return
 	}
 
-	emptyLogger := zerolog.New(io.Discard)
-	server, err := NewServer(handlerTable, WithLogger(&emptyLogger))
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
+	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1366,7 +1345,7 @@ func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
 
 	go server.ServeConn(serverConn)
 
-	frisbeeConn := NewAsync(clientConn, &emptyLogger)
+	frisbeeConn := NewAsync(clientConn, emptyLogger)
 
 	data := make([]byte, packetSize)
 	_, _ = rand.Read(data)

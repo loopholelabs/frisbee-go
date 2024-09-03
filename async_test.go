@@ -1,18 +1,4 @@
-/*
-	Copyright 2022 Loophole Labs
-
-	Licensed under the Apache License, Version 2.0 (the "License");
-	you may not use this file except in compliance with the License.
-	You may obtain a copy of the License at
-
-		   http://www.apache.org/licenses/LICENSE-2.0
-
-	Unless required by applicable law or agreed to in writing, software
-	distributed under the License is distributed on an "AS IS" BASIS,
-	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	See the License for the specific language governing permissions and
-	limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 
 package frisbee
 
@@ -25,12 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/loopholelabs/polyglot/v2"
-	"github.com/loopholelabs/testing/conn/pair"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/loopholelabs/logging"
+	"github.com/loopholelabs/polyglot/v2"
+	"github.com/loopholelabs/testing/conn/pair"
+
+	"github.com/loopholelabs/frisbee-go/pkg/packet"
 )
 
 func TestNewAsync(t *testing.T) {
@@ -38,12 +26,12 @@ func TestNewAsync(t *testing.T) {
 
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -97,12 +85,12 @@ func TestAsyncLargeWrite(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 512
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	randomData := make([][]byte, testSize)
 	p := packet.Get()
@@ -146,13 +134,13 @@ func TestAsyncRawConn(t *testing.T) {
 	const testSize = 100000
 	const packetSize = 32
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	randomData := make([]byte, packetSize)
 	_, _ = rand.Read(randomData)
@@ -210,10 +198,10 @@ func TestAsyncReadClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -258,10 +246,10 @@ func TestAsyncReadAvailableClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -308,10 +296,10 @@ func TestAsyncWriteClose(t *testing.T) {
 
 	reader, writer := net.Pipe()
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -358,13 +346,13 @@ func TestAsyncWriteClose(t *testing.T) {
 func TestAsyncTimeout(t *testing.T) {
 	t.Parallel()
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
 
 	reader, writer, err := pair.New()
 	require.NoError(t, err)
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	p := packet.Get()
 	p.Metadata.Id = 64
@@ -437,12 +425,12 @@ func TestAsyncTimeout(t *testing.T) {
 func BenchmarkAsyncThroughputPipe(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
 
 	reader, writer := net.Pipe()
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
 	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))
@@ -457,15 +445,15 @@ func BenchmarkAsyncThroughputPipe(b *testing.B) {
 func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 	const testSize = 100
 
-	emptyLogger := zerolog.New(io.Discard)
+	emptyLogger := logging.Test(b, logging.Noop, b.Name())
 
 	reader, writer, err := pair.New()
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	readerConn := NewAsync(reader, &emptyLogger)
-	writerConn := NewAsync(writer, &emptyLogger)
+	readerConn := NewAsync(reader, emptyLogger)
+	writerConn := NewAsync(writer, emptyLogger)
 
 	b.Run("32 Bytes", throughputRunner(testSize, 32, readerConn, writerConn))
 	b.Run("512 Bytes", throughputRunner(testSize, 512, readerConn, writerConn))
@@ -538,15 +526,15 @@ func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < numClients; i++ {
 				go func() {
-					emptyLogger := zerolog.New(io.Discard)
+					emptyLogger := logging.Test(b, logging.Noop, b.Name())
 
 					reader, writer, err := pair.New()
 					if err != nil {
 						b.Error(err)
 					}
 
-					readerConn := NewAsync(reader, &emptyLogger)
-					writerConn := NewAsync(writer, &emptyLogger)
+					readerConn := NewAsync(reader, emptyLogger)
+					writerConn := NewAsync(writer, emptyLogger)
 					throughputRunner(testSize, packetSize, readerConn, writerConn)(b)
 
 					_ = readerConn.Close()

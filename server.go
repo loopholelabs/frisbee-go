@@ -1,18 +1,4 @@
-/*
-	Copyright 2022 Loophole Labs
-
-	Licensed under the Apache License, Version 2.0 (the "License");
-	you may not use this file except in compliance with the License.
-	You may obtain a copy of the License at
-
-		   http://www.apache.org/licenses/LICENSE-2.0
-
-	Unless required by applicable law or agreed to in writing, software
-	distributed under the License is distributed on an "AS IS" BASIS,
-	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	See the License for the specific language governing permissions and
-	limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 
 package frisbee
 
@@ -22,11 +8,11 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/rs/zerolog"
-	"go.uber.org/atomic"
+	"github.com/loopholelabs/logging/types"
 )
 
 var (
@@ -53,7 +39,7 @@ var (
 type Server struct {
 	listener      net.Listener
 	handlerTable  HandlerTable
-	shutdown      *atomic.Bool
+	shutdown      atomic.Bool
 	options       *Options
 	wg            sync.WaitGroup
 	connections   map[*Async]struct{}
@@ -93,7 +79,6 @@ func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 	options := loadOptions(opts...)
 	s := &Server{
 		options:       options,
-		shutdown:      atomic.NewBool(false),
 		connections:   make(map[*Async]struct{}),
 		startedCh:     make(chan struct{}),
 		baseContext:   defaultBaseContext,
@@ -359,9 +344,9 @@ func (s *Server) handleUnlimitedPacket(frisbeeConn *Async, connCtx context.Conte
 		return
 	}
 	wg := new(sync.WaitGroup)
-	closed := atomic.NewBool(false)
+	var closed atomic.Bool
 	connCtx, cancel := context.WithCancel(connCtx)
-	handle := s.createHandler(frisbeeConn, closed, wg, connCtx, cancel)
+	handle := s.createHandler(frisbeeConn, &closed, wg, connCtx, cancel)
 	for {
 		wg.Add(1)
 		go handle(p)
@@ -386,9 +371,9 @@ func (s *Server) handleLimitedPacket(frisbeeConn *Async, connCtx context.Context
 		return
 	}
 	wg := new(sync.WaitGroup)
-	closed := atomic.NewBool(false)
+	var closed atomic.Bool
 	connCtx, cancel := context.WithCancel(connCtx)
-	handler := s.createHandler(frisbeeConn, closed, wg, connCtx, cancel)
+	handler := s.createHandler(frisbeeConn, &closed, wg, connCtx, cancel)
 	handle := func(p *packet.Packet) {
 		handler(p)
 		<-s.limiter
@@ -476,7 +461,7 @@ func (s *Server) serveConn(newConn net.Conn) {
 }
 
 // Logger returns the server's logger (useful for ServerRouter functions)
-func (s *Server) Logger() *zerolog.Logger {
+func (s *Server) Logger() types.Logger {
 	return s.options.Logger
 }
 

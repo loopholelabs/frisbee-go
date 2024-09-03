@@ -2,9 +2,11 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-brightgreen.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Tests](https://github.com/loopholelabs/frisbee-go/actions/workflows/tests.yaml/badge.svg)](https://github.com/loopholelabs/frisbee-go/actions/workflows/tests.yaml)
-[![Benchmarks](https://github.com/loopholelabs/frisbee-go/actions/workflows/benchmarks.yaml/badge.svg)](https://github.com/loopholelabs/frisbee-go/actions/workflows/benchmarks.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/loopholelabs/frisbee-go)](https://goreportcard.com/report/github.com/loopholelabs/frisbee-go)
 [![go-doc](https://godoc.org/github.com/loopholelabs/frisbee-go?status.svg)](https://godoc.org/github.com/loopholelabs/frisbee-go)
+[![Discord](https://dcbadge.vercel.app/api/server/JYmFhtdPeu?style=flat)](https://loopholelabs.io/discord)
+![Go Version](https://img.shields.io/badge/go%20version-%3E=1.22-61CFDD.svg)
+
 
 This is the [Go](http://golang.org) implementation of **Frisbee**, a bring-your-own
 protocol messaging framework designed for performance and
