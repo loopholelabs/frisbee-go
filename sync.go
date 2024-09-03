@@ -233,7 +233,11 @@ func (c *Sync) Logger() types.Logger {
 
 // Error returns the error that caused the frisbee.Sync to close or go into a paused state
 func (c *Sync) Error() error {
-	return c.error.Load().(error)
+	err := c.error.Load()
+	if err == nil {
+		return nil
+	}
+	return err.(error)
 }
 
 // Raw shuts off all of frisbee's underlying functionality and converts the frisbee connection into a normal TCP connection (net.Conn)

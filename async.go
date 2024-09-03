@@ -237,7 +237,11 @@ func (c *Async) Logger() types.Logger {
 
 // Error returns the error that caused the frisbee.Async connection to close
 func (c *Async) Error() error {
-	return c.error.Load().(error)
+	err := c.error.Load()
+	if err == nil {
+		return nil
+	}
+	return err.(error)
 }
 
 // Closed returns whether the frisbee.Async connection is closed
