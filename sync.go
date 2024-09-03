@@ -61,13 +61,15 @@ func ConnectSync(addr string, keepAlive time.Duration, logger types.Logger, TLSC
 // NewSync takes an existing net.Conn object and wraps it in a frisbee connection
 func NewSync(c net.Conn, logger types.Logger) (conn *Sync) {
 	conn = &Sync{
-		conn:   c,
-		logger: logger,
+		conn: c,
 	}
 
 	if logger == nil {
 		conn.logger = noop.New(types.InfoLevel)
+	} else {
+		conn.logger = logger.SubLogger("sync").With().Str("remote", c.RemoteAddr().String()).Logger()
 	}
+
 	return
 }
 

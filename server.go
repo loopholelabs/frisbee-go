@@ -77,6 +77,9 @@ type Server struct {
 // The Start method must then be called to start the server and listen for connections.
 func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
 	options := loadOptions(opts...)
+
+	options.Logger = options.Logger.SubLogger("server")
+
 	s := &Server{
 		options:       options,
 		connections:   make(map[*Async]struct{}),

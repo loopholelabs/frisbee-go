@@ -35,6 +35,8 @@ func loadOptions(options ...Option) *Options {
 
 	if opts.Logger == nil {
 		opts.Logger = noop.New(types.InfoLevel)
+	} else {
+		opts.Logger = opts.Logger.SubLogger("frisbee")
 	}
 
 	if opts.KeepAlive == 0 {
