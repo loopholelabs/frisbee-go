@@ -1,28 +1,15 @@
-/*
-	Copyright 2022 Loophole Labs
-
-	Licensed under the Apache License, Version 2.0 (the "License");
-	you may not use this file except in compliance with the License.
-	You may obtain a copy of the License at
-
-		   http://www.apache.org/licenses/LICENSE-2.0
-
-	Unless required by applicable law or agreed to in writing, software
-	distributed under the License is distributed on an "AS IS" BASIS,
-	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	See the License for the specific language governing permissions and
-	limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 
 package frisbee
 
 import (
 	"crypto/tls"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
-	"io"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/loopholelabs/logging"
 )
 
 func TestWithoutOptions(t *testing.T) {
@@ -31,7 +18,7 @@ func TestWithoutOptions(t *testing.T) {
 	options := loadOptions()
 
 	assert.Equal(t, time.Minute*3, options.KeepAlive)
-	assert.Equal(t, &DefaultLogger, options.Logger)
+	assert.NotNil(t, options.Logger)
 	assert.Nil(t, options.TLSConfig)
 }
 
@@ -47,7 +34,7 @@ func TestWithOptions(t *testing.T) {
 	options := loadOptions(option)
 
 	assert.Equal(t, time.Minute*6, options.KeepAlive)
-	assert.Equal(t, &DefaultLogger, options.Logger)
+	assert.NotNil(t, options.Logger)
 	assert.Equal(t, &tls.Config{}, options.TLSConfig)
 }
 
@@ -61,25 +48,25 @@ func TestDisableOptions(t *testing.T) {
 	options := loadOptions(option)
 
 	assert.Equal(t, time.Duration(-1), options.KeepAlive)
-	assert.Equal(t, &DefaultLogger, options.Logger)
+	assert.NotNil(t, options.Logger)
 	assert.Nil(t, options.TLSConfig)
 }
 
 func TestIndividualOptions(t *testing.T) {
 	t.Parallel()
 
-	logger := zerolog.New(io.Discard)
+	logger := logging.Test(t, logging.Noop, t.Name())
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 	}
 
 	keepAliveOption := WithKeepAlive(time.Minute * 6)
-	loggerOption := WithLogger(&logger)
+	loggerOption := WithLogger(logger)
 	TLSOption := WithTLS(tlsConfig)
 
 	options := loadOptions(keepAliveOption, loggerOption, TLSOption)
 
 	assert.Equal(t, time.Minute*6, options.KeepAlive)
-	assert.Equal(t, &logger, options.Logger)
+	assert.Equal(t, logger, options.Logger)
 	assert.Equal(t, tlsConfig, options.TLSConfig)
 }

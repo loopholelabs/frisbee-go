@@ -1,18 +1,4 @@
-/*
-	Copyright 2022 Loophole Labs
-
-	Licensed under the Apache License, Version 2.0 (the "License");
-	you may not use this file except in compliance with the License.
-	You may obtain a copy of the License at
-
-		   http://www.apache.org/licenses/LICENSE-2.0
-
-	Unless required by applicable law or agreed to in writing, software
-	distributed under the License is distributed on an "AS IS" BASIS,
-	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-	See the License for the specific language governing permissions and
-	limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
 
 package frisbee
 
@@ -24,14 +10,16 @@ import (
 	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/loopholelabs/common/pkg/queue"
+	"github.com/loopholelabs/logging/loggers/noop"
+	"github.com/loopholelabs/logging/types"
+
 	"github.com/loopholelabs/frisbee-go/internal/dialer"
 	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
-	"github.com/rs/zerolog"
-	"go.uber.org/atomic"
 )
 
 // Async is the underlying asynchronous frisbee connection which has extremely efficient read and write logic and
@@ -40,16 +28,16 @@ import (
 type Async struct {
 	sync.Mutex
 	conn               net.Conn
-	closed             *atomic.Bool
+	closed             atomic.Bool
 	writer             *bufio.Writer
 	flushCh            chan struct{}
 	closeCh            chan struct{}
 	incoming           *queue.Circular[packet.Packet, *packet.Packet]
 	staleMu            sync.Mutex
 	stale              []*packet.Packet
-	logger             *zerolog.Logger
+	logger             types.Logger
 	wg                 sync.WaitGroup
-	error              *atomic.Error
+	error              atomic.Value
 	streamsMu          sync.Mutex
 	streams            map[uint16]*Stream
 	newStreamHandlerMu sync.Mutex
@@ -57,7 +45,7 @@ type Async struct {
 }
 
 // ConnectAsync creates a new TCP connection (using net.Dial) and wraps it in a frisbee connection
-func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, TLSConfig *tls.Config, streamHandler ...NewStreamHandler) (*Async, error) {
+func ConnectAsync(addr string, keepAlive time.Duration, logger types.Logger, TLSConfig *tls.Config, streamHandler ...NewStreamHandler) (*Async, error) {
 	var conn net.Conn
 	var err error
 
@@ -81,21 +69,19 @@ func ConnectAsync(addr string, keepAlive time.Duration, logger *zerolog.Logger, 
 }
 
 // NewAsync takes an existing net.Conn object and wraps it in a frisbee connection
-func NewAsync(c net.Conn, logger *zerolog.Logger, streamHandler ...NewStreamHandler) (conn *Async) {
+func NewAsync(c net.Conn, logger types.Logger, streamHandler ...NewStreamHandler) (conn *Async) {
 	conn = &Async{
 		conn:     c,
-		closed:   atomic.NewBool(false),
 		writer:   bufio.NewWriterSize(c, DefaultBufferSize),
 		incoming: queue.NewCircular[packet.Packet, *packet.Packet](DefaultBufferSize),
 		flushCh:  make(chan struct{}, 3),
 		closeCh:  make(chan struct{}),
 		streams:  make(map[uint16]*Stream),
 		logger:   logger,
-		error:    atomic.NewError(nil),
 	}
 
 	if logger == nil {
-		conn.logger = &defaultLogger
+		conn.logger = noop.New(types.InfoLevel)
 	}
 
 	if len(streamHandler) > 0 {
@@ -245,13 +231,13 @@ func (c *Async) WriteBufferSize() int {
 }
 
 // Logger returns the underlying logger of the frisbee connection
-func (c *Async) Logger() *zerolog.Logger {
+func (c *Async) Logger() types.Logger {
 	return c.logger
 }
 
 // Error returns the error that caused the frisbee.Async connection to close
 func (c *Async) Error() error {
-	return c.error.Load()
+	return c.error.Load().(error)
 }
 
 // Closed returns whether the frisbee.Async connection is closed
@@ -388,7 +374,7 @@ func (c *Async) flush() error {
 		err = c.writer.Flush()
 		if err != nil {
 			c.Unlock()
-			c.Logger().Err(err).Msg("error while flushing data")
+			c.Logger().Error().Err(err).Msg("error while flushing data")
 			return err
 		}
 	}
