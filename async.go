@@ -82,7 +82,7 @@ func NewAsync(c net.Conn, logger types.Logger, streamHandler ...NewStreamHandler
 	if logger == nil {
 		conn.logger = noop.New(types.InfoLevel)
 	} else {
-		logger.SubLogger("async").With().Str("remote", c.RemoteAddr().String()).Logger()
+		conn.logger = logger.SubLogger("async").With().Str("remote", c.RemoteAddr().String()).Logger()
 	}
 
 	if len(streamHandler) > 0 {
