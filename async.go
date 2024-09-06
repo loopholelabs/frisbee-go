@@ -402,7 +402,7 @@ func (c *Async) close() error {
 		c.stale = c.incoming.Drain()
 		c.staleMu.Unlock()
 		for _, stream := range c.streams {
-			_ = stream.Close()
+			_ = stream.closeSend(false)
 		}
 		c.streamsMu.Unlock()
 		c.Lock()
