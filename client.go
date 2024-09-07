@@ -44,6 +44,8 @@ func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
 
+	options.Logger = options.Logger.SubLogger("client")
+
 	return &Client{
 		handlerTable:     handlerTable,
 		ctx:              ctx,

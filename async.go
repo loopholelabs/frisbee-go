@@ -77,11 +77,12 @@ func NewAsync(c net.Conn, logger types.Logger, streamHandler ...NewStreamHandler
 		flushCh:  make(chan struct{}, 3),
 		closeCh:  make(chan struct{}),
 		streams:  make(map[uint16]*Stream),
-		logger:   logger,
 	}
 
 	if logger == nil {
 		conn.logger = noop.New(types.InfoLevel)
+	} else {
+		conn.logger = logger.SubLogger("async").With().Str("remote", c.RemoteAddr().String()).Logger()
 	}
 
 	if len(streamHandler) > 0 {
