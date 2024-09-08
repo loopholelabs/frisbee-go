@@ -16,11 +16,10 @@ import (
 )
 
 var (
-	BaseContextNil   = errors.New("BaseContext cannot be nil")
-	OnClosedNil      = errors.New("OnClosed cannot be nil")
-	PreWriteNil      = errors.New("PreWrite cannot be nil")
-	StreamHandlerNil = errors.New("StreamHandler cannot be nil")
-	ListenerNil      = errors.New("Listener cannot be nil")
+	BaseContextNil = errors.New("BaseContext function cannot be nil")
+	OnClosedNil    = errors.New("OnClosed function cannot be nil")
+	PreWriteNil    = errors.New("PreWrite function cannot be nil")
+	ListenerNil    = errors.New("listener cannot be nil")
 )
 
 var (
@@ -63,6 +62,10 @@ type Server struct {
 	// ConnContext is used to define a connection-specific context based on the incoming connection
 	// and is run whenever a new connection is opened
 	ConnContext func(context.Context, *Async) context.Context
+
+	// StreamContext is used to define a stream-specific context based on the incoming stream
+	// and is run whenever a new stream is opened
+	StreamContext func(context.Context, *Stream) context.Context
 
 	// PacketContext is used to define a handler-specific contexts based on the incoming packet
 	// and is run whenever a new packet arrives
@@ -117,13 +120,14 @@ func (s *Server) SetPreWrite(f func()) error {
 	return nil
 }
 
-// SetStreamHandler sets the streamHandler function for the server. If f is nil, it returns an error.
-func (s *Server) SetStreamHandler(f func(*Async, *Stream)) error {
-	if f == nil {
-		return StreamHandlerNil
-	}
+// SetStreamHandler sets the streamHandler function for the server.
+func (s *Server) SetStreamHandler(f func(context.Context, *Stream)) error {
 	s.streamHandler = func(stream *Stream) {
-		f(stream.Conn(), stream)
+		streamCtx := s.baseContext()
+		if s.StreamContext != nil {
+			streamCtx = s.StreamContext(streamCtx, stream)
+		}
+		f(streamCtx, stream)
 	}
 	return nil
 }

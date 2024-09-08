@@ -84,13 +84,17 @@ func NewAsync(c net.Conn, logger types.Logger, streamHandler ...NewStreamHandler
 		conn.logger = noop.New(types.InfoLevel)
 	}
 
-	if len(streamHandler) > 0 {
+	if len(streamHandler) > 0 && streamHandler[0] != nil {
 		conn.newStreamHandler = streamHandler[0]
 	}
 
-	conn.wg.Add(3)
+	conn.wg.Add(1)
 	go conn.flushLoop()
+
+	conn.wg.Add(1)
 	go conn.readLoop()
+
+	conn.wg.Add(1)
 	go conn.pingLoop()
 
 	return
