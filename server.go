@@ -16,15 +16,12 @@ import (
 )
 
 var (
-	BaseContextNil = errors.New("BaseContext function cannot be nil")
-	OnClosedNil    = errors.New("OnClosed function cannot be nil")
-	PreWriteNil    = errors.New("PreWrite function cannot be nil")
-	ListenerNil    = errors.New("listener cannot be nil")
+	OnClosedNil = errors.New("OnClosed function cannot be nil")
+	PreWriteNil = errors.New("PreWrite function cannot be nil")
+	ListenerNil = errors.New("listener cannot be nil")
 )
 
 var (
-	defaultBaseContext = context.Background
-
 	defaultOnClosed = func(_ *Async, _ error) {}
 
 	defaultPreWrite = func() {}
@@ -47,8 +44,8 @@ type Server struct {
 	concurrency   uint64
 	limiter       chan struct{}
 
-	// baseContext is used to define the base context for this Server and all incoming connections
-	baseContext func() context.Context
+	baseContext       context.Context
+	baseContextCancel context.CancelFunc
 
 	// onClosed is a function run by the server whenever a connection is closed
 	onClosed func(*Async, error)
@@ -78,28 +75,23 @@ type Server struct {
 
 // NewServer returns an uninitialized frisbee Server with the registered HandlerTable.
 // The Start method must then be called to start the server and listen for connections.
-func NewServer(handlerTable HandlerTable, opts ...Option) (*Server, error) {
+func NewServer(handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Server, error) {
 	options := loadOptions(opts...)
+
+	baseContext, baseContextCancel := context.WithCancel(ctx)
+
 	s := &Server{
-		options:       options,
-		connections:   make(map[*Async]struct{}),
-		startedCh:     make(chan struct{}),
-		baseContext:   defaultBaseContext,
-		onClosed:      defaultOnClosed,
-		preWrite:      defaultPreWrite,
-		streamHandler: defaultStreamHandler,
+		options:           options,
+		connections:       make(map[*Async]struct{}),
+		startedCh:         make(chan struct{}),
+		baseContext:       baseContext,
+		baseContextCancel: baseContextCancel,
+		onClosed:          defaultOnClosed,
+		preWrite:          defaultPreWrite,
+		streamHandler:     defaultStreamHandler,
 	}
 
 	return s, s.SetHandlerTable(handlerTable)
-}
-
-// SetBaseContext sets the baseContext function for the server. If f is nil, it returns an error.
-func (s *Server) SetBaseContext(f func() context.Context) error {
-	if f == nil {
-		return BaseContextNil
-	}
-	s.baseContext = f
-	return nil
 }
 
 // SetOnClosed sets the onClosed function for the server. If f is nil, it returns an error.
@@ -123,7 +115,7 @@ func (s *Server) SetPreWrite(f func()) error {
 // SetStreamHandler sets the streamHandler function for the server.
 func (s *Server) SetStreamHandler(f func(context.Context, *Stream)) error {
 	s.streamHandler = func(stream *Stream) {
-		streamCtx := s.baseContext()
+		streamCtx := s.baseContext
 		if s.StreamContext != nil {
 			streamCtx = s.StreamContext(streamCtx, stream)
 		}
@@ -437,7 +429,7 @@ func (s *Server) serveConn(newConn net.Conn) {
 	}
 
 	frisbeeConn := NewAsync(newConn, s.Logger(), s.streamHandler)
-	connCtx := s.baseContext()
+	connCtx := s.baseContext
 	s.connectionsMu.Lock()
 	if s.shutdown.Load() {
 		s.wg.Done()
@@ -471,16 +463,18 @@ func (s *Server) Logger() types.Logger {
 
 // Shutdown shuts down the frisbee server and kills all the goroutines and active connections
 func (s *Server) Shutdown() error {
-	s.shutdown.Store(true)
-	s.connectionsMu.Lock()
-	for c := range s.connections {
-		_ = c.Close()
-		delete(s.connections, c)
-	}
-	s.connectionsMu.Unlock()
-	defer s.wg.Wait()
-	if s.listener != nil {
-		return s.listener.Close()
+	if s.shutdown.CompareAndSwap(false, true) {
+		s.baseContextCancel()
+		s.connectionsMu.Lock()
+		for c := range s.connections {
+			_ = c.Close()
+			delete(s.connections, c)
+		}
+		s.connectionsMu.Unlock()
+		defer s.wg.Wait()
+		if s.listener != nil {
+			return s.listener.Close()
+		}
 	}
 	return nil
 }

@@ -54,7 +54,7 @@ func TestServerRawSingle(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(1)
@@ -155,7 +155,7 @@ func TestServerStaleCloseSingle(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(1)
@@ -229,7 +229,7 @@ func TestServerMultipleConnectionsSingle(t *testing.T) {
 		}
 
 		emptyLogger := logging.Test(t, logging.Noop, t.Name())
-		s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+		s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 		require.NoError(t, err)
 
 		s.SetConcurrency(1)
@@ -329,7 +329,7 @@ func TestServerRawUnlimited(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(0)
@@ -432,7 +432,7 @@ func TestServerStaleCloseUnlimited(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(0)
@@ -509,7 +509,7 @@ func TestServerMultipleConnectionsUnlimited(t *testing.T) {
 		}
 
 		emptyLogger := logging.Test(t, logging.Noop, t.Name())
-		s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+		s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 		require.NoError(t, err)
 
 		s.SetConcurrency(0)
@@ -609,7 +609,7 @@ func TestServerRawLimited(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(10)
@@ -712,7 +712,7 @@ func TestServerStaleCloseLimited(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(10)
@@ -790,7 +790,7 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 		}
 
 		emptyLogger := logging.Test(t, logging.Noop, t.Name())
-		s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+		s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 		require.NoError(t, err)
 
 		s.SetConcurrency(10)
@@ -874,7 +874,7 @@ func BenchmarkThroughputServerSingle(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
+	server, err := NewServer(handlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -938,7 +938,7 @@ func BenchmarkThroughputServerUnlimited(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
+	server, err := NewServer(handlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1002,7 +1002,7 @@ func BenchmarkThroughputServerLimited(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
+	server, err := NewServer(handlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1076,7 +1076,7 @@ func BenchmarkThroughputResponseServerSingle(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
+	server, err := NewServer(handlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1161,7 +1161,7 @@ func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
+	server, err := NewServer(handlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1248,7 +1248,7 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
+	server, err := NewServer(handlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1336,7 +1336,7 @@ func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	server, err := NewServer(handlerTable, WithLogger(emptyLogger))
+	server, err := NewServer(handlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}

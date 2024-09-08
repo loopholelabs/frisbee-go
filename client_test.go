@@ -49,7 +49,7 @@ func TestClientRaw(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(1)
@@ -144,7 +144,7 @@ func TestClientStaleClose(t *testing.T) {
 	}
 
 	emptyLogger := logging.Test(t, logging.Noop, t.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	require.NoError(t, err)
 
 	s.SetConcurrency(1)
@@ -204,7 +204,7 @@ func BenchmarkThroughputClient(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func BenchmarkThroughputResponseClient(b *testing.B) {
 	}
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
-	s, err := NewServer(serverHandlerTable, WithLogger(emptyLogger))
+	s, err := NewServer(serverHandlerTable, context.Background(), WithLogger(emptyLogger))
 	if err != nil {
 		b.Fatal(err)
 	}

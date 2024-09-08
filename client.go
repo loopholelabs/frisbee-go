@@ -22,7 +22,8 @@ type Client struct {
 	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
 
-	baseContext context.Context
+	baseContext       context.Context
+	baseContextCancel context.CancelFunc
 
 	// PacketContext is used to define packet-specific contexts based on the incoming packet
 	// and is run whenever a new packet arrives
@@ -39,7 +40,7 @@ type Client struct {
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
 // The ConnectAsync method must then be called to dial the server and initialize the connection.
-func NewClient(handlerTable HandlerTable, baseContext context.Context, opts ...Option) (*Client, error) {
+func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Client, error) {
 	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := handlerTable[i]; ok {
 			return nil, InvalidHandlerTable
@@ -49,11 +50,14 @@ func NewClient(handlerTable HandlerTable, baseContext context.Context, opts ...O
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
 
+	baseContext, baseContextCancel := context.WithCancel(ctx)
+
 	return &Client{
-		handlerTable:     handlerTable,
-		baseContext:      baseContext,
-		options:          options,
-		heartbeatChannel: heartbeatChannel,
+		handlerTable:      handlerTable,
+		baseContext:       baseContext,
+		baseContextCancel: baseContextCancel,
+		options:           options,
+		heartbeatChannel:  heartbeatChannel,
 	}, nil
 }
 
@@ -99,6 +103,7 @@ func (c *Client) Error() error {
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
 	if c.closed.CompareAndSwap(false, true) {
+		c.baseContextCancel()
 		err := c.conn.Close()
 		if err != nil {
 			return err
