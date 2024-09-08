@@ -17,11 +17,12 @@ import (
 type Client struct {
 	conn             *Async
 	handlerTable     HandlerTable
-	ctx              context.Context
 	options          *Options
 	closed           atomic.Bool
 	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
+
+	baseContext context.Context
 
 	// PacketContext is used to define packet-specific contexts based on the incoming packet
 	// and is run whenever a new packet arrives
@@ -38,7 +39,7 @@ type Client struct {
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
 // The ConnectAsync method must then be called to dial the server and initialize the connection.
-func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (*Client, error) {
+func NewClient(handlerTable HandlerTable, baseContext context.Context, opts ...Option) (*Client, error) {
 	for i := uint16(0); i < RESERVED9; i++ {
 		if _, ok := handlerTable[i]; ok {
 			return nil, InvalidHandlerTable
@@ -50,7 +51,7 @@ func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (
 
 	return &Client{
 		handlerTable:     handlerTable,
-		ctx:              ctx,
+		baseContext:      baseContext,
 		options:          options,
 		heartbeatChannel: heartbeatChannel,
 	}, nil
@@ -154,7 +155,7 @@ func (c *Client) SetStreamHandler(f func(context.Context, *Stream)) {
 		c.conn.SetNewStreamHandler(nil)
 	}
 	c.conn.SetNewStreamHandler(func(s *Stream) {
-		streamCtx := c.ctx
+		streamCtx := c.baseContext
 		if c.StreamContext != nil {
 			streamCtx = c.StreamContext(streamCtx, s)
 		}
@@ -187,7 +188,7 @@ func (c *Client) handleConn() {
 		}
 		handlerFunc = c.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
-			packetCtx := c.ctx
+			packetCtx := c.baseContext
 			if c.PacketContext != nil {
 				packetCtx = c.PacketContext(packetCtx, p)
 			}
