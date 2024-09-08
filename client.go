@@ -17,11 +17,13 @@ import (
 type Client struct {
 	conn             *Async
 	handlerTable     HandlerTable
-	ctx              context.Context
 	options          *Options
 	closed           atomic.Bool
 	wg               sync.WaitGroup
 	heartbeatChannel chan struct{}
+
+	baseContext       context.Context
+	baseContextCancel context.CancelFunc
 
 	// PacketContext is used to define packet-specific contexts based on the incoming packet
 	// and is run whenever a new packet arrives
@@ -30,6 +32,10 @@ type Client struct {
 	// UpdateContext is used to update a handler-specific context whenever the returned
 	// Action from a handler is UPDATE
 	UpdateContext func(context.Context, *Async) context.Context
+
+	// StreamContext is used to update a handler-specific context whenever a new stream is created
+	// and is run whenever a new stream is created
+	StreamContext func(context.Context, *Stream) context.Context
 }
 
 // NewClient returns an uninitialized frisbee Client with the registered ClientRouter.
@@ -44,11 +50,14 @@ func NewClient(handlerTable HandlerTable, ctx context.Context, opts ...Option) (
 	options := loadOptions(opts...)
 	var heartbeatChannel chan struct{}
 
+	baseContext, baseContextCancel := context.WithCancel(ctx)
+
 	return &Client{
-		handlerTable:     handlerTable,
-		ctx:              ctx,
-		options:          options,
-		heartbeatChannel: heartbeatChannel,
+		handlerTable:      handlerTable,
+		baseContext:       baseContext,
+		baseContextCancel: baseContextCancel,
+		options:           options,
+		heartbeatChannel:  heartbeatChannel,
 	}, nil
 }
 
@@ -94,6 +103,7 @@ func (c *Client) Error() error {
 // Close closes the frisbee client and kills all the goroutines
 func (c *Client) Close() error {
 	if c.closed.CompareAndSwap(false, true) {
+		c.baseContextCancel()
 		err := c.conn.Close()
 		if err != nil {
 			return err
@@ -138,15 +148,24 @@ func (c *Client) Stream(id uint16) *Stream {
 	return c.conn.NewStream(id)
 }
 
-// SetNewStreamHandler sets the callback handler for new streams.
+// SetStreamHandler sets the callback handler for new streams.
 //
 // It's important to note that this handler is called for new streams and if it is
 // not set then stream packets will be dropped.
 //
 // It's also important to note that the handler itself is called in its own goroutine to
-// avoid blocking the read lop. This means that the handler must be thread-safe.
-func (c *Client) SetNewStreamHandler(handler NewStreamHandler) {
-	c.conn.SetNewStreamHandler(handler)
+// avoid blocking the read loop. This means that the handler must be thread-safe.
+func (c *Client) SetStreamHandler(f func(context.Context, *Stream)) {
+	if f == nil {
+		c.conn.SetNewStreamHandler(nil)
+	}
+	c.conn.SetNewStreamHandler(func(s *Stream) {
+		streamCtx := c.baseContext
+		if c.StreamContext != nil {
+			streamCtx = c.StreamContext(streamCtx, s)
+		}
+		f(streamCtx, s)
+	})
 }
 
 // Logger returns the client's logger (useful for ClientRouter functions)
@@ -174,7 +193,7 @@ func (c *Client) handleConn() {
 		}
 		handlerFunc = c.handlerTable[p.Metadata.Operation]
 		if handlerFunc != nil {
-			packetCtx := c.ctx
+			packetCtx := c.baseContext
 			if c.PacketContext != nil {
 				packetCtx = c.PacketContext(packetCtx, p)
 			}
