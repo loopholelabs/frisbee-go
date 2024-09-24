@@ -37,7 +37,8 @@ type Async struct {
 	stale              []*packet.Packet
 	logger             types.Logger
 	wg                 sync.WaitGroup
-	error              atomic.Value
+	errorMu            sync.RWMutex
+	error              error
 	streamsMu          sync.Mutex
 	streams            map[uint16]*Stream
 	newStreamHandlerMu sync.Mutex
@@ -241,11 +242,9 @@ func (c *Async) Logger() types.Logger {
 
 // Error returns the error that caused the frisbee.Async connection to close
 func (c *Async) Error() error {
-	err := c.error.Load()
-	if err == nil {
-		return nil
-	}
-	return err.(error)
+	c.errorMu.RLock()
+	defer c.errorMu.RUnlock()
+	return c.error
 }
 
 // Closed returns whether the frisbee.Async connection is closed
@@ -424,12 +423,16 @@ func (c *Async) close() error {
 }
 
 func (c *Async) closeWithError(err error) error {
+	c.errorMu.Lock()
+	defer c.errorMu.Unlock()
+
+	c.error = err
 	closeError := c.close()
 	if closeError != nil {
 		c.Logger().Debug().Err(closeError).Msgf("attempted to close connection with error `%s`, but got error while closing", err)
-		return closeError
+		c.error = errors.Join(closeError, err)
+		return c.error
 	}
-	c.error.Store(err)
 	_ = c.conn.Close()
 	return err
 }
