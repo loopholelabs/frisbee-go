@@ -521,7 +521,7 @@ func (c *Async) readLoop() {
 
 			switch p.Metadata.Operation {
 			case PING:
-				c.Logger().Debug().Msg("PING Packet received by read loop, sending back PONG packet")
+				c.Logger().Trace().Msg("PING Packet received by read loop, sending back PONG packet")
 				err = c.writePacket(PONGPacket, false)
 				if err != nil {
 					c.wg.Done()
@@ -530,10 +530,10 @@ func (c *Async) readLoop() {
 				}
 				packet.Put(p)
 			case PONG:
-				c.Logger().Debug().Msg("PONG Packet received by read loop")
+				c.Logger().Trace().Msg("PONG Packet received by read loop")
 				packet.Put(p)
 			case STREAM:
-				c.Logger().Debug().Msg("STREAM Packet received by read loop")
+				c.Logger().Trace().Msg("STREAM Packet received by read loop")
 				isStream = true
 				c.newStreamHandlerMu.Lock()
 				newStreamHandler = c.newStreamHandler
