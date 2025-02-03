@@ -6,10 +6,10 @@ toolchain go1.22.6
 
 require (
 	github.com/loopholelabs/common v0.4.10
-	github.com/loopholelabs/logging v0.3.1
+	github.com/loopholelabs/logging v0.3.2
 	github.com/loopholelabs/polyglot/v2 v2.0.2
 	github.com/loopholelabs/testing v0.2.3
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	go.uber.org/goleak v1.3.0
 )
 
