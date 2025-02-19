@@ -16,6 +16,7 @@ func TestNew(t *testing.T) {
 
 	assert.IsType(t, new(Packet), p)
 	assert.NotNil(t, p.Metadata)
+	assert.Equal(t, uint16(0), p.Metadata.Magic)
 	assert.Equal(t, uint16(0), p.Metadata.Id)
 	assert.Equal(t, uint16(0), p.Metadata.Operation)
 	assert.Equal(t, uint32(0), p.Metadata.ContentLength)

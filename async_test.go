@@ -128,6 +128,29 @@ func TestAsyncLargeWrite(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAsyncInvalidPacket(t *testing.T) {
+	t.Parallel()
+
+	client, server, err := pair.New()
+	require.NoError(t, err)
+
+	serverConn := NewAsync(server, logging.Test(t, logging.Noop, t.Name()))
+	t.Cleanup(func() { serverConn.Close() })
+
+	// Write invalid data.
+	httpReq := []byte(`GET / HTTP/1.1
+Host: www.example.com
+User-Agent: curl/8.9.1
+Accept: */*`)
+	_, err = client.Write(httpReq)
+	assert.NoError(t, err)
+
+	// Verify server connection was closed with the expected error.
+	_, err = serverConn.ReadPacket()
+	assert.ErrorIs(t, err, ConnectionClosed)
+	assert.ErrorIs(t, serverConn.Error(), InvalidMagicHeader)
+}
+
 func TestAsyncRawConn(t *testing.T) {
 	t.Parallel()
 

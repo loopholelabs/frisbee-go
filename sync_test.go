@@ -225,6 +225,27 @@ func TestSyncRawConn(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSyncInvalid(t *testing.T) {
+	t.Parallel()
+
+	client, server, err := pair.New()
+	require.NoError(t, err)
+
+	serverConn := NewSync(server, logging.Test(t, logging.Noop, t.Name()))
+	t.Cleanup(func() { serverConn.Close() })
+
+	httpReq := []byte(`GET / HTTP/1.1
+Host: www.example.com
+User-Agent: curl/8.9.1
+Accept: */*`)
+	_, err = client.Write(httpReq)
+	assert.NoError(t, err)
+
+	_, err = serverConn.ReadPacket()
+	assert.ErrorIs(t, err, InvalidMagicHeader)
+	assert.ErrorIs(t, serverConn.Error(), InvalidMagicHeader)
+}
+
 func TestSyncReadClose(t *testing.T) {
 	t.Parallel()
 

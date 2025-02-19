@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -133,6 +134,7 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 
 	var encodedMetadata [metadata.Size]byte
 
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.MagicOffset:metadata.MagicOffset+metadata.MagicSize], metadata.PacketMagicHeader)
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
 	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
@@ -189,9 +191,15 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	}
 	p := packet.Get()
 
+	p.Metadata.Magic = binary.BigEndian.Uint16(encodedPacket[metadata.MagicOffset : metadata.MagicOffset+metadata.MagicSize])
 	p.Metadata.Id = binary.BigEndian.Uint16(encodedPacket[metadata.IdOffset : metadata.IdOffset+metadata.IdSize])
 	p.Metadata.Operation = binary.BigEndian.Uint16(encodedPacket[metadata.OperationOffset : metadata.OperationOffset+metadata.OperationSize])
 	p.Metadata.ContentLength = binary.BigEndian.Uint32(encodedPacket[metadata.ContentLengthOffset : metadata.ContentLengthOffset+metadata.ContentLengthSize])
+
+	if p.Metadata.Magic != metadata.PacketMagicHeader {
+		c.Logger().Debug().Str("magic", fmt.Sprintf("%x", p.Metadata.Magic)).Msg("received packet with incorrect magic header")
+		return nil, c.closeWithError(InvalidMagicHeader)
+	}
 
 	if p.Metadata.ContentLength > 0 {
 		contentLength := int(p.Metadata.ContentLength)
