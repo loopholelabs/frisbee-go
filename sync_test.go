@@ -185,7 +185,7 @@ func TestSyncLargeRead(t *testing.T) {
 	go func() {
 		defer close(doneCh)
 
-		_, err = client.Write(bigData)
+		_, err := client.Write(bigData)
 
 		// Verify client was disconnected.
 		var opError *net.OpError
@@ -202,10 +202,7 @@ func TestSyncLargeRead(t *testing.T) {
 func TestSyncDisableMaxContentLength(t *testing.T) {
 	// Don't run in parallel since it modifies DefaultMaxContentLength.
 
-	oldMax := DefaultMaxContentLength
-	DefaultMaxContentLength = 0
-	t.Cleanup(func() { DefaultMaxContentLength = oldMax })
-
+	oldMax := DisableMaxContentLength(t)
 	logger := logging.Test(t, logging.Noop, t.Name())
 
 	t.Run("read", func(t *testing.T) {
@@ -479,6 +476,8 @@ func TestSyncWriteClose(t *testing.T) {
 }
 
 func BenchmarkSyncThroughputPipe(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
@@ -499,6 +498,8 @@ func BenchmarkSyncThroughputPipe(b *testing.B) {
 }
 
 func BenchmarkSyncThroughputNetwork(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())

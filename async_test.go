@@ -175,10 +175,7 @@ func TestAsyncLargeRead(t *testing.T) {
 func TestAsyncDisableMaxContentLength(t *testing.T) {
 	// Don't run in parallel since it modifies DefaultMaxContentLength.
 
-	oldMax := DefaultMaxContentLength
-	DefaultMaxContentLength = 0
-	t.Cleanup(func() { DefaultMaxContentLength = oldMax })
-
+	oldMax := DisableMaxContentLength(t)
 	logger := logging.Test(t, logging.Noop, t.Name())
 
 	t.Run("read", func(t *testing.T) {
@@ -566,6 +563,8 @@ func TestAsyncTimeout(t *testing.T) {
 }
 
 func BenchmarkAsyncThroughputPipe(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
@@ -586,6 +585,8 @@ func BenchmarkAsyncThroughputPipe(b *testing.B) {
 }
 
 func BenchmarkAsyncThroughputNetwork(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
@@ -609,6 +610,8 @@ func BenchmarkAsyncThroughputNetwork(b *testing.B) {
 }
 
 func BenchmarkAsyncThroughputNetworkMultiple(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	throughputRunner := func(testSize uint32, packetSize uint32, readerConn Conn, writerConn Conn) func(b *testing.B) {

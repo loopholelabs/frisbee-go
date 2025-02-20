@@ -892,6 +892,8 @@ func TestServerInvalidPacket(t *testing.T) {
 }
 
 func BenchmarkThroughputServerSingle(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -955,6 +957,8 @@ func BenchmarkThroughputServerSingle(b *testing.B) {
 }
 
 func BenchmarkThroughputServerUnlimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1019,6 +1023,8 @@ func BenchmarkThroughputServerUnlimited(b *testing.B) {
 }
 
 func BenchmarkThroughputServerLimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1083,6 +1089,8 @@ func BenchmarkThroughputServerLimited(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSingle(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1167,6 +1175,8 @@ func BenchmarkThroughputResponseServerSingle(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1252,6 +1262,8 @@ func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1340,6 +1352,8 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
