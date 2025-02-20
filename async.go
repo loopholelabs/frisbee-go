@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -297,8 +298,12 @@ func (c *Async) writePacket(p *packet.Packet, closeOnErr bool) error {
 	if int(p.Metadata.ContentLength) != p.Content.Len() {
 		return InvalidContentLength
 	}
+	if DefaultMaxContentLength > 0 && p.Metadata.ContentLength > DefaultMaxContentLength {
+		return ContentLengthExceeded
+	}
 
 	encodedMetadata := metadata.GetBuffer()
+	binary.BigEndian.PutUint16(encodedMetadata[metadata.MagicOffset:metadata.MagicOffset+metadata.MagicSize], metadata.PacketMagicHeader)
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], p.Metadata.Id)
 	binary.BigEndian.PutUint16(encodedMetadata[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], p.Metadata.Operation)
 	binary.BigEndian.PutUint32(encodedMetadata[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], p.Metadata.ContentLength)
@@ -514,10 +519,29 @@ func (c *Async) readLoop() {
 		index = 0
 		for index < n {
 			p := packet.Get()
+			p.Metadata.Magic = binary.BigEndian.Uint16(buf[index+metadata.MagicOffset : index+metadata.MagicOffset+metadata.MagicSize])
 			p.Metadata.Id = binary.BigEndian.Uint16(buf[index+metadata.IdOffset : index+metadata.IdOffset+metadata.IdSize])
 			p.Metadata.Operation = binary.BigEndian.Uint16(buf[index+metadata.OperationOffset : index+metadata.OperationOffset+metadata.OperationSize])
 			p.Metadata.ContentLength = binary.BigEndian.Uint32(buf[index+metadata.ContentLengthOffset : index+metadata.ContentLengthOffset+metadata.ContentLengthSize])
 			index += metadata.Size
+
+			if p.Metadata.Magic != metadata.PacketMagicHeader {
+				c.Logger().Debug().Str("magic", fmt.Sprintf("0x%04x", p.Metadata.Magic)).Msg("received packet with incorrect magic header")
+				c.wg.Done()
+				_ = c.closeWithError(InvalidMagicHeader)
+				return
+			}
+
+			if DefaultMaxContentLength > 0 && p.Metadata.ContentLength > DefaultMaxContentLength {
+				c.Logger().Debug().
+					Uint32("content_length", p.Metadata.ContentLength).
+					Uint32("max_content_length", DefaultMaxContentLength).
+					Msg("received packet that exceeds max content length")
+
+				c.wg.Done()
+				_ = c.closeWithError(ContentLengthExceeded)
+				return
+			}
 
 			switch p.Metadata.Operation {
 			case PING:

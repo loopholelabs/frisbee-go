@@ -189,6 +189,8 @@ func TestClientStaleClose(t *testing.T) {
 }
 
 func BenchmarkThroughputClient(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -263,6 +265,8 @@ func BenchmarkThroughputClient(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseClient(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
