@@ -4,6 +4,7 @@ package frisbee
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"io"
 	"net"
 	"runtime"
@@ -18,6 +19,7 @@ import (
 	"github.com/loopholelabs/polyglot/v2"
 	"github.com/loopholelabs/testing/conn/pair"
 
+	"github.com/loopholelabs/frisbee-go/pkg/metadata"
 	"github.com/loopholelabs/frisbee-go/pkg/packet"
 )
 
@@ -122,10 +124,128 @@ func TestAsyncLargeWrite(t *testing.T) {
 		packet.Put(p)
 	}
 
-	err := readerConn.Close()
+	// Verify large writes past max length fails.
+	big := make([]byte, 2*DefaultMaxContentLength)
+
+	p = packet.Get()
+	p.Metadata.Id = 64
+	p.Metadata.Operation = 32
+	p.Metadata.ContentLength = uint32(len(big))
+	p.Content.Write(big)
+
+	err := writerConn.WritePacket(p)
+	assert.ErrorIs(t, err, ContentLengthExceeded)
+	p.Content.Reset()
+	packet.Put(p)
+
+	err = readerConn.Close()
 	assert.NoError(t, err)
 	err = writerConn.Close()
 	assert.NoError(t, err)
+}
+
+func TestAsyncLargeRead(t *testing.T) {
+	t.Parallel()
+
+	client, server, err := pair.New()
+	require.NoError(t, err)
+
+	serverConn := NewAsync(server, logging.Test(t, logging.Noop, t.Name()))
+	t.Cleanup(func() { serverConn.Close() })
+
+	// Write a large packet that exceeds the maximum limit.
+	bigData := make([]byte, 2*DefaultMaxContentLength+metadata.Size)
+	binary.BigEndian.PutUint16(bigData[metadata.MagicOffset:metadata.MagicOffset+metadata.MagicSize], metadata.PacketMagicHeader)
+	binary.BigEndian.PutUint16(bigData[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], 0xFFFF)
+	binary.BigEndian.PutUint16(bigData[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], 0xFFFF)
+	binary.BigEndian.PutUint32(bigData[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], 2*DefaultMaxContentLength)
+
+	_, err = client.Write(bigData)
+
+	// Verify client was disconnected.
+	var opError *net.OpError
+	assert.ErrorAs(t, err, &opError)
+
+	// Verify server connection was closed with the expected error.
+	_, err = serverConn.ReadPacket()
+	assert.ErrorIs(t, err, ConnectionClosed)
+	assert.ErrorIs(t, serverConn.Error(), ContentLengthExceeded)
+}
+
+func TestAsyncDisableMaxContentLength(t *testing.T) {
+	// Don't run in parallel since it modifies DefaultMaxContentLength.
+
+	oldMax := DefaultMaxContentLength
+	DefaultMaxContentLength = 0
+	t.Cleanup(func() { DefaultMaxContentLength = oldMax })
+
+	logger := logging.Test(t, logging.Noop, t.Name())
+
+	t.Run("read", func(t *testing.T) {
+		client, server, err := pair.New()
+		require.NoError(t, err)
+
+		serverConn := NewAsync(server, logger)
+		t.Cleanup(func() { serverConn.Close() })
+
+		// Write a large packet that would exceed the default maximum limit.
+		bigData := make([]byte, 2*oldMax+metadata.Size)
+		binary.BigEndian.PutUint16(bigData[metadata.MagicOffset:metadata.MagicOffset+metadata.MagicSize], metadata.PacketMagicHeader)
+		binary.BigEndian.PutUint16(bigData[metadata.IdOffset:metadata.IdOffset+metadata.IdSize], 0xFFFF)
+		binary.BigEndian.PutUint16(bigData[metadata.OperationOffset:metadata.OperationOffset+metadata.OperationSize], 0xFFFF)
+		binary.BigEndian.PutUint32(bigData[metadata.ContentLengthOffset:metadata.ContentLengthOffset+metadata.ContentLengthSize], 2*oldMax)
+
+		n, err := client.Write(bigData)
+		assert.NoError(t, err)
+		assert.Equal(t, int(2*oldMax+metadata.Size), n)
+
+		// Verify packet can be read.
+		p, err := serverConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, int(2*oldMax), p.Content.Len())
+	})
+
+	t.Run("write", func(t *testing.T) {
+		client, server, err := pair.New()
+		require.NoError(t, err)
+
+		clientConn := NewAsync(client, logger)
+		t.Cleanup(func() { clientConn.Close() })
+
+		serverConn := NewAsync(server, logger)
+		t.Cleanup(func() { serverConn.Close() })
+
+		doneCh := make(chan any)
+		go func() {
+			defer close(doneCh)
+
+			p, err := serverConn.ReadPacket()
+			assert.NoError(t, err)
+			if err == nil {
+				assert.Equal(t, int(2*oldMax), p.Content.Len())
+			}
+		}()
+
+		p := packet.Get()
+		t.Cleanup(func() {
+			p.Content.Reset()
+			packet.Put(p)
+		})
+
+		// Write a large packet that would exceed the default maximum limit.
+		content := make([]byte, 2*oldMax)
+
+		p.Metadata.Id = 64
+		p.Metadata.Operation = 32
+		p.Metadata.ContentLength = uint32(len(content))
+		p.Content.Write(content)
+
+		err = clientConn.WritePacket(p)
+		require.NoError(t, err)
+
+		<-doneCh
+	})
+
 }
 
 func TestAsyncInvalidPacket(t *testing.T) {

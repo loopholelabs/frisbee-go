@@ -131,6 +131,9 @@ func (c *Sync) WritePacket(p *packet.Packet) error {
 	if int(p.Metadata.ContentLength) != p.Content.Len() {
 		return InvalidContentLength
 	}
+	if DefaultMaxContentLength > 0 && p.Metadata.ContentLength > DefaultMaxContentLength {
+		return ContentLengthExceeded
+	}
 
 	var encodedMetadata [metadata.Size]byte
 
@@ -199,6 +202,14 @@ func (c *Sync) ReadPacket() (*packet.Packet, error) {
 	if p.Metadata.Magic != metadata.PacketMagicHeader {
 		c.Logger().Debug().Str("magic", fmt.Sprintf("%x", p.Metadata.Magic)).Msg("received packet with incorrect magic header")
 		return nil, c.closeWithError(InvalidMagicHeader)
+	}
+
+	if DefaultMaxContentLength > 0 && p.Metadata.ContentLength > DefaultMaxContentLength {
+		c.Logger().Debug().
+			Uint32("content_length", p.Metadata.ContentLength).
+			Uint32("max_content_length", DefaultMaxContentLength).
+			Msg("received packet that exceeds max content length")
+		return nil, c.closeWithError(ContentLengthExceeded)
 	}
 
 	if p.Metadata.ContentLength > 0 {
