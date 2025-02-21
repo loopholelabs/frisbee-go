@@ -14,6 +14,7 @@ func TestMessageEncodeDecode(t *testing.T) {
 	t.Parallel()
 
 	message := &Metadata{
+		Magic:         PacketMagicHeader,
 		Id:            uint16(64),
 		Operation:     PacketProbe,
 		ContentLength: uint32(0),
@@ -21,6 +22,7 @@ func TestMessageEncodeDecode(t *testing.T) {
 
 	correct := NewBuffer()
 
+	binary.BigEndian.PutUint16(correct[MagicOffset:MagicOffset+MagicSize], PacketMagicHeader)
 	binary.BigEndian.PutUint16(correct[IdOffset:IdOffset+IdSize], uint16(64))
 	binary.BigEndian.PutUint16(correct[OperationOffset:OperationOffset+OperationSize], PacketProbe)
 	binary.BigEndian.PutUint32(correct[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], uint32(0))
@@ -44,6 +46,7 @@ func TestEncodeDecode(t *testing.T) {
 
 	message, err := Decode(encodedBytes[:])
 	require.NoError(t, err)
+	assert.Equal(t, PacketMagicHeader, message.Magic)
 	assert.Equal(t, uint32(512), message.ContentLength)
 	assert.Equal(t, uint16(64), message.Id)
 	assert.Equal(t, PacketPong, message.Operation)
@@ -53,6 +56,7 @@ func TestEncodeDecode(t *testing.T) {
 
 	emptyMessage, err := Decode(emptyEncodedBytes[:])
 	require.NoError(t, err)
+	assert.Equal(t, PacketMagicHeader, message.Magic)
 	assert.Equal(t, uint32(0), emptyMessage.ContentLength)
 	assert.Equal(t, uint16(64), emptyMessage.Id)
 	assert.Equal(t, PacketPing, emptyMessage.Operation)
