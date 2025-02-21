@@ -5,7 +5,10 @@ package frisbee
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -863,7 +866,34 @@ func TestServerMultipleConnectionsLimited(t *testing.T) {
 	t.Run("100", func(t *testing.T) { runner(t, 100) })
 }
 
+func TestServerInvalidPacket(t *testing.T) {
+	t.Parallel()
+
+	// Ensure request is rejected promptly.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	t.Cleanup(cancel)
+
+	emptyLogger := logging.Test(t, logging.Noop, t.Name())
+	s, err := NewServer(nil, context.Background(), WithLogger(emptyLogger))
+	require.NoError(t, err)
+
+	ln, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+
+	go s.StartWithListener(ln)
+	t.Cleanup(func() { s.Shutdown() })
+
+	url := fmt.Sprintf("http://%s/", ln.Addr())
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	require.NoError(t, err)
+
+	_, err = http.DefaultClient.Do(req)
+	require.ErrorIs(t, err, io.EOF)
+}
+
 func BenchmarkThroughputServerSingle(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -927,6 +957,8 @@ func BenchmarkThroughputServerSingle(b *testing.B) {
 }
 
 func BenchmarkThroughputServerUnlimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -991,6 +1023,8 @@ func BenchmarkThroughputServerUnlimited(b *testing.B) {
 }
 
 func BenchmarkThroughputServerLimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1055,6 +1089,8 @@ func BenchmarkThroughputServerLimited(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSingle(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1139,6 +1175,8 @@ func BenchmarkThroughputResponseServerSingle(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1224,6 +1262,8 @@ func BenchmarkThroughputResponseServerSlowSingle(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 
@@ -1312,6 +1352,8 @@ func BenchmarkThroughputResponseServerSlowUnlimited(b *testing.B) {
 }
 
 func BenchmarkThroughputResponseServerSlowLimited(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 1<<16 - 1
 	const packetSize = 512
 

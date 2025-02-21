@@ -12,6 +12,7 @@ import (
 //
 //	type Packet struct {
 //		Metadata struct {
+//			Magic         uint16 // 2 Bytes
 //			Id            uint16 // 2 Bytes
 //			Operation     uint16 // 2 Bytes
 //			ContentLength uint32 // 4 Bytes
@@ -27,6 +28,7 @@ type Packet struct {
 }
 
 func (p *Packet) Reset() {
+	p.Metadata.Magic = 0
 	p.Metadata.Id = 0
 	p.Metadata.Operation = 0
 	p.Metadata.ContentLength = 0

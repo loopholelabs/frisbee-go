@@ -14,6 +14,10 @@ var (
 	InvalidBufferLengthErr = errors.New("invalid buffer length")
 )
 
+var (
+	PacketMagicHeader = uint16(0x0F)
+)
+
 const (
 	PacketPing  = uint16(10) // PING
 	PacketPong  = uint16(11) // PONG
@@ -21,20 +25,24 @@ const (
 )
 
 const (
-	IdOffset = 0 // 0
+	MagicOffset = 0 // 0
+	MagicSize   = 2
+
+	IdOffset = MagicOffset + MagicSize // 2
 	IdSize   = 2
 
-	OperationOffset = IdOffset + IdSize // 2
+	OperationOffset = IdOffset + IdSize // 4
 	OperationSize   = 2
 
-	ContentLengthOffset = OperationOffset + OperationSize // 4
+	ContentLengthOffset = OperationOffset + OperationSize // 6
 	ContentLengthSize   = 4
 
-	Size = ContentLengthOffset + ContentLengthSize // 8
+	Size = ContentLengthOffset + ContentLengthSize // 10
 )
 
 // Metadata is 8 bytes in length
 type Metadata struct {
+	Magic         uint16 // 2 bytes
 	Id            uint16 // 2 Bytes
 	Operation     uint16 // 2 Bytes
 	ContentLength uint32 // 4 Bytes
@@ -49,6 +57,7 @@ func (fm *Metadata) Encode() (b *Buffer, err error) {
 	}()
 
 	b = NewBuffer()
+	binary.BigEndian.PutUint16(b[MagicOffset:MagicOffset+MagicSize], fm.Magic)
 	binary.BigEndian.PutUint16(b[IdOffset:IdOffset+IdSize], fm.Id)
 	binary.BigEndian.PutUint16(b[OperationOffset:OperationOffset+OperationSize], fm.Operation)
 	binary.BigEndian.PutUint32(b[ContentLengthOffset:ContentLengthOffset+ContentLengthSize], fm.ContentLength)
@@ -64,6 +73,7 @@ func (fm *Metadata) Decode(buf *Buffer) (err error) {
 		}
 	}()
 
+	fm.Magic = binary.BigEndian.Uint16(buf[MagicOffset : MagicOffset+MagicSize])
 	fm.Id = binary.BigEndian.Uint16(buf[IdOffset : IdOffset+IdSize])
 	fm.Operation = binary.BigEndian.Uint16(buf[OperationOffset : OperationOffset+OperationSize])
 	fm.ContentLength = binary.BigEndian.Uint32(buf[ContentLengthOffset : ContentLengthOffset+ContentLengthSize])
@@ -73,6 +83,7 @@ func (fm *Metadata) Decode(buf *Buffer) (err error) {
 
 func Encode(id, operation uint16, contentLength uint32) (*Buffer, error) {
 	metadata := Metadata{
+		Magic:         PacketMagicHeader,
 		Id:            id,
 		Operation:     operation,
 		ContentLength: contentLength,

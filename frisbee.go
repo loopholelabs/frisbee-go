@@ -20,9 +20,11 @@ var (
 	StreamClosed             = errors.New("stream closed")
 	InvalidStreamPacket      = errors.New("invalid stream packet")
 	ConnectionNotInitialized = errors.New("connection not initialized")
+	InvalidMagicHeader       = errors.New("invalid magic header")
 	InvalidBufferLength      = errors.New("invalid buffer length")
 	InvalidHandlerTable      = errors.New("invalid handler table configuration, a reserved value may have been used")
 	InvalidOperation         = errors.New("invalid operation in packet, a reserved value may have been used")
+	ContentLengthExceeded    = errors.New("content length exceeds maximum allowed")
 )
 
 // Action is an ENUM used to modify the state of the client or server from a Handler function

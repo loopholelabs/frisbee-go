@@ -16,6 +16,8 @@ import (
 )
 
 func BenchmarkAsyncThroughputLarge(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
@@ -39,6 +41,8 @@ func BenchmarkAsyncThroughputLarge(b *testing.B) {
 }
 
 func BenchmarkSyncThroughputLarge(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	emptyLogger := logging.Test(b, logging.Noop, b.Name())
@@ -62,6 +66,8 @@ func BenchmarkSyncThroughputLarge(b *testing.B) {
 }
 
 func BenchmarkTCPThroughput(b *testing.B) {
+	DisableMaxContentLength(b)
+
 	const testSize = 100
 
 	reader, writer, err := pair.New()

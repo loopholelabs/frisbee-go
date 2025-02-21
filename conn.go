@@ -18,8 +18,9 @@ import (
 const DefaultBufferSize = 1 << 16
 
 var (
-	DefaultDeadline     = time.Second * 5
-	DefaultPingInterval = time.Millisecond * 500
+	DefaultDeadline         = time.Second * 5
+	DefaultPingInterval     = time.Millisecond * 500
+	DefaultMaxContentLength = uint32(5 * 1024 * 1024) // 5 MB
 
 	emptyTime = time.Time{}
 	pastTime  = time.Unix(1, 0)
